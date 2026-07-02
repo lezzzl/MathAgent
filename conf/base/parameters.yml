@@ -1,0 +1,15 @@
+# Гиперпараметры агента и оценки. Прокидываются в узлы как params:agent / params:eval.
+
+agent:
+  model: "claude-opus-4-8"        # id модели для langchain-anthropic
+  temperature: 0.0                 
+  max_steps: 15                    # предохранитель от бесконечного лупа
+  tools:
+    - sympy                        # символьная математика
+    - python_exec                  # исполнение Python
+  system_prompt_path: ${globals:prompts_dir}/math_system.txt
+
+eval:
+  id_column: id                    # ключ для джойна результатов с эталоном
+  question_column: question
+  gold_column: gold                # столбец с правильным ответом

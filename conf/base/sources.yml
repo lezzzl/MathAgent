@@ -1,0 +1,10 @@
+# Реестр «сырых» источников данных с метаинформацией (схема, маппинг колонок).
+
+data:
+  sample:
+    kind: parquet
+    path: ${globals:raw_dir}/sample.parquet
+    column_map:
+      text: text        # текст задачи
+      level: level       # сложность / класс задачи
+      #Надо будеь дополнить под задачу

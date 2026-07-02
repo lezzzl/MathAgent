@@ -1,0 +1,24 @@
+# Датасеты, которыми обмениваются узлы пайплайна.
+# Пути берутся из globals.yml через встроенный резолвер ${globals:...}.
+
+# Вход: датасет математических задач
+math_problems:
+  type: pandas.ParquetDataset
+  filepath: ${globals:raw_dir}/sample.parquet
+
+# Выход агента: по строке на задачу
+agent_results:
+  type: pandas.CSVDataset
+  filepath: ${globals:output_dir}/agent_results.csv
+  save_args:
+    index: false
+
+# Полная трасса лупа (сообщения, tool_calls) — для отладки/анализа
+agent_traces:
+  type: json.JSONDataset
+  filepath: ${globals:output_dir}/agent_traces.json
+
+# Метрики оценки (accuracy и т.п.)
+eval_report:
+  type: json.JSONDataset
+  filepath: ${globals:metrics_dir}/eval_report.json
