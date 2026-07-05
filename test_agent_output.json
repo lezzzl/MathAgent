@@ -1,0 +1,98 @@
+[
+  {
+    "id": "2024-I-1",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "204",
+    "model_answer": "Разложим на множители и найдём корни уравнения... После проверки всех случаев получаем, что искомое число равно \\boxed{204}."
+  },
+  {
+    "id": "2024-I-2",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "45",
+    "model_answer": "Составим систему уравнений и решим её. В итоге x + y = \\boxed{47}."
+  },
+  {
+    "id": "2024-I-3",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "70",
+    "model_answer": "Задача оказалась сложной, не удалось довести решение до конца из-за нехватки токенов генерации..."
+  },
+  {
+    "id": "2024-I-4",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "self_consistency",
+    "benchmark": "aime24",
+    "ground_truth": "512",
+    "model_answer": "Ответ: 512 (без оформления в boxed, просто текстом)."
+  },
+  {
+    "id": "2024-I-5",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "self_consistency",
+    "benchmark": "aime24",
+    "ground_truth": "13",
+    "model_answer": "Первый подход даёт \\boxed{15}, но перепроверив вычисления, получаем окончательный ответ \\boxed{13}."
+  },
+  {
+    "id": "2024-II-1",
+    "model": "llama3.1-70b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "336",
+    "model_answer": "Используя формулу включений-исключений, находим итоговое количество способов: \\boxed{336}"
+  },
+  {
+    "id": "2024-II-2",
+    "model": "llama3.1-70b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "58",
+    "model_answer": "\\boxed{058}"
+  },
+  {
+    "id": "2024-II-3",
+    "model": "llama3.1-70b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "7/2",
+    "model_answer": "Площадь треугольника равна \\boxed{3.5}"
+  },
+  {
+    "id": "2025-I-1",
+    "model": "llama3.1-70b-instruct",
+    "pipeline": "self_consistency",
+    "benchmark": "aime25",
+    "ground_truth": "289",
+    "model_answer": ""
+  },
+  {
+    "id": "2025-I-2",
+    "model": "deepseek-r1-distill-32b",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime25",
+    "ground_truth": "144",
+    "model_answer": "После долгих рассуждений и проверки на малых случаях приходим к выводу, что n = \\boxed{144}, что удовлетворяет всем условиям задачи."
+  },
+  {
+    "id": "2025-I-3",
+    "model": "deepseek-r1-distill-32b",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime25",
+    "ground_truth": "820",
+    "model_answer": "Итоговая сумма равна \\boxed{828}."
+  },
+  {
+    "id": "2025-I-4",
+    "model": "deepseek-r1-distill-32b",
+    "pipeline": "self_consistency",
+    "benchmark": "aime25",
+    "ground_truth": "0",
+    "model_answer": "Все члены последовательности взаимно уничтожаются, поэтому сумма равна \\boxed{0}."
+  }
+]
