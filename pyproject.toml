@@ -10,11 +10,12 @@ requires-python = ">=3.10"
 dependencies = [
     # --- Оркестрация ---
     "kedro>=0.19,<0.20",
-    "kedro-datasets[pandas-csvdataset,pandas-parquetdataset,json-jsondataset]>=3.0",
+    "kedro-datasets[pandas-csvdataset,pandas-parquetdataset,json-jsondataset,yaml-yamldataset]>=3.0",
     # --- Агент (LangGraph / LangChain) ---
+    # Yandex AI Studio через OpenAI-совместимый эндпоинт → ChatOpenAI из langchain-openai.
     "langgraph>=0.2",
     "langchain-core>=0.3",
-    "langchain-anthropic>=0.2",
+    "langchain-openai>=0.2",
     # --- Математика и данные ---
     "sympy>=1.12",
     "pandas>=2.0",

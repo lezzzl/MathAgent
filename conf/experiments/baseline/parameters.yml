@@ -1,0 +1,6 @@
+# Эксперимент: baseline (без RAG).
+# Переопределяет только нужные ключи; всё остальное наследуется из conf/base.
+# Запуск: uv run kedro run --env experiments/baseline
+
+rag:
+  enabled: false

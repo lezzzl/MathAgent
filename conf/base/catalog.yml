@@ -1,10 +1,24 @@
 # Датасеты, которыми обмениваются узлы пайплайна.
 # Пути берутся из globals.yml через встроенный резолвер ${globals:...}.
 
-# Вход: датасет математических задач
+# --- Входные данные ---
+
+# Датасет математических задач
 math_problems:
   type: pandas.ParquetDataset
   filepath: ${globals:raw_dir}/sample.parquet
+
+# База примеров для RAG (условие/решение/ответ/тема)
+rag_examples:
+  type: pandas.ParquetDataset
+  filepath: ${globals:raw_dir}/examples.parquet
+
+# Схема колонок (из sources.yml) — узлы читают как обычный словарь
+sources:
+  type: yaml.YAMLDataset
+  filepath: conf/base/sources.yml
+
+# --- Выходные данные ---
 
 # Выход агента: по строке на задачу
 agent_results:
@@ -13,7 +27,7 @@ agent_results:
   save_args:
     index: false
 
-# Полная трасса лупа (сообщения, tool_calls) — для отладки/анализа
+# Полная трасса лупа (сообщения, tool_calls, извлечённые подсказки) — для анализа
 agent_traces:
   type: json.JSONDataset
   filepath: ${globals:output_dir}/agent_traces.json

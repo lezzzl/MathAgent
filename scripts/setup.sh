@@ -23,21 +23,27 @@ echo "==> Синхронизация зависимостей (uv sync)"
 # Создаёт .venv и ставит всё из pyproject.toml, фиксируя версии в uv.lock.
 uv sync
 
-echo "==> Проверка credentials"
-CRED="conf/local/credentials.yml"
-if [ ! -s "$CRED" ]; then
-  mkdir -p "$(dirname "$CRED")"
-  cat > "$CRED" <<'YAML'
-# Секреты (этот файл не коммитится). Впиши ключ Anthropic:
-anthropic:
-  api_key: sk-ant-...
-YAML
-  echo "    создан шаблон $CRED — не забудь вписать api_key"
+echo "==> Проверка доступа к Yandex AI Studio"
+# Секреты НЕ хранятся в репозитории. Держим их в .env (в .gitignore),
+# конфиг ссылается лишь на имена переменных YC_API_KEY / YC_FOLDER_ID.
+ENV_FILE=".env"
+if [ ! -f "$ENV_FILE" ]; then
+  cat > "$ENV_FILE" <<'DOTENV'
+# Секреты — этот файл НЕ коммитится. Впиши свои значения:
+YC_API_KEY=
+YC_FOLDER_ID=
+DOTENV
+  echo "    создан $ENV_FILE — впиши YC_API_KEY и YC_FOLDER_ID"
 else
-  echo "    $CRED уже заполнен"
+  echo "    $ENV_FILE уже есть"
+fi
+# Подстраховка: убедимся, что .env игнорируется гитом.
+if ! git check-ignore -q "$ENV_FILE" 2>/dev/null; then
+  echo ".env" >> .gitignore
+  echo "    добавил .env в .gitignore"
 fi
 
 echo ""
 echo "Готово. Дальше:"
-echo "  # вписать ключ в $CRED"
-echo "  uv run kedro run --pipeline agent_eval    # запустить пайплайн"
+echo "  # впиши YC_API_KEY и YC_FOLDER_ID в $ENV_FILE"
+echo "  uv run kedro run --env experiments/baseline    # запустить эксперимент"
