@@ -1,0 +1,13 @@
+# Общие значения, на которые ссылаются другие конфиги через резолвер ${globals:...}.
+# Резолвер globals включается автоматически, когда в conf/base есть globals.yml.
+
+# Параметризация запуска из окружения (синтаксис OmegaConf: ${oc.env:VAR,default})
+run_name: "${oc.env:RUN_NAME,sample_v1}"
+owner: "${oc.env:OWNER,local}"
+
+# Раскладка файловой системы
+raw_dir: data/raw
+processed_dir: data/processed
+output_dir: data/output
+prompts_dir: conf/base/prompts
+metrics_dir: runs/${globals:run_name}/metrics

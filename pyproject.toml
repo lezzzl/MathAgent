@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mathagent"
+version = "0.1.0"
+description = "MathAgent — агентский луп для решения математических задач (LangGraph + Kedro)"
+requires-python = ">=3.10"
+dependencies = [
+    # --- Оркестрация ---
+    "kedro>=0.19,<0.20",
+    "kedro-datasets[pandas-csvdataset,pandas-parquetdataset,json-jsondataset,yaml-yamldataset]>=3.0",
+    # --- Агент (LangGraph / LangChain) ---
+    # Yandex AI Studio через OpenAI-совместимый эндпоинт → ChatOpenAI из langchain-openai.
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.2",
+    # --- Математика и данные ---
+    "sympy>=1.12",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    # --- Утилиты ---
+    "python-dotenv>=1.0",
+]
+
+[tool.kedro]
+package_name = "mathagent"
+project_name = "MathAgent"
+kedro_init_version = "0.19.9"
+source_dir = "src"

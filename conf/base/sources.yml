@@ -1,0 +1,24 @@
+# Схема датасетов: семантические роли колонок. Сами пути к файлам — в catalog.yml.
+# Читается узлами как обычный словарь через catalog-датасет `sources`
+# (yaml.YAMLDataset), поэтому резолверы ${...} здесь НЕ раскрываются.
+
+data:
+  sample:
+    kind: parquet
+    column_map:
+      id: id              # ключ для джойна результатов с эталоном
+      question: text      # условие задачи (вход агента)
+      gold: gold          # эталонный ответ (для оценки)
+      level: level        # сложность / тема
+
+  # База примеров для RAG (условие, решение, ответ, тема/техника).
+  # Заполнить, когда появится файл — пути тоже пойдут в catalog.yml.
+  examples:
+    kind: parquet
+    column_map:
+      id: id
+      question: text
+      solution: solution        # пошаговое решение
+      answer: answer            # финальный ответ
+      topic: topic              # тема / техника решения
+      reasoning_trace: trace    # опц.: трасса рассуждений
