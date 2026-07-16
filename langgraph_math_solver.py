@@ -3,6 +3,7 @@ import json
 import re
 from typing import Annotated, List, Optional, Any, Dict, Tuple
 from typing_extensions import TypedDict
+from dataclasses import dataclass
 
 import ollama
 from math_verify import parse, verify
@@ -11,34 +12,151 @@ from langgraph.graph import StateGraph, END
 import yaml
 from pathlib import Path
 
-GEN_SYSTEM_PROMPT = "..."
-EVAL_SYSTEM_PROMPT = "..."
-VERIFY_SYSTEM_PROMPT = "..."
+MODEL_NAME = "llama3.2"
+_BOXED_RE = re.compile(r"\\boxed\{")
 
-def load_prompts_from_yaml(yaml_path: Path | str):
-    global GEN_SYSTEM_PROMPT, EVAL_SYSTEM_PROMPT, VERIFY_SYSTEM_PROMPT
-    
+@dataclass
+class Role:
+    name: str
+    system_prompt: str
+    user_template: str = "{context}"   
+    temperature: float = 0.6
+    json_format: bool = False
+    num_predict: Optional[int] = None
+
+    def build_messages(self, **kwargs) -> List[dict]:
+        """Собирает messages для _chat() из system_prompt + user_template.
+        kwargs — именованные значения для плейсхолдеров шаблона (например,
+        context=..., step=...). Лишние kwargs, которых нет в шаблоне, просто
+        игнорируются — так один и тот же вызов подходит и для ролей, которым
+        нужен только context, и для тех, кому нужен ещё и step."""
+        try:
+            user_content = self.user_template.format(**kwargs)
+        except KeyError as e:
+            raise ValueError(
+                f"Роль '{self.name}': user_template ссылается на плейсхолдер {e}, "
+                f"которого нет среди переданных аргументов ({sorted(kwargs)}). "
+                f"Проверьте user_template в agent-step-v1.yml для этой роли."
+            )
+        return [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+
+
+# Дефолты на случай, если YAML не найден
+_DEFAULT_ROLE_DEFS: Dict[str, Dict[str, Any]] = {
+    "generator": {
+        "system": (
+            "You are an experienced mathematics problem solver.\n"
+            "You will be given a problem statement and any current solution steps. "
+            "Your task is to generate ONLY THE NEXT SINGLE STEP of the solution that brings you closer to the answer. "
+            "Do not solve the entire problem at once.\n"
+            "If this step completes the solution and you know the final answer, end the step with the exact format:\n"
+            "Final answer: \\boxed{ANSWER}"
+        ),
+        "user_template": "{context}",
+        "temperature": 0.6,
+        "json_format": False,
+        "num_predict": 400,
+    },
+    "evaluator": {
+        "system": (
+            "You are a pedantic and strict evaluator of mathematical solution steps.\n"
+            "Analyze the problem context and the proposed next step.\n"
+            "You must respond with a single, valid JSON object matching this schema exactly:\n\n"
+            "{\n"
+            '  "mathematical_analysis": "Recalculate the step yourself. Is the arithmetic correct? '
+            'Are the constraints of the original problem (e.g., distinct digits, non-zero) strictly maintained?",\n'
+            '  "rationale": "Explanation of the quality of the step.",\n'
+            '  "score": 0.0\n'
+            "}\n\n"
+            "CRITICAL RULES:\n"
+            "1. If the step contains ANY mathematical error, wrong numbers, or violates a problem constraint "
+            "(like accidentally allowing zero), you MUST give it a score BELOW 0.5.\n"
+            "2. Never say a step has a mistake but give it a high score. If it has a mistake, fail it!\n"
+            "3. If the step is perfectly accurate and logically advances the solution, give it a 1.0."
+        ),
+        "user_template": "{context}\nGive a score of the new step:\n{step}",
+        "temperature": 0.1,
+        "json_format": True,
+        "num_predict": 900,
+    },
+    "verifier": {
+        "system": (
+            "You are a highly precise verifier of mathematical solutions.\n"
+            "Review the entire step-by-step solution provided.\n"
+            "You must respond with a single, valid JSON object matching this schema exactly.\n\n"
+            'Crucial: You must write the "step_by_step_analysis" first to double-check every single '
+            "calculation in the solution before deciding on the final verdict.\n\n"
+            "{\n"
+            '  "step_by_step_analysis": "Go through each step of the solution one by one. Recalculate everything yourself to ensure no errors exist.",\n'
+            '  "rationale": "Detailed explanation of your verification verdict.",\n'
+            '  "is_valid": false,\n'
+            '  "confidence": 0.0,\n'
+            '  "faulty_step_index": null\n'
+            "}\n\n"
+            "Verification Rules:\n"
+            "- Double check your own math. Do not claim correct equations or calculations are incorrect.\n"
+            "- Dividing both sides of an equation (e.g., -2x = -10) by a negative number (e.g., -2) results in a "
+            "positive value (e.g., x = 5) and is perfectly correct. Equations are NOT inequalities; there is no "
+            "direction to reverse.\n"
+            "- When counting three-digit numbers (e.g., permutations), the order of digits matters (e.g., 123 is "
+            "different from 321). Do NOT divide by factorials (like 3!) unless order does not matter.\n"
+            '- "is_valid": boolean (true if the entire solution is flawless and correct, false otherwise).\n'
+            '- "confidence": float from 0.0 to 1.0.\n'
+            '- "faulty_step_index": integer (0-indexed) of the first incorrect step, or null if correct.'
+        ),
+        "user_template": "{context}",
+        "temperature": 0.0,
+        "json_format": True,
+        "num_predict": 900,
+    },
+}
+
+ROLES: Dict[str, Role] = {
+    name: Role(
+        name=name,
+        system_prompt=cfg["system"],
+        user_template=cfg["user_template"],
+        temperature=cfg["temperature"],
+        json_format=cfg["json_format"],
+        num_predict=cfg["num_predict"],
+    )
+    for name, cfg in _DEFAULT_ROLE_DEFS.items()
+}
+
+
+def load_prompts_from_yaml(yaml_path: "Path | str") -> None:
     try:
-        with open(yaml_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-            
-        roles = config.get("roles", {})
-        if "generator" in roles:
-            GEN_SYSTEM_PROMPT = roles["generator"]["system"]
-        if "evaluator" in roles:
-            EVAL_SYSTEM_PROMPT = roles["evaluator"]["system"]
-        if "verifier" in roles:
-            VERIFY_SYSTEM_PROMPT = roles["verifier"]["system"]
-            
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+
+        roles_cfg = config.get("roles", {})
+        if not roles_cfg:
+            print(f"[Prompts] Warning: {yaml_path} has no 'roles' section. Using hardcoded defaults.")
+            return
+
+        for role_name, role_cfg in roles_cfg.items():
+            if role_name not in _DEFAULT_ROLE_DEFS:
+                print(f"[Prompts] Warning: unknown role '{role_name}' in {yaml_path}, ignoring.")
+                continue
+            defaults = _DEFAULT_ROLE_DEFS[role_name]
+            ROLES[role_name] = Role(
+                name=role_name,
+                system_prompt=role_cfg.get("system", defaults["system"]),
+                user_template=role_cfg.get("user_template", defaults["user_template"]),
+                temperature=float(role_cfg.get("temperature", defaults["temperature"])),
+                json_format=bool(role_cfg.get("json_format", defaults["json_format"])),
+                num_predict=role_cfg.get("num_predict", defaults["num_predict"]),
+            )
+
         print(f"[Prompts] Successfully loaded prompts from {yaml_path}")
     except Exception as e:
         print(f"[Prompts] Warning: Could not load prompt file ({e}). Using hardcoded defaults.")
 
 
-MODEL_NAME = "llama3.2"
-_BOXED_RE = re.compile(r"\\boxed\{")
-
-
+# --- Utilities ---
 def _chat(
     messages: List[dict],
     json_format: bool = False,
@@ -115,18 +233,16 @@ def generate_step(state: AgentState):
     k = state['k_branches'] if (state['branch_mode'] == 'multi' or state['in_recovery']) else 1
     print(f"  -> Generating {k} candidate(s).")
 
+    role = ROLES["generator"]
     candidates = []
     total_tokens = 0
     context = _build_context(state['problem'], state.get('steps', []))
     
     for i in range(k):
         temp = state['base_temperature'] + (0.15 * i) if k > 1 else state['base_temperature']
-        messages = [
-            {"role": "system", "content": GEN_SYSTEM_PROMPT},
-            {"role": "user", "content": context},
-        ]
+        messages = role.build_messages(context=context)
         
-        step_text, tks = _chat(messages, temperature=temp, seed=1000 + i)
+        step_text, tks = _chat(messages, temperature=temp, seed=1000 + i, num_predict=role.num_predict)
         candidates.append(step_text)
         total_tokens += tks
         
@@ -138,16 +254,14 @@ def generate_step(state: AgentState):
 
 def evaluate_steps(state: AgentState):
     print(f"\n[Node: Evaluate] Checking {len(state['candidate_steps'])} candidate(s)...")
+    role = ROLES["evaluator"]
     scores = []
     total_tokens = 0
     context = _build_context(state['problem'], state.get('steps', []))
     
     for i, step in enumerate(state['candidate_steps']):
-        messages = [
-            {"role": "system", "content": EVAL_SYSTEM_PROMPT},
-            {"role": "user", "content": f"{context}\nGive a score of the new step:\n{step}"},
-        ]
-        content, tks = _chat(messages, json_format=True, temperature=0.1)
+        messages = role.build_messages(context=context, step=step)
+        content, tks = _chat(messages, json_format=role.json_format, temperature=role.temperature, num_predict=role.num_predict)
         total_tokens += tks
 
         try:
@@ -210,12 +324,10 @@ def commit_step(state: AgentState):
 
 def verify_solution(state: AgentState):
     print("\n[Node: Verify] Running verifier...")
+    role = ROLES["verifier"]
     context = _build_context(state['problem'], state.get('steps', []))
-    messages = [
-        {"role": "system", "content": VERIFY_SYSTEM_PROMPT},
-        {"role": "user", "content": context},
-    ]
-    content, tks = _chat(messages, json_format=True, temperature=0.0)
+    messages = role.build_messages(context=context)
+    content, tks = _chat(messages, json_format=role.json_format, temperature=role.temperature, num_predict=role.num_predict)
 
     try:
         result_dict = json.loads(content)

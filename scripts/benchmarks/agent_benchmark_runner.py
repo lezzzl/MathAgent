@@ -14,6 +14,9 @@ sys.path.insert(0, str(ROOT))
 import langgraph_math_solver
 from langgraph_math_solver import build_solver_graph
 
+from dotenv import load_dotenv
+load_dotenv()
+
 DEFAULT_PROMPT = ROOT / "conf/base/prompts/agent-step-v1.yml"
 
 @dataclass(frozen=True)
@@ -126,7 +129,6 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
                 f"{config.name} task {task_id}"
             )
 
-            # Инициализируем стартовое состояние для графа в соответствии с AgentState
             initial_state = {
                 "problem": item["problem"],
                 "steps": [],
@@ -184,7 +186,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
                 config,
                 task_id,
                 solution,
-                str(item.get("solution", "")),
+                str(item.get("answer", "")),
                 args.model,
                 metadata,
             )

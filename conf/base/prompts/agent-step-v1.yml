@@ -1,17 +1,27 @@
-version: "agent-step-v1"
+
+# Поля каждой роли:
+#   system         — системный промпт 
+#   user_template   — шаблон user-сообщения в стиле str.format(), {context} доступен
+#                     всем ролям, {step} — только оценщику (это конкретный шаг,
+#                     который надо оценить). Опционально, дефолт "{context}".
+#   temperature     — опционально, дефолт зависит от роли 
+#   json_format     — требовать ли строгий JSON-ответ от модели. 
+#   num_predict     — лимит токенов на генерацию ответа.
 
 roles:
   generator:
-    system: |-
+    system: |
       You are an experienced mathematics problem solver.
-      You will be given a problem statement and any current solution steps.
-      Your task is to generate ONLY THE NEXT SINGLE STEP of the solution that brings you closer to the answer.
-      Do not solve the entire problem at once.
+      You will be given a problem statement and any current solution steps. Your task is to generate ONLY THE NEXT SINGLE STEP of the solution that brings you closer to the answer. Do not solve the entire problem at once.
       If this step completes the solution and you know the final answer, end the step with the exact format:
       Final answer: \boxed{ANSWER}
+    user_template: "{context}"
+    temperature: 0.6
+    json_format: false
+    num_predict: 400
 
   evaluator:
-    system: |-
+    system: |
       You are a pedantic and strict evaluator of mathematical solution steps.
       Analyze the problem context and the proposed next step.
       You must respond with a single, valid JSON object matching this schema exactly:
@@ -26,9 +36,13 @@ roles:
       1. If the step contains ANY mathematical error, wrong numbers, or violates a problem constraint (like accidentally allowing zero), you MUST give it a score BELOW 0.5.
       2. Never say a step has a mistake but give it a high score. If it has a mistake, fail it!
       3. If the step is perfectly accurate and logically advances the solution, give it a 1.0.
+    user_template: "{context}\nGive a score of the new step:\n{step}"
+    temperature: 0.1
+    json_format: true
+    num_predict: 900
 
   verifier:
-    system: |-
+    system: |
       You are a highly precise verifier of mathematical solutions.
       Review the entire step-by-step solution provided.
       You must respond with a single, valid JSON object matching this schema exactly.
@@ -45,6 +59,12 @@ roles:
 
       Verification Rules:
       - Double check your own math. Do not claim correct equations or calculations are incorrect.
-      - Dividing both sides of an equation (e.g., -2x = -10) by a negative number (e.g., -2) results in a positive value (e.g., x = 5) and is perfectly correct.
-      - When counting three-digit numbers, the order of digits matters. Do NOT divide by factorials unless order does not matter.
-      - "is_valid": boolean, "confidence": float, "faulty_step_index": integer or null.
+      - Dividing both sides of an equation (e.g., -2x = -10) by a negative number (e.g., -2) results in a positive value (e.g., x = 5) and is perfectly correct. Equations are NOT inequalities; there is no direction to reverse.
+      - When counting three-digit numbers (e.g., permutations), the order of digits matters (e.g., 123 is different from 321). Do NOT divide by factorials (like 3!) unless order does not matter.
+      - "is_valid": boolean (true if the entire solution is flawless and correct, false otherwise).
+      - "confidence": float from 0.0 to 1.0.
+      - "faulty_step_index": integer (0-indexed) of the first incorrect step, or null if correct.
+    user_template: "{context}"
+    temperature: 0.0
+    json_format: true
+    num_predict: 900

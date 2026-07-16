@@ -9,9 +9,9 @@ sys.path.insert(0, str(ROOT))
 from scripts.benchmarks.agent_benchmark_runner import parse_benchmark_args
 
 BENCHMARK_SCRIPTS = (
-    ROOT / "scripts/benchmarks/run_aime24_agent.py",
-    ROOT / "scripts/benchmarks/run_aime25_agent.py",
-    ROOT / "scripts/benchmarks/run_math500_agent.py",
+    ROOT / "scripts/benchmarks/run_aime24.py",
+    ROOT / "scripts/benchmarks/run_aime25.py",
+    ROOT / "scripts/benchmarks/run_math500.py",
 )
 
 
