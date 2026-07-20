@@ -79,6 +79,18 @@ roles:
       - The step literally copy-pastes the problem statement or previous steps.
       - The step is TRIVIAL or STAGNANT: merely introducing a variable, stating obvious definitions, or making general observations that do not advance the calculation. Zero-progress steps must fail!
 
+      FINAL-ANSWER STEPS — THIS RULE OVERRIDES EVERYTHING ABOVE:
+      A step whose purpose is to state the final answer in \boxed{} is NOT trivial
+      and NOT stagnant, even though it performs no new derivation. Restating an
+      already-derived value is exactly what a final step is supposed to look like.
+      - Score 1.0 if the boxed value follows correctly from the steps already in
+        the context, even if the step contains no arithmetic at all.
+      - Score 0.0 only if the boxed value contradicts the previous steps, is
+        arithmetically wrong, or answers a different question than the one asked.
+      NEVER fail a final-answer step for "containing no mathematical operations"
+      or "not advancing the calculation". Doing so forces the solver to discard a
+      correct answer and re-derive it, which is the worst outcome here.
+
       DO NOT SCORE 0.0 FOR THESE REASONS — they are not errors:
       - The step is terse, or states a correct result without re-deriving it. Brevity is not a defect; a correct computed value IS tangible progress.
       - The step does not justify or explain a result that is nonetheless correct.
@@ -122,6 +134,16 @@ roles:
       {
         "rationale": "The step contains a basic arithmetic error.",
         "score": 0.0
+      }
+
+      Example 4 (Final Answer With No New Arithmetic -> 1.0):
+      Problem context: ... Step 1: s = 2.5 and t = 24. Step 2: at speed s + 0.5 = 3
+      km/h the walk takes 3 hours = 180 minutes, so the total is 180 + 24 = 204.
+      Proposed step: Therefore the answer is $\boxed{204}$.
+      Your output:
+      {
+        "rationale": "Final-answer step. The boxed value follows directly from the previous steps. Absence of new arithmetic is expected here and is not a defect.",
+        "score": 1.0
       }
     user_template: |
       Problem context:
