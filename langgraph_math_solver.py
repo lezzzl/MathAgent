@@ -1,19 +1,20 @@
-import operator
 import json
+import operator
+import os
 import re
-from typing import Annotated, List, Optional, Any, Dict, Tuple
-from typing_extensions import TypedDict
 from dataclasses import dataclass
-
-import ollama
-from math_verify import parse, verify
-from langgraph.graph import StateGraph, END
-
-import yaml
 from pathlib import Path
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 
-MODEL_NAME = "llama3.2"
-_BOXED_RE = re.compile(r"\\boxed\{")
+import requests
+import yaml
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langgraph.graph import END, StateGraph
+from typing_extensions import TypedDict
+
+from answer_utils import extract_answer
+from tool_generator_subgraph import count_chain_tokens, generator_with_tools, make_llm
+from tools import reset_calculator_state
 
 @dataclass
 class Role:
@@ -23,6 +24,11 @@ class Role:
     temperature: float = 0.6
     json_format: bool = False
     num_predict: Optional[int] = None
+    # None — не трогать поведение модели (для не-reasoning моделей это
+    # единственный корректный вариант). False у thinking-моделей вроде Qwen3.5
+    # выключает блок размышлений: замер на оценщике дал 420 токенов и 12 с
+    # против 5277 токенов и 153 с с размышлениями.
+    enable_thinking: Optional[bool] = None
 
     def build_messages(self, **kwargs) -> List[dict]:
         """Собирает messages для _chat() из system_prompt + user_template.
@@ -44,73 +50,37 @@ class Role:
         ]
 
 
-# Дефолты на случай, если YAML не найден
+# Промпты живут в conf/base/prompts/agent-step-v1.yml — он единственный источник
+# правды. Здесь только аварийная заглушка на случай отсутствия файла и список
+# известных ролей для валидации. Раньше тут лежала полная копия всех промптов,
+# которая незаметно разошлась с YAML (упоминала уже переименованный инструмент
+# и старые лимиты токенов) и вводила в заблуждение при отладке.
+_FALLBACK_SYSTEM = (
+    "You are a careful mathematician. Follow the output format requested by the "
+    "user message exactly. Prompts failed to load from YAML — results will be poor."
+)
+
 _DEFAULT_ROLE_DEFS: Dict[str, Dict[str, Any]] = {
     "generator": {
-        "system": (
-            "You are an experienced mathematics problem solver.\n"
-            "You will be given a problem statement and any current solution steps. "
-            "Your task is to generate ONLY THE NEXT SINGLE STEP of the solution that brings you closer to the answer. "
-            "Do not solve the entire problem at once.\n"
-            "If this step completes the solution and you know the final answer, end the step with the exact format:\n"
-            "Final answer: \\boxed{ANSWER}"
-        ),
+        "system": _FALLBACK_SYSTEM,
         "user_template": "{context}",
         "temperature": 0.6,
         "json_format": False,
-        "num_predict": 400,
+        "num_predict": 4000,
     },
     "evaluator": {
-        "system": (
-            "You are a pedantic and strict evaluator of mathematical solution steps.\n"
-            "Analyze the problem context and the proposed next step.\n"
-            "You must respond with a single, valid JSON object matching this schema exactly:\n\n"
-            "{\n"
-            '  "mathematical_analysis": "Recalculate the step yourself. Is the arithmetic correct? '
-            'Are the constraints of the original problem (e.g., distinct digits, non-zero) strictly maintained?",\n'
-            '  "rationale": "Explanation of the quality of the step.",\n'
-            '  "score": 0.0\n'
-            "}\n\n"
-            "CRITICAL RULES:\n"
-            "1. If the step contains ANY mathematical error, wrong numbers, or violates a problem constraint "
-            "(like accidentally allowing zero), you MUST give it a score BELOW 0.5.\n"
-            "2. Never say a step has a mistake but give it a high score. If it has a mistake, fail it!\n"
-            "3. If the step is perfectly accurate and logically advances the solution, give it a 1.0."
-        ),
+        "system": _FALLBACK_SYSTEM,
         "user_template": "{context}\nGive a score of the new step:\n{step}",
-        "temperature": 0.1,
-        "json_format": True,
-        "num_predict": 900,
+        "temperature": 0.6,
+        "json_format": False,
+        "num_predict": 4000,
     },
     "verifier": {
-        "system": (
-            "You are a highly precise verifier of mathematical solutions.\n"
-            "Review the entire step-by-step solution provided.\n"
-            "You must respond with a single, valid JSON object matching this schema exactly.\n\n"
-            'Crucial: You must write the "step_by_step_analysis" first to double-check every single '
-            "calculation in the solution before deciding on the final verdict.\n\n"
-            "{\n"
-            '  "step_by_step_analysis": "Go through each step of the solution one by one. Recalculate everything yourself to ensure no errors exist.",\n'
-            '  "rationale": "Detailed explanation of your verification verdict.",\n'
-            '  "is_valid": false,\n'
-            '  "confidence": 0.0,\n'
-            '  "faulty_step_index": null\n'
-            "}\n\n"
-            "Verification Rules:\n"
-            "- Double check your own math. Do not claim correct equations or calculations are incorrect.\n"
-            "- Dividing both sides of an equation (e.g., -2x = -10) by a negative number (e.g., -2) results in a "
-            "positive value (e.g., x = 5) and is perfectly correct. Equations are NOT inequalities; there is no "
-            "direction to reverse.\n"
-            "- When counting three-digit numbers (e.g., permutations), the order of digits matters (e.g., 123 is "
-            "different from 321). Do NOT divide by factorials (like 3!) unless order does not matter.\n"
-            '- "is_valid": boolean (true if the entire solution is flawless and correct, false otherwise).\n'
-            '- "confidence": float from 0.0 to 1.0.\n'
-            '- "faulty_step_index": integer (0-indexed) of the first incorrect step, or null if correct.'
-        ),
+        "system": _FALLBACK_SYSTEM,
         "user_template": "{context}",
-        "temperature": 0.0,
-        "json_format": True,
-        "num_predict": 900,
+        "temperature": 0.6,
+        "json_format": False,
+        "num_predict": 3000,
     },
 }
 
@@ -122,6 +92,7 @@ ROLES: Dict[str, Role] = {
         temperature=cfg["temperature"],
         json_format=cfg["json_format"],
         num_predict=cfg["num_predict"],
+        enable_thinking=cfg.get("enable_thinking"),
     )
     for name, cfg in _DEFAULT_ROLE_DEFS.items()
 }
@@ -149,49 +120,362 @@ def load_prompts_from_yaml(yaml_path: "Path | str") -> None:
                 temperature=float(role_cfg.get("temperature", defaults["temperature"])),
                 json_format=bool(role_cfg.get("json_format", defaults["json_format"])),
                 num_predict=role_cfg.get("num_predict", defaults["num_predict"]),
+                enable_thinking=role_cfg.get("enable_thinking", defaults.get("enable_thinking")),
             )
 
         print(f"[Prompts] Successfully loaded prompts from {yaml_path}")
     except Exception as e:
-        print(f"[Prompts] Warning: Could not load prompt file ({e}). Using hardcoded defaults.")
+        print(f"[Prompts] ОШИБКА: промпты не загрузились из {yaml_path} ({e}).\n"
+              f"           Работаем на аварийной заглушке — качество будет мусорным.")
 
 
-# --- Utilities ---
-def _chat(
-    messages: List[dict],
-    json_format: bool = False,
-    temperature: float = 0.6,
-    seed: Optional[int] = None,
-    num_predict: Optional[int] = None,
-) -> Tuple[str, int]:
-    if num_predict is None:
-        num_predict = 900 if json_format else 400
-    options = {"temperature": temperature, "num_predict": num_predict}
+MODEL_NAME = os.getenv("MODEL", "Qwen/Qwen3.5-4B")
+BASE_URL = os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1")
+API_KEY = os.getenv("OPENAI_API_KEY", "token-abc123")
+
+# Лимит на ОДИН ответ модели, а не на весь контекст. Прежнее значение 8192
+# совпадало с полным контекстом сервера, из-за чего накопленный диалог плюс
+# запрошенная генерация гарантированно упирались в 400 (4 из 30 задач aime26).
+DEFAULT_MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
+
+# Сколько символов контекста считаем безопасными. ~4 символа на токен, плюс
+# запас под системный промпт и ответ. Служит защитой от переполнения при
+# длинных пошаговых решениях.
+MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "40000"))
+
+# Таймаут одного HTTP-запроса к серверу модели. Без него requests.post висит
+# бесконечно, если сервер перестал отвечать, и прогон замирает молча.
+REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
+
+def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=False,
+          enable_thinking=None):
+    url = f"{BASE_URL}/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": messages,
+        "temperature": temperature,
+    }
+
+    # Устанавливаем лимит токенов
+    payload["max_tokens"] = num_predict if num_predict is not None else DEFAULT_MAX_TOKENS
+
     if seed is not None:
-        options["seed"] = seed
+        payload["seed"] = seed
 
-    kwargs: Dict[str, Any] = {"model": MODEL_NAME, "messages": messages, "options": options}
     if json_format:
-        kwargs["format"] = "json"
+        payload["response_format"] = {"type": "json_object"}
 
-    response = ollama.chat(**kwargs)
-    total_tokens = response.get("prompt_eval_count", 0) + response.get("eval_count", 0)
-    return (response["message"].get("content") or "").strip(), total_tokens
+    if enable_thinking is not None:
+        payload["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+
+        data = response.json()
+
+        choices = data.get("choices")
+        if not choices:
+            print(f"[WARN] No choices in response: {data}")
+            return "", 0
+
+        message = choices[0].get("message")
+        if not message:
+            print(f"[WARN] No message in response: {data}")
+            return "", 0
+
+        content = message.get("content", "")
+        if not content:
+            content = message.get("reasoning_content", "") or message.get("reasoning", "")
+
+        if not content:
+            print(f"[WARN] Empty content and reasoning in response: {data}")
+
+        tokens_used = data.get("usage", {}).get("total_tokens", 0)
+        return content, tokens_used
+
+    except requests.exceptions.RequestException as e:
+        print(f"API Error: {e}")
+        if 'response' in locals() and response is not None:
+            print(f"Response content: {response.text}")
+        return "", 0
+
+_STEP_TAG_RE = re.compile(r"<step>(.*?)</step>", re.DOTALL | re.IGNORECASE)
+_STEP_OPEN_TAG_RE = re.compile(r"<step>", re.IGNORECASE)
+_BOXED_START_RE = re.compile(r"\\boxed\s*\{")
+def _extract_step_content(raw: str) -> str:
+    """
+    Извлекает содержимое <step>...</step>.
+    Если модель вынесла \boxed{ за пределы тегов, автоматически
+    захватывает весь хвост от \boxed{ и приклеивает его обратно к шагу.
+    """
+    if not raw:
+        return ""
+
+    m = _STEP_TAG_RE.search(raw)
+    if m:
+        step = m.group(1).strip()
+    else:
+        m_open = _STEP_OPEN_TAG_RE.search(raw)
+        if m_open:
+            step = raw[m_open.end():].strip()
+        else:
+            step = raw.strip()
+
+    matches = list(_BOXED_START_RE.finditer(raw))
+    
+    if matches:
+        last_match = matches[-1]
+        tail = raw[last_match.start():]
+
+        if last_match.group(0) not in step:
+            clean_tail = tail.replace("</step>", "").strip()
+            
+            if step:
+                step += f"\n\nFinal answer: {clean_tail}"
+            else:
+                step = f"Final answer: {clean_tail}"
+
+    return step
+
 
 def _build_context(problem: str, steps: List[str]) -> str:
-    context = f"Task: {problem}\n\nCurrent solution:\n"
-    for i, step in enumerate(steps):
-        context += f"Step {i}: {step}\n"
-    return context
+    """Собирает контекст, обрезая середину решения при переполнении.
 
-def extract_answer(step_text: str) -> Optional[str]:
-    matches = list(_BOXED_RE.finditer(step_text))
-    if not matches:
+    Условие задачи и последние шаги нужны модели всегда, а самые ранние шаги
+    обычно уже «впитаны» в последующие выкладки — поэтому при нехватке места
+    выбрасываем их с начала, а не обрезаем текст по символам.
+    """
+    if not steps:
+        return f"Task: {problem}\n"
+
+    head = f"Task: {problem}\n\nCurrent steps of solution:\n"
+    rendered = [f"Step {i}: {step}\n" for i, step in enumerate(steps, 1)]
+
+    budget = MAX_CONTEXT_CHARS - len(head)
+    dropped = 0
+    while len(rendered) > 1 and sum(len(s) for s in rendered) > budget:
+        rendered.pop(0)
+        dropped += 1
+
+    if dropped:
+        print(f"  [CONTEXT TRIM] Отброшено {dropped} ранних шагов, чтобы уложиться "
+              f"в {MAX_CONTEXT_CHARS} символов контекста.")
+        head += f"[... {dropped} earlier step(s) omitted for brevity ...]\n"
+
+    # Единственный оставшийся шаг всё ещё может быть длиннее бюджета.
+    tail = "".join(rendered)
+    if len(tail) > budget:
+        tail = tail[: max(0, budget)] + "\n[... step truncated ...]\n"
+
+    return head + tail
+
+_STEP_PREFIX_RE = re.compile(r"^(step\s*\d+\s*:\s*)+", re.IGNORECASE)
+
+def _normalize_step_text(text: str) -> str:
+    stripped = _STEP_PREFIX_RE.sub("", (text or "").strip())
+    return re.sub(r"\s+", " ", stripped.lower()).strip()
+
+
+_LEAKED_TOOL_CALL_RE = re.compile(r"<tool_call>|<\|tool_call\|>", re.IGNORECASE)
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_MD_JSON_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
+
+
+def _iter_json_objects(text: str):
+    """Перебирает сбалансированные {...} с конца текста к началу.
+
+    Reasoning-модели (Qwen3, R1) пишут длинную цепочку рассуждений, а JSON
+    кладут в самый конец. Прежний поиск `\\{.*\\}` жадно захватывал от ПЕРВОЙ
+    скобки — а ей обычно оказывалась латеховая \\frac{a}{b} в рассуждениях,
+    из-за чего разбор гарантированно падал. Идём с конца: нужный объект там.
+    """
+    opens = [i for i, ch in enumerate(text) if ch == "{"]
+    for start in reversed(opens):
+        depth = 0
+        in_string = False
+        escaped = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    yield text[start : i + 1]
+                    break
+
+
+def _extract_json_dict(content: str, expected_keys: Tuple[str, ...]) -> Optional[Dict[str, Any]]:
+    """Достаёт из ответа модели JSON-объект с одним из ожидаемых ключей."""
+    if not content:
         return None
-    tail = step_text[matches[-1].start():]
-    if not parse(tail):
-        return None
-    return tail
+    # Рассуждения в <think>...</think> нам не нужны и только мешают.
+    cleaned = _THINK_BLOCK_RE.sub("", content)
+
+    candidates = [m.group(1) for m in _MD_JSON_RE.finditer(cleaned)]
+    candidates.extend(_iter_json_objects(cleaned))
+
+    for candidate in candidates:
+        for attempt in (candidate, re.sub(r'\\(?![\\"/bfnrtu])', r"\\\\", candidate)):
+            try:
+                parsed = json.loads(attempt, strict=False)
+            except Exception:
+                continue
+            if isinstance(parsed, dict) and any(k in parsed for k in expected_keys):
+                return parsed
+    return None
+
+
+def _diagnose_non_json(content: str, role: str) -> Optional[str]:
+    """Распознаёт типовые причины, по которым ответ не является JSON.
+
+    Главная из них — вызов инструмента, оборванный лимитом токенов: парсер
+    hermes не может разобрать незакрытый <tool_call>, и сырой текст утекает в
+    content. Раньше это выглядело как «модель выдала мусор», хотя лечится
+    увеличением num_predict.
+    """
+    if _LEAKED_TOOL_CALL_RE.search(content or ""):
+        return (
+            f"{role}: в ответе сырой <tool_call> вместо JSON. Сервер не распознал "
+            f"вызов инструмента — обычно это несовпадение формата с "
+            f"--tool-call-parser (Qwen3.x пишет <function=...><parameter=...>, "
+            f"а hermes ждёт JSON), реже обрыв по лимиту токенов. Если инструменты "
+            f"не нужны, запускайте с --no-tools: тогда они вообще не отдаются модели."
+        )
+    return None
+
+
+def _parse_eval_response(content: str) -> Tuple[float, str, bool]:
+    """
+    Разбирает ответ оценщика с 3 уровнями защиты от типичных сбоев LLM
+    (неэкранированные слэши LaTeX, markdown-блоки, битый синтаксис JSON).
+    Возвращает (score, rationale, is_reliable).
+    """
+    if not content:
+        return 0.0, "Empty response from evaluator", False
+
+    parsed = _extract_json_dict(content, ("score", "rationale"))
+    if parsed is not None and "score" in parsed:
+        try:
+            score = max(0.0, min(1.0, float(parsed["score"])))
+            rationale = str(parsed.get("rationale", "No rationale provided"))
+            return score, rationale, True
+        except (TypeError, ValueError):
+            pass
+
+    md_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL | re.IGNORECASE)
+    json_str = md_match.group(1) if md_match else content
+    if not md_match:
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+
+    try:
+        # strict=False разрешает сырые управляющие символы внутри строк:
+        # модели постоянно вставляют настоящий перевод строки в "rationale",
+        # что по стандарту невалидно и раньше уводило разбор в регекс-фоллбек.
+        result_dict = json.loads(json_str, strict=False)
+        score = max(0.0, min(1.0, float(result_dict.get("score", 0.0))))
+        rationale = str(result_dict.get("rationale", "No rationale provided"))
+        return score, rationale, True
+    except Exception as e_first:
+        try:
+            # Тот же набор исключений, что у верификатора: без bfnrtu валидные
+            # escape-последовательности \n и \t портились при «починке».
+            repaired_str = re.sub(r'\\(?![\\"/bfnrtu])', r'\\\\', json_str)
+            result_dict = json.loads(repaired_str, strict=False)
+            score = max(0.0, min(1.0, float(result_dict.get("score", 0.0))))
+            rationale = str(result_dict.get("rationale", "No rationale provided"))
+            return score, rationale, True
+        except Exception:
+            pass
+
+    # 4. РЕГЕКС-ФОЛЛБЕК: Если JSON разрушен, спасаем score и rationale регуляркой
+    score_match = re.search(r'"score"\s*:\s*([0-1](?:\.[0-9]+)?)', content, re.IGNORECASE)
+    rat_match = re.search(r'"rationale"\s*:\s*"([^"]*)"', content, re.IGNORECASE)
+    
+    if score_match:
+        try:
+            score = max(0.0, min(1.0, float(score_match.group(1))))
+            rationale = rat_match.group(1) if rat_match else f"Extracted via regex (JSON parse failed: {e_first})"
+            print(f"  ℹ️ [JSON RECOVERY] Парсер спас оценку score={score:.4f} регулярным выражением!")
+            return score, rationale, True
+        except ValueError:
+            pass
+
+    diagnosis = _diagnose_non_json(content, "оценщик")
+    if diagnosis:
+        return 0.0, diagnosis, False
+
+    # Выводим до 400 символов ошибки, чтобы в логах было видно реальную причину, если даже регекс не сработал
+    return 0.0, f"Invalid JSON from evaluator (raw preview: {content[:400]!r})", False
+
+
+def _parse_verify_response(content: str) -> Tuple[bool, str, bool]:
+    """Аналогично _parse_eval_response, но для схемы верификатора с лечением LaTeX и фоллбеком."""
+    if not content:
+        return False, "Empty response from verifier", False
+
+    parsed = _extract_json_dict(content, ("is_valid", "rationale"))
+    if parsed is not None and "is_valid" in parsed:
+        return (
+            bool(parsed["is_valid"]),
+            str(parsed.get("rationale", "No rationale provided")),
+            True,
+        )
+
+    md_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL | re.IGNORECASE)
+    json_str = md_match.group(1) if md_match else content
+    if not md_match:
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+
+    try:
+        result_dict = json.loads(json_str, strict=False)
+        is_valid = bool(result_dict.get("is_valid", False))
+        rationale = str(result_dict.get("rationale", "No rationale provided"))
+        return is_valid, rationale, True
+    except Exception as e_first:
+        try:
+            repaired_str = re.sub(r'\\(?![\\"/bfnrtu])', r'\\\\', json_str)
+            result_dict = json.loads(repaired_str, strict=False)
+            is_valid = bool(result_dict.get("is_valid", False))
+            rationale = str(result_dict.get("rationale", "No rationale provided"))
+            return is_valid, rationale, True
+        except Exception:
+            pass
+
+    valid_match = re.search(r'"is_valid"\s*:\s*(true|false)', content, re.IGNORECASE)
+    rat_match = re.search(r'"rationale"\s*:\s*"([^"]*)"', content, re.IGNORECASE)
+    
+    if valid_match:
+        is_valid = (valid_match.group(1).lower() == "true")
+        rationale = rat_match.group(1) if rat_match else f"Extracted via regex (JSON parse failed: {e_first})"
+        print(f"  ℹ️ [JSON RECOVERY] Верификатор спас вердикт is_valid={is_valid} регулярным выражением!")
+        return is_valid, rationale, True
+
+    diagnosis = _diagnose_non_json(content, "верификатор")
+    if diagnosis:
+        return False, diagnosis, False
+
+    return False, f"Invalid JSON from verifier (raw preview: {content[:400]!r})", False
 
 
 # ---------------------------------------------------------------------------
@@ -212,9 +496,18 @@ class AgentState(TypedDict):
     tokens_used: Annotated[int, operator.add]
     token_budget: int  
     in_recovery: bool
-    recovery_count: int  
     max_recoveries: int  
     total_recovery_events: Annotated[int, operator.add]  
+
+    stuck_streak: int
+    max_stuck_steps: int
+
+    unreliable_eval_streak: int
+    max_unreliable_evals: int
+
+    # История оценок по раундам — без неё поведение оценщика невозможно
+    # измерить постфактум: в результатах видно только итоговый ответ.
+    eval_history: Annotated[List[Dict[str, Any]], operator.add]
 
     final_answer: Optional[str]
     is_valid: bool
@@ -222,15 +515,24 @@ class AgentState(TypedDict):
     gave_up: bool         
     gave_up_reason: str    
 
+    step_recovery_attempts: int  # Сколько раз мы уже пытались перегенерировать этот шаг
+    max_step_attempts: int       # Максимальное число попыток на один шаг (например, 2 или 3)
+
+    # Ключи, не объявленные здесь, LangGraph молча отбрасывает: состояние
+    # фильтруется по схеме. Без этой строки --no-tools не имел никакого эффекта.
+    use_tools: bool
+
 
 # ---------------------------------------------------------------------------
 # 2. Graph Nodes
 # ---------------------------------------------------------------------------
 def generate_step(state: AgentState):
+    if not state.get('steps'):
+        reset_calculator_state()
     current_depth = len(state.get('steps', []))
-    print(f"\n[Node: Generate] Depth: {current_depth} | Tokens used: {state.get('tokens_used', 0)}")
-    
-    k = state['k_branches'] if (state['branch_mode'] == 'multi' or state['in_recovery']) else 1
+    print(f"\n[Node: Generate] Depth: {current_depth} | Tokens used: {state.get('tokens_used', 0)}")    
+    multi = state.get('branch_mode') == 'multi' or state.get('in_recovery')
+    k = state.get('k_branches', 3) if multi else 1
     print(f"  -> Generating {k} candidate(s).")
 
     role = ROLES["generator"]
@@ -238,61 +540,184 @@ def generate_step(state: AgentState):
     total_tokens = 0
     context = _build_context(state['problem'], state.get('steps', []))
     
+    use_tools = state.get("use_tools", True)
+    # База — температура роли из yaml. base_temperature раньше бралась из
+    # --temperature (дефолт 0.2) и полностью перекрывала yaml для генератора
+    # (в отличие от evaluate_steps/verify_solution, которые честно берут
+    # role.temperature). Для thinking-моделей вроде Qwen3 низкая температура в
+    # режиме размышлений — известный триггер вырождения в бесконечный повтор
+    # без выхода из <think>: модель жгла весь num_predict на размышления и
+    # обрывалась с пустым content. base_temperature остаётся явным override
+    # для тех, кто действительно хочет его задать через --temperature.
+    base_temp = state.get('base_temperature')
+    if base_temp is None:
+        base_temp = role.temperature
     for i in range(k):
-        temp = state['base_temperature'] + (0.15 * i) if k > 1 else state['base_temperature']
-        messages = role.build_messages(context=context)
-        
-        step_text, tks = _chat(messages, temperature=temp, seed=1000 + i, num_predict=role.num_predict)
+        attempt = state.get('step_recovery_attempts', 0)
+        # Потолок 1.1: с базой 0.6 (вместо прежних 0.2) эскалация по веткам и
+        # попыткам recovery иначе легко уходит за 1.2, где генерация у
+        # большинства моделей теряет связность.
+        temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
+        llm = make_llm(temp, model_name=MODEL_NAME, base_url=BASE_URL, api_key=API_KEY,
+                max_tokens=role.num_predict, with_tools=use_tools,
+                enable_thinking=role.enable_thinking)
+        if use_tools:
+            result = generator_with_tools.invoke(
+                {
+                    "messages": [
+                        SystemMessage(content=role.system_prompt),
+                        HumanMessage(content=context),
+                    ],
+                    "max_hops": 5,
+                },
+                config={"configurable": {"llm": llm}},
+            )
+        else:
+            input_messages = [
+                SystemMessage(content=role.system_prompt),
+                HumanMessage(content=context),
+            ]            
+            response = llm.invoke(input_messages)            
+            result = {
+                "messages": input_messages + [response]
+            }
+            
+        for m in result["messages"]:    
+            if isinstance(m, ToolMessage):
+                print(f"      [tool_result] {m.content[:200]}")
+        final_msg = result["messages"][-1]
+        raw_text = final_msg.content
+        step_text = _extract_step_content(raw_text)
         candidates.append(step_text)
+
+        tks = count_chain_tokens(result["messages"])
         total_tokens += tks
-        
-        print(f"    - Branch {i+1} generated (temp: {temp:.2f}, tokens: {tks})")
+
+        stripped_note = ""
+        if step_text != (raw_text or "").strip():
+            stripped_note = f" | ⚠️ отброшено {len(raw_text) - len(step_text)} симв. текста вне <step> тегов"
+        n_tool_calls = sum(1 for m in result["messages"] if getattr(m, "tool_calls", None))
+        print(f"    - Branch {i+1} generated (temp: {temp:.2f}, tokens: {tks}, tool-вызовов: {n_tool_calls}{stripped_note})")
         print(f"      Step:\n{step_text}\n")
-        
+
     return {"candidate_steps": candidates, "tokens_used": total_tokens}
 
 
 def evaluate_steps(state: AgentState):
-    print(f"\n[Node: Evaluate] Checking {len(state['candidate_steps'])} candidate(s)...")
+    candidates = state['candidate_steps']
+    print(f"\n[Node: Evaluate] Checking {len(candidates)} candidate(s)...")
     role = ROLES["evaluator"]
-    scores = []
+    scores: List[float] = []
+    seen: Dict[str, Tuple[float, str]] = {}
     total_tokens = 0
+    any_reliable = False
+    use_tools = state.get("use_tools", True)
     context = _build_context(state['problem'], state.get('steps', []))
-    
-    for i, step in enumerate(state['candidate_steps']):
-        messages = role.build_messages(context=context, step=step)
-        content, tks = _chat(messages, json_format=role.json_format, temperature=role.temperature, num_predict=role.num_predict)
+
+    for i, step in enumerate(candidates):
+        key = _normalize_step_text(step)
+        
+        if not key:
+            score = 0.0
+            rationale = "Step is entirely empty. Generator produced whitespace or failed to output tags."
+            seen[key] = (score, rationale)
+            scores.append(score)
+            print(f"    - Candidate {i+1} Score: {score:.4f} | Rationale: {rationale}")
+            continue
+        if key in seen:
+            score, rationale = seen[key]
+            scores.append(score)
+            print(f"    - Candidate {i+1} Score: {score:.4f} | Rationale: {rationale} "
+                  f"♻️ [ДУБЛИКАТ шага, оценщик повторно не вызывался]")
+            continue
+        
+        user_content = role.user_template.format(context=context, step=step)
+        llm = make_llm(role.temperature, model_name=MODEL_NAME, base_url=BASE_URL, api_key=API_KEY,
+                max_tokens=role.num_predict, with_tools=use_tools,
+                enable_thinking=role.enable_thinking)
+        messages = [
+            SystemMessage(content=role.system_prompt),
+            HumanMessage(content=user_content),
+        ]
+        if use_tools:
+            result = generator_with_tools.invoke(
+                {"messages": messages, "max_hops": 4, "max_total_tool_calls": 8},
+                config={"configurable": {"llm": llm}},
+            )
+        else:
+            result = {"messages": messages + [llm.invoke(messages)]}
+        final_msg = result["messages"][-1]
+        content = final_msg.content or ""
+
+        tks = count_chain_tokens(result["messages"])
         total_tokens += tks
 
-        try:
-            result_dict = json.loads(content)
-            score = max(0.0, min(1.0, float(result_dict.get("score", 0.5))))
-            rationale = str(result_dict.get("rationale", "No rationale extracted"))
-        except (json.JSONDecodeError, ValueError, TypeError):
-            score, rationale = 0.5, "JSON Parse Error"
-
+        score, rationale, reliable = _parse_eval_response(content)
+        any_reliable = any_reliable or reliable
+        seen[key] = (score, rationale)
         scores.append(score)
-        print(f"    - Candidate {i+1} Score: {score:.4f} | Rationale: {rationale}")
-        
-    return {"candidate_scores": scores, "tokens_used": total_tokens}
+
+        n_eval_tools = sum(1 for m in result["messages"] if getattr(m, "tool_calls", None))
+        tool_note = f" (калькулятор вызван {n_eval_tools} раз)" if n_eval_tools > 0 else ""
+
+        tag = "" if reliable else " ⚠️ [ОЦЕНКА НЕНАДЁЖНА]"
+        print(f"    - Candidate {i+1} Score: {score:.4f}{tag}{tool_note} | Rationale: {rationale}")
+
+    unreliable_streak = 0 if any_reliable else state.get('unreliable_eval_streak', 0) + 1
+    if unreliable_streak > 0:
+        print(f"  ⚠️  [ОЦЕНЩИК] Ни один ответ в этом раунде не распарсился — подряд "
+              f"{unreliable_streak}/{state.get('max_unreliable_evals', 3)} ненадёжных раундов.")
+
+    return {
+        "candidate_scores": scores,
+        "tokens_used": total_tokens,
+        "unreliable_eval_streak": unreliable_streak,
+        "eval_history": [{
+            "depth": len(state.get('steps', [])),
+            "scores": scores,
+            "reliable": any_reliable,
+            "in_recovery": bool(state.get('in_recovery')),
+        }],
+    }
 
 
 def trigger_recovery(state: AgentState):
+    new_attempts = state.get('step_recovery_attempts', 0) + 1
     total_so_far = state.get('total_recovery_events', 0) + 1
     print(f"\n[Node: Recovery] Triggering k-branch recovery for the current step. "
           f"(Event {total_so_far}/{state['max_recoveries']} for the entire run)")
     return {
         "in_recovery": True,
-        "recovery_count": state.get('recovery_count', 0) + 1,
+        "step_recovery_attempts": new_attempts,
         "total_recovery_events": 1,  
     }
 
 
 def give_up(state: AgentState):
-    reason = (
-        f"The token budget is exhausted ({state.get('tokens_used', 0)}/{state.get('token_budget', 0)}), "
-        f"clear \\boxed{{}} was not received."
-    )
+    if state.get('stuck_streak', 0) >= state.get('max_stuck_steps', 2):
+        reason = (
+            f"No-progress detected: {state['stuck_streak'] + 1} committed steps in a row did not add new "
+            f"content (differed only in step number/wording). Stopping now instead of grinding through "
+            f"the rest of the token budget ({state.get('tokens_used', 0)}/{state.get('token_budget', 0)})."
+        )
+    elif state.get('unreliable_eval_streak', 0) >= state.get('max_unreliable_evals', 3):
+        reason = (
+            f"Evaluator returned unparseable JSON {state['unreliable_eval_streak']} rounds in a row — "
+            f"likely a server-side issue (e.g. response_format=json_object needs a guided-decoding backend "
+            f"on vLLM), not a step-quality problem. Stopping instead of committing on noise "
+            f"({state.get('tokens_used', 0)}/{state.get('token_budget', 0)} tokens used)."
+        )
+    elif state.get('tokens_used', 0) >= state.get('token_budget', 0):
+        reason = (
+            f"The token budget is exhausted ({state.get('tokens_used', 0)}/{state.get('token_budget', 0)}), "
+            f"a clear \\boxed{{}} was not received."
+        )
+    else:
+        reason = (
+            f"Recovery budget for the entire run ({state.get('max_recoveries', 0)}) is exhausted and the "
+            f"best candidate is still below score_threshold — stopping rather than committing low-quality "
+            f"steps indefinitely until the token budget dies."
+        )
     print(f"\n[Node: Give Up] {reason}")
     return {
         "final_answer": None,
@@ -304,21 +729,41 @@ def give_up(state: AgentState):
 
 
 def commit_step(state: AgentState):
-    best_idx = max(range(len(state['candidate_scores'])), key=lambda i: state['candidate_scores'][i])
+    scores = state['candidate_scores']
+    steps = state['candidate_steps']
+    best_score = max(scores)
+    tied = [i for i, s in enumerate(scores) if s == best_score]
+
+    if len(tied) > 1:
+        with_answer = [i for i in tied if extract_answer(steps[i])]
+        best_idx = with_answer[0] if with_answer else tied[0]
+    else:
+        best_idx = tied[0]
+
     best_step = state['candidate_steps'][best_idx]
     best_score = state['candidate_scores'][best_idx]
     
     print(f"\n[Node: Commit] Selected best candidate (Score: {best_score:.4f}). Appending to steps.")
+
+    prior_steps = state.get('steps', [])
+    no_progress = bool(prior_steps) and _normalize_step_text(best_step) == _normalize_step_text(prior_steps[-1])
+    stuck_streak = (state.get('stuck_streak', 0) + 1) if no_progress else 0
+    if no_progress:
+        print(f"  ⚠️  [NO PROGRESS] Принятый шаг не отличается по содержанию от предыдущего "
+              f"(разница только в формулировке/номере шага) — подряд {stuck_streak}/{state.get('max_stuck_steps', 2)}.")
+
     answer = extract_answer(best_step)
-    if answer: print(f"  -> Explicit answer found: {answer}")
+    if answer:
+        print(f"  -> Explicit answer found: {answer}")
         
     return {
         "steps": [best_step],       
         "final_answer": answer if answer else "",
         "in_recovery": False,       
-        "recovery_count": 0,        
         "candidate_steps": [],      
-        "candidate_scores": []
+        "candidate_scores": [],
+        "stuck_streak": stuck_streak,
+        "step_recovery_attempts": 0,
     }
 
 
@@ -327,14 +772,12 @@ def verify_solution(state: AgentState):
     role = ROLES["verifier"]
     context = _build_context(state['problem'], state.get('steps', []))
     messages = role.build_messages(context=context)
-    content, tks = _chat(messages, json_format=role.json_format, temperature=role.temperature, num_predict=role.num_predict)
+    content, tks = _chat(messages, json_format=role.json_format, temperature=role.temperature,
+                         num_predict=role.num_predict, enable_thinking=role.enable_thinking)
 
-    try:
-        result_dict = json.loads(content)
-        is_valid = bool(result_dict.get("is_valid", False))
-        rationale = str(result_dict.get("rationale", ""))
-    except (json.JSONDecodeError, ValueError, TypeError):
-        is_valid, rationale = False, "JSON Parse Error"
+    is_valid, rationale, reliable = _parse_verify_response(content)
+    if not reliable:
+        print(f"  ⚠️  [НЕНАДЁЖНЫЙ ВЕРДИКТ] {rationale}")
 
     print(f"  -> Valid: {is_valid} | Rationale: {rationale}")
     
@@ -349,33 +792,70 @@ def verify_solution(state: AgentState):
 # 3. Conditional Edge Routers
 # ---------------------------------------------------------------------------
 def route_after_eval(state: AgentState):
-    best_score = max(state['candidate_scores'])
+    scores = state.get('candidate_scores') or []
+    if not scores:
+        # Генератор не вернул ни одного кандидата (например, все запросы упали).
+        # Раньше это был ValueError из max() и падение всей задачи.
+        print("\n[Router] Кандидатов нет — генерация не дала результата. Giving up.")
+        return "give_up"
+    best_score = max(scores)
     tokens_used = state.get('tokens_used', 0)
     token_budget = state.get('token_budget', 10**9)
+    attempts = state.get("step_recovery_attempts", 0)
+    max_attempts = state.get("max_step_attempts", 3)
+    
+    total_recoveries = state.get('total_recovery_events', 0)
+    max_recoveries = state.get('max_recoveries', 5)
 
     if tokens_used >= token_budget:
         print(f"\n[Router] The token budget is exhausted ({tokens_used}/{token_budget}). "
               f"Commit the best available option without further attempts.")
         return "commit"
 
-    total_recoveries = state.get('total_recovery_events', 0)
+    unreliable_streak = state.get('unreliable_eval_streak', 0)
+    max_unreliable = state.get('max_unreliable_evals', 3)
+    if unreliable_streak >= max_unreliable:
+        print(f"\n[Router] Evaluator has been unparseable for {unreliable_streak} rounds in a row "
+              f"(limit {max_unreliable}). Giving up — this looks like a broken JSON mode, not a model quality issue.")
+        return "give_up"
 
+
+    # 1. Первичное срабатывание восстановления (если мы шли в один поток)
     if (best_score < state['score_threshold'] 
         and not state['in_recovery'] 
-        and state['branch_mode'] == 'single'
-        and total_recoveries < state['max_recoveries']):
-        print(f"\n[Router] Best score {best_score:.4f} < Threshold {state['score_threshold']}. Initiating recovery.")
-        return "recover"
-
-    if best_score < state['score_threshold'] and not state['in_recovery'] and total_recoveries >= state['max_recoveries']:
-        print(f"\n[Router] Recovery event limit for the entire run ({state['max_recoveries']}) already exhausted"
-              f"({total_recoveries} used). Commit without a new branch.")
-        return "commit"
-
-    if best_score < state['score_threshold'] and state['in_recovery']:
-        print(f"\n[Router] All {state['k_branches']} branches scored below threshold. Forcing commit of highest score ({best_score:.4f}).")
-        return "commit"
+        and state['branch_mode'] == 'single'):
         
+        if total_recoveries < max_recoveries:
+            print(f"\n[Router] Best score {best_score:.4f} < Threshold {state['score_threshold']}. Initiating recovery.")
+            return "recover"
+        else:
+            print(f"\n[Router] Score {best_score:.4f} still below threshold {state['score_threshold']}, but the "
+                  f"recovery budget for the entire run ({max_recoveries}) is exhausted "
+                  f"({total_recoveries} used). Giving up instead of committing low-quality steps indefinitely.")
+            return "give_up"
+
+    # 2. Логика повторных попыток (когда мы УЖЕ в режиме восстановления)
+    if best_score < state['score_threshold'] and state['in_recovery']:
+        
+        # Если есть еще локальные попытки И глобальный бюджет не исчерпан
+        if attempts < max_attempts and total_recoveries < max_recoveries:
+            print(f"\n[Router] All {state.get('k_branches', 3)} branches failed. "
+                  f"Triggering recovery attempt {attempts + 1}/{max_attempts} "
+                  f"(Global recoveries used: {total_recoveries}/{max_recoveries}).")
+            return "recover"
+            
+        # Если исчерпан глобальный бюджет на всю задачу
+        elif total_recoveries >= max_recoveries:
+            print(f"\n[Router] Global recovery budget ({max_recoveries}) exhausted during retries. Giving up.")
+            return "give_up"
+            
+        # Если исчерпан лимит попыток для конкретно этого шага
+        else:
+            print(f"\n[Router] All {max_attempts} recovery attempts for this step failed. "
+                  f"Giving up to prevent context poisoning.")
+            return "give_up" 
+            
+    # 3. Успех
     print(f"\n[Router] Score {best_score:.4f} meets threshold. Committing.")
     return "commit"
 
@@ -383,6 +863,9 @@ def route_after_commit(state: AgentState):
     if state.get("final_answer"):
         return "verify"
     if state.get('tokens_used', 0) >= state.get('token_budget', 10**9):
+        return "give_up"
+    if state.get('stuck_streak', 0) >= state.get('max_stuck_steps', 2):
+        print(f"\n[Router] {state['stuck_streak'] + 1} committed steps in a row added no new content. Giving up.")
         return "give_up"
     return "generate"
 
@@ -403,7 +886,7 @@ def build_solver_graph():
     workflow.set_entry_point("generate_step")
 
     workflow.add_edge("generate_step", "evaluate_steps")
-    workflow.add_conditional_edges("evaluate_steps", route_after_eval, {"recover": "trigger_recovery", "commit": "commit_step"})
+    workflow.add_conditional_edges("evaluate_steps", route_after_eval, {"recover": "trigger_recovery", "commit": "commit_step", "give_up": "give_up"})
     workflow.add_edge("trigger_recovery", "generate_step")
     workflow.add_conditional_edges("commit_step", route_after_commit, {"verify": "verify_solution", "generate": "generate_step", "give_up": "give_up"})
     workflow.add_edge("verify_solution", END)

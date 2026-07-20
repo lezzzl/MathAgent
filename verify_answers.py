@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterator
@@ -97,7 +98,6 @@ def process_sample(
     verification = extract_and_verify(model_answer or "", ground_truth, timeout_seconds)
     
     result_item["is_correct"] = verification["is_correct"]
-    print(result_item)
     result_item["extracted_answer_text"] = verification["extracted_text"]
     result_item["parsed_model_answer"] = verification["parsed_answer"]
     result_item["parsed_ground_truth"] = verification["parsed_ground_truth"]
@@ -251,13 +251,16 @@ def main():
              "(например: model_name,benchmark_name). Пусто — без разбивки.",
     )
     arg_parser.add_argument(
-        "--timeout", type=int, default=5,
-        help="Таймаут парсинга/сверки в секундах на один ответ (по умолчанию 5).",
+        "--timeout", type=int, default=None,
+        help="Таймаут парсинга/сверки в секундах на один ответ. По умолчанию "
+             "отключён на Windows (см. --no-timeout) и равен 5 на остальных ОС.",
     )
     arg_parser.add_argument(
         "--no-timeout", action="store_true",
-        help="Отключить таймаут полностью (на Windows это избавляет от накладных "
-             "расходов multiprocessing, но без защиты от зависания на патологическом вводе).",
+        help="Отключить таймаут полностью. На Windows это ОБЯЗАТЕЛЬНО: math_verify "
+             "реализует таймаут через multiprocessing, дочерние процессы падают с "
+             "WinError, и parse() молча возвращает пустой результат — не парсится "
+             "вообще ничего.",
     )
     args = arg_parser.parse_args()
 
@@ -265,7 +268,22 @@ def main():
         args.input.stem + "_verified" + args.input.suffix
     )
     group_by_keys = [k.strip() for k in args.group_by.split(",") if k.strip()]
-    timeout_seconds = None if args.no_timeout else args.timeout
+
+    # Таймаут math_verify нерабочий на Windows: его multiprocessing-обёртка не
+    # поднимает дочерний процесс, parse() возвращает [] на ЛЮБОМ входе, и весь
+    # файл получает is_correct=False. Поэтому там он выключен по умолчанию.
+    if args.no_timeout:
+        timeout_seconds = None
+    elif args.timeout is not None:
+        timeout_seconds = args.timeout
+    elif sys.platform == "win32":
+        timeout_seconds = None
+        logger.info(
+            "Windows: таймаут парсинга отключён автоматически (иначе math_verify "
+            "не распарсит ни одного ответа). Явно задать: --timeout N."
+        )
+    else:
+        timeout_seconds = 5
 
     process_file(
         input_path=args.input,

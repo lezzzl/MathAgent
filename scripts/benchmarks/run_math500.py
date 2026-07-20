@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from scripts.benchmarks.benchmark_runner import (
+from scripts.benchmarks.agent_benchmark_runner import (
     BenchmarkConfig,
     parse_benchmark_args,
     run_benchmark,
