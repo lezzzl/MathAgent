@@ -509,6 +509,11 @@ class AgentState(TypedDict):
     # измерить постфактум: в результатах видно только итоговый ответ.
     eval_history: Annotated[List[Dict[str, Any]], operator.add]
 
+    # Сколько генераций пришлось повторить без размышлений из-за обрыва.
+    # Ненулевое значение означает, что прогон — смесь режимов, и замер
+    # "с ризонингом" не чистый.
+    thinking_overruns: Annotated[int, operator.add]
+
     final_answer: Optional[str]
     is_valid: bool
     verifier_rationale: str
@@ -561,11 +566,11 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     if truncated_empty and role.enable_thinking:
         print(f"      [THINKING OVERRUN] Размышления съели весь лимит "
               f"({role.num_predict} токенов), ответ пуст. Повтор без размышлений.")
-        result = call(False)
-    elif truncated_empty:
+        return call(False), True
+    if truncated_empty:
         print(f"      [TRUNCATED] Ответ пуст, finish_reason=length при лимите "
               f"{role.num_predict}. Поднимите num_predict генератора в yaml.")
-    return result
+    return result, False
 
 
 def generate_step(state: AgentState):
@@ -580,6 +585,7 @@ def generate_step(state: AgentState):
     role = ROLES["generator"]
     candidates = []
     total_tokens = 0
+    overruns = 0
     context = _build_context(state['problem'], state.get('steps', []))
     
     use_tools = state.get("use_tools", True)
@@ -600,7 +606,8 @@ def generate_step(state: AgentState):
         # попыткам recovery иначе легко уходит за 1.2, где генерация у
         # большинства моделей теряет связность.
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        result = _generate_one(role, context, temp, use_tools)
+        result, overran = _generate_one(role, context, temp, use_tools)
+        overruns += overran
 
         for m in result["messages"]:
             if isinstance(m, ToolMessage):
@@ -623,7 +630,8 @@ def generate_step(state: AgentState):
               f"tool-вызовов: {n_tool_calls}{fr_note}{stripped_note})")
         print(f"      Step:\n{step_text}\n")
 
-    return {"candidate_steps": candidates, "tokens_used": total_tokens}
+    return {"candidate_steps": candidates, "tokens_used": total_tokens,
+            "thinking_overruns": overruns}
 
 
 def evaluate_steps(state: AgentState):

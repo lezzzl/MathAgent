@@ -190,8 +190,10 @@ def warn_on_context_fit(context_length: int | None) -> None:
     """
     if not isinstance(context_length, int):
         return
-    # Запас под системный промпт, условие задачи и накопленные шаги.
-    reserve = 4000
+    # Запас под промпт: контекст обрезается по MAX_CONTEXT_CHARS (~4 символа
+    # на токен), плюс системный промпт роли. Жёсткая константа тут врала бы
+    # при изменении MAX_CONTEXT_CHARS.
+    reserve = langgraph_math_solver.MAX_CONTEXT_CHARS // 4 + 1500
     for role_name, role in langgraph_math_solver.ROLES.items():
         limit = role.num_predict or 0
         if limit >= context_length:
@@ -369,6 +371,7 @@ def _solve_with_graph(graph, item: dict[str, Any], args: argparse.Namespace) -> 
         "unreliable_eval_streak": 0,
         "max_unreliable_evals": args.max_unreliable_evals,
         "eval_history": [],
+        "thinking_overruns": 0,
         "final_answer": None,
         "is_valid": False,
         "verifier_rationale": "",
@@ -397,6 +400,9 @@ def _solve_with_graph(graph, item: dict[str, Any], args: argparse.Namespace) -> 
         "eval_unreliable_rounds": sum(1 for r in history if not r.get("reliable")),
         "recovery_rounds": sum(1 for r in history if r.get("in_recovery")),
         "eval_history": history,
+        # Сколько генераций пришлось повторить без размышлений: ненулевое
+        # значение означает, что замер "с ризонингом" неоднородный.
+        "thinking_overruns": state.get("thinking_overruns", 0),
     }
     return state.get("final_answer"), metrics
 
