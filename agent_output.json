@@ -1,0 +1,74 @@
+[
+  {
+  "id": "2024-I-3-false",
+  "model": "qwen2.5-32b-instruct",
+  "pipeline": "cot_baseline",
+  "benchmark": "aime24",
+  "ground_truth": "405",
+  "question": "Alice and Bob play the following game. A stack of $n$ tokens lies before them. The players take turns with Alice going first. On each turn, the player removes either $1$ token or $4$ tokens from the stack. Whoever removes the last token wins. Find the number of positive integers $n$ less than or equal to $2024$ for which Bob has a winning strategy.",
+  "model_answer": "Это циклическая игра с периодом 5. Позиция проигрышная для первого игрока (Алисы), если n делится на 5 с остатком 0 или 2. Значит, Боб выигрывает, когда n mod 5 = 0 или n mod 5 = 2. Количество таких чисел до 2024 равно 2024 // 5 * 2 = 808. В итоге получаем \\boxed{808}."
+},
+{
+    "id": "2024-I-2-correct",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "25",
+    "question": "There exist real numbers $x$ and $y$, both greater than 1, such that $\\log_x (y^x) = \\log_y (x^{4y}) = 10$. Find $xy$.",
+    "model_answer": "Используя свойства логарифмов, упростим данные уравнения:\n1) $\\log_x (y^x) = x \\log_x y = 10 \\implies \\log_x y = \\frac{10}{x}$\n2) $\\log_y (x^{4y}) = 4y \\log_y x = 10 \\implies \\log_y x = \\frac{10}{4y} = \\frac{5}{2y}$\nТак как $\\log_x y \\cdot \\log_y x = 1$, мы можем перемножить полученные выражения:\n$\\frac{10}{x} \\cdot \\frac{5}{2y} = 1$\n$\\frac{50}{2xy} = 1 \\implies 2xy = 50 \\implies xy = 25$.\nОтвет: \\boxed{25}."
+  },
+  {
+    "id": "2024-I-2-correct-solution-in-a-different-format",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "25",
+    "question": "There exist real numbers $x$ and $y$, both greater than 1, such that $\\log_x (y^x) = \\log_y (x^{4y}) = 10$. Find $xy$.",
+    "model_answer": "Используя свойства логарифмов, упростим данные уравнения:\n1) $\\log_x (y^x) = x \\log_x y = 10 \\implies \\log_x y = \\frac{10}{x}$\n2) $\\log_y (x^{4y}) = 4y \\log_y x = 10 \\implies \\log_y x = \\frac{10}{4y} = \\frac{5}{2y}$\nТак как $\\log_x y \\cdot \\log_y x = 1$, мы можем перемножить полученные выражения:\n$\\frac{10}{x} \\cdot \\frac{5}{2y} = 1$\n$\\frac{50}{2xy} = 1 \\implies 2xy = 50 \\implies xy = 25$.\nОтвет: \\boxed{50*2/4}."
+  },
+  {
+    "id": "2024-I-2-flawed-logic",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "25",
+    "question": "There exist real numbers $x$ and $y$, both greater than 1, such that $\\log_x (y^x) = \\log_y (x^{4y}) = 10$. Find $xy$.",
+    "model_answer": "Заметим, что $\\log_x(y^x) = y$ и $\\log_y(x^{4y}) = 4x$. \nТогда система принимает вид:\ny = 10\n4x = 10 => x = 2.5\nНам нужно найти произведение xy. Подставляем значения:\nxy = 2.5 * 10 = 25.\nОтвет: \\boxed{25}."
+  },
+  {
+    "id": "2024-I-1-wrong-all",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "204",
+    "question": "Every morning Aya goes for a $9$-kilometer-long walk and stops at a coffee shop afterwards. When she walks at a constant speed of $s$ kilometers per hour, the walk takes her 4 hours, including $t$ minutes spent in the coffee shop. When she walks $s+2$ kilometers per hour, the walk takes her 2 hours and 24 minutes, including $t$ minutes spent in the coffee shop. Suppose Aya walks at $s+\\frac{1}{2}$ kilometers per hour. Find the number of minutes the walk takes her, including the $t$ minutes spent in the coffee shop.",
+    "model_answer": "Переведем все время в минуты. 4 часа = 240 минут, 2 часа 24 минуты = 144 минуты.\nСоставим уравнения для скорости v (в км/мин):\n9/v + t = 240\n9/(v+2) + t = 144\nВычитая второе из первого: 9/v - 9/(v+2) = 96.\nРешая это уравнение, получаем v = 0.1 км/мин.\nТогда t = 240 - 9/0.1 = 240 - 90 = 150 минут.\nЕсли скорость равна s + 0.5, то в км/мин это 0.1 + 0.5 = 0.6 км/мин.\nВремя на прогулку: 9 / 0.6 + 150 = 15 + 150 = 165 минут.\nОтвет: \\boxed{165}."
+  },
+  {
+    "id": "2024-I-1-arithmetic-error",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "204",
+    "question": "Every morning Aya goes for a $9$-kilometer-long walk and stops at a coffee shop afterwards. When she walks at a constant speed of $s$ kilometers per hour, the walk takes her 4 hours, including $t$ minutes spent in the coffee shop. When she walks $s+2$ kilometers per hour, the walk takes her 2 hours and 24 minutes, including $t$ minutes spent in the coffee shop. Suppose Aya walks at $s+\\frac{1}{2}$ kilometers per hour. Find the number of minutes the walk takes her, including the $t$ minutes spent in the coffee shop.",
+    "model_answer": "Пусть $s$ - скорость в км/ч, а $t$ - время в кофейне в минутах. Составим систему уравнений:\n9/s + t/60 = 4\n9/(s+2) + t/60 = 2.4\nВычитая второе из первого, получаем 9/s - 9/(s+2) = 1.6.\nУпрощаем: 18 / (s(s+2)) = 1.6 => 1.6s^2 + 3.2s - 18 = 0.\nДелим на 1.6: s^2 + 2s - 11.25 = 0.\nРешая квадратное уравнение, находим s = 2.5.\nПодставляя s обратно, получаем 9/2.5 + t/60 = 4 => 3.6 + t/60 = 4 => t/60 = 0.4 => t = 20 минут.\nЕсли скорость равна s + 0.5 = 3 км/ч, то время на ходьбу составит 9 / 3 = 3 часа = 180 минут.\nОбщее время с учетом кофейни: 180 + 20 = 200 минут.\nОтвет: \\boxed{200}."
+  },
+  {
+    "id": "2024-I-1-arithmetic-error-in-a-different-format",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "204",
+    "question": "Every morning Aya goes for a $9$-kilometer-long walk and stops at a coffee shop afterwards. When she walks at a constant speed of $s$ kilometers per hour, the walk takes her 4 hours, including $t$ minutes spent in the coffee shop. When she walks $s+2$ kilometers per hour, the walk takes her 2 hours and 24 minutes, including $t$ minutes spent in the coffee shop. Suppose Aya walks at $s+\\frac{1}{2}$ kilometers per hour. Find the number of minutes the walk takes her, including the $t$ minutes spent in the coffee shop.",
+    "model_answer": "Пусть $s$ - скорость в км/ч, а $t$ - время в кофейне в минутах. Составим систему уравнений:\n9/s + t/60 = 4\n9/(s+2) + t/60 = 2.4\nВычитая второе из первого, получаем 9/s - 9/(s+2) = 1.6.\nУпрощаем: 18 / (s(s+2)) = 1.6 => 1.6s^2 + 3.2s - 18 = 0.\nДелим на 1.6: s^2 + 2s - 11.25 = 0.\nРешая квадратное уравнение, находим s = 2.5.\nПодставляя s обратно, получаем 9/2.5 + t/60 = 4 => 3.6 + t/60 = 4 => t/60 = 0.4 => t = 20 минут.\nЕсли скорость равна s + 0.5 = 3 км/ч, то время на ходьбу составит 9 / 3 = 3 часа = 180 минут.\nОбщее время с учетом кофейни: 180 + 20 = 200 минут.\nОтвет: \\boxed{200*8 - 1400}."
+  },
+  {
+    "id": "2024-I-1-text-cutoff",
+    "model": "qwen2.5-32b-instruct",
+    "pipeline": "cot_baseline",
+    "benchmark": "aime24",
+    "ground_truth": "204",
+    "question": "Every morning Aya goes for a $9$-kilometer-long walk and stops at a coffee shop afterwards. When she walks at a constant speed of $s$ kilometers per hour, the walk takes her 4 hours, including $t$ minutes spent in the coffee shop. When she walks $s+2$ kilometers per hour, the walk takes her 2 hours and 24 minutes, including $t$ minutes spent in the coffee shop. Suppose Aya walks at $s+\\frac{1}{2}$ kilometers per hour. Find the number of minutes the walk takes her, including the $t$ minutes spent in the coffee shop.",
+    "model_answer": "Пусть $s$ - скорость в км/ч, а $t$ - время в кофейне в минутах. Составим систему уравнений:\n9/s + t/60 = 4\n9/(s+2) + t/60 = 2.4\nВычитая второе из первого, получаем 9/s - 9/(s+2) = 1.6.\nУпрощаем: 18 / (s(s+2)) = 1.6 => 1.6s^2 + 3.2s - 18 = 0.\nДелим на 1.6: s^2 + 2s - 11.25 = 0.\nРешая квадратное уравнение, получим"
+  }
+]
