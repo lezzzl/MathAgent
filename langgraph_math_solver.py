@@ -526,6 +526,48 @@ class AgentState(TypedDict):
 # ---------------------------------------------------------------------------
 # 2. Graph Nodes
 # ---------------------------------------------------------------------------
+def _finish_reason(message: Any) -> Optional[str]:
+    return (getattr(message, "response_metadata", None) or {}).get("finish_reason")
+
+
+def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
+    """Один вызов генератора с откатом при обрыве на размышлениях.
+
+    У thinking-моделей размышления идут в тот же num_predict, что и ответ. Если
+    их не хватило, сервер возвращает finish_reason='length' и ПУСТОЙ content —
+    шаг теряется целиком. Recovery тут не помогает: он меняет температуру, а
+    причина в бюджете токенов, поэтому все k веток приходят одинаково пустыми.
+    В этом случае повторяем вызов один раз с выключенными размышлениями: лучше
+    шаг без размышлений, чем пустой шаг и сожжённая попытка восстановления.
+    """
+    def call(enable_thinking):
+        llm = make_llm(temp, model_name=MODEL_NAME, base_url=BASE_URL, api_key=API_KEY,
+                       max_tokens=role.num_predict, with_tools=use_tools,
+                       enable_thinking=enable_thinking)
+        messages = [SystemMessage(content=role.system_prompt), HumanMessage(content=context)]
+        if use_tools:
+            return generator_with_tools.invoke(
+                {"messages": messages, "max_hops": 5},
+                config={"configurable": {"llm": llm}},
+            )
+        return {"messages": messages + [llm.invoke(messages)]}
+
+    result = call(role.enable_thinking)
+    last = result["messages"][-1]
+    truncated_empty = (
+        not (last.content or "").strip()
+        and _finish_reason(last) == "length"
+    )
+    if truncated_empty and role.enable_thinking:
+        print(f"      [THINKING OVERRUN] Размышления съели весь лимит "
+              f"({role.num_predict} токенов), ответ пуст. Повтор без размышлений.")
+        result = call(False)
+    elif truncated_empty:
+        print(f"      [TRUNCATED] Ответ пуст, finish_reason=length при лимите "
+              f"{role.num_predict}. Поднимите num_predict генератора в yaml.")
+    return result
+
+
 def generate_step(state: AgentState):
     if not state.get('steps'):
         reset_calculator_state()
@@ -558,31 +600,9 @@ def generate_step(state: AgentState):
         # попыткам recovery иначе легко уходит за 1.2, где генерация у
         # большинства моделей теряет связность.
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        llm = make_llm(temp, model_name=MODEL_NAME, base_url=BASE_URL, api_key=API_KEY,
-                max_tokens=role.num_predict, with_tools=use_tools,
-                enable_thinking=role.enable_thinking)
-        if use_tools:
-            result = generator_with_tools.invoke(
-                {
-                    "messages": [
-                        SystemMessage(content=role.system_prompt),
-                        HumanMessage(content=context),
-                    ],
-                    "max_hops": 5,
-                },
-                config={"configurable": {"llm": llm}},
-            )
-        else:
-            input_messages = [
-                SystemMessage(content=role.system_prompt),
-                HumanMessage(content=context),
-            ]            
-            response = llm.invoke(input_messages)            
-            result = {
-                "messages": input_messages + [response]
-            }
-            
-        for m in result["messages"]:    
+        result = _generate_one(role, context, temp, use_tools)
+
+        for m in result["messages"]:
             if isinstance(m, ToolMessage):
                 print(f"      [tool_result] {m.content[:200]}")
         final_msg = result["messages"][-1]
@@ -597,7 +617,10 @@ def generate_step(state: AgentState):
         if step_text != (raw_text or "").strip():
             stripped_note = f" | ⚠️ отброшено {len(raw_text) - len(step_text)} симв. текста вне <step> тегов"
         n_tool_calls = sum(1 for m in result["messages"] if getattr(m, "tool_calls", None))
-        print(f"    - Branch {i+1} generated (temp: {temp:.2f}, tokens: {tks}, tool-вызовов: {n_tool_calls}{stripped_note})")
+        fr = _finish_reason(final_msg)
+        fr_note = f", finish={fr}" if fr and fr != "stop" else ""
+        print(f"    - Branch {i+1} generated (temp: {temp:.2f}, tokens: {tks}, "
+              f"tool-вызовов: {n_tool_calls}{fr_note}{stripped_note})")
         print(f"      Step:\n{step_text}\n")
 
     return {"candidate_steps": candidates, "tokens_used": total_tokens}

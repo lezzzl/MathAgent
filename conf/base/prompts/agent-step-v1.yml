@@ -50,7 +50,10 @@ roles:
       {context}
     temperature: 0.6
     json_format: false
-    num_predict: 10000
+    # Размышления идут в тот же лимит, что и ответ. На глубоких шагах
+    # контекст растёт, рассуждения удлиняются, и при 10000 ответ приходил
+    # пустым (finish_reason=length). Требует --max-model-len 32768.
+    num_predict: 16000
     # Размышления генератору нужны: это и есть решение задачи.
     enable_thinking: true
 

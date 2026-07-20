@@ -181,6 +181,34 @@ def apply_thinking_override(mode: str) -> None:
           f"для всех ролей, per-role настройки yaml проигнорированы")
 
 
+def warn_on_context_fit(context_length: int | None) -> None:
+    """Проверяет, что num_predict ролей помещается в контекст сервера.
+
+    num_predict больше max_model_len означает HTTP 400 на каждом вызове роли;
+    близкое к нему — обрыв ответа, как только контекст подрастёт на пару шагов.
+    Обе ситуации выглядят в логах как "модель сломалась", поэтому ловим заранее.
+    """
+    if not isinstance(context_length, int):
+        return
+    # Запас под системный промпт, условие задачи и накопленные шаги.
+    reserve = 4000
+    for role_name, role in langgraph_math_solver.ROLES.items():
+        limit = role.num_predict or 0
+        if limit >= context_length:
+            print(
+                f"[config] ОШИБКА: у роли '{role_name}' num_predict={limit} >= "
+                f"max_model_len={context_length}. Каждый вызов вернёт HTTP 400. "
+                f"Поднимите --max-model-len на сервере или снизьте num_predict."
+            )
+        elif limit + reserve > context_length:
+            print(
+                f"[config] ВНИМАНИЕ: у роли '{role_name}' num_predict={limit} при "
+                f"контексте {context_length} — на промпт и накопленные шаги остаётся "
+                f"{context_length - limit} токенов. На глубоких шагах ответы начнут "
+                f"обрываться. Рекомендуется --max-model-len 32768."
+            )
+
+
 def warn_on_thinking_budget() -> None:
     """Предупреждает, если у роли включены размышления при малом num_predict."""
     for role_name, role in langgraph_math_solver.ROLES.items():
@@ -416,6 +444,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
         langgraph_math_solver.load_prompts_from_yaml(args.prompt)
     apply_thinking_override(args.thinking)
     warn_on_thinking_budget()
+    warn_on_context_fit(context_length)
 
     # Эффективная температура генератора для логов: явный --temperature, иначе
     # то, что реально возьмёт generate_step — temperature роли из yaml.
