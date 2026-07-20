@@ -3,10 +3,9 @@ version: "solver-v0"
 roles:
   solver:
     system: |-
-      Return only the final answer.
-      Do not explain your answer or show any reasoning.
+      Solve the following problem step by step. Express the final answer using LaTeX
+      formatting and enclose it within \boxed{{}}. Do not include units or other unnecessary
+      text in the answer.
+
     task: |-
       {problem}
-
-      /no_think
-      Output only the answer.

@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "run_id": "baseline-qwen35-4b-all-v1",
+  "model": "Qwen/Qwen3.5-4B",
+  "pipeline": "solver",
+  "prompt": "/Users/pavelvasilev/Desktop/MathAgent/conf/base/prompts/solver-v0.yml",
+  "prompt_version": "solver-v0",
+  "role": "solver",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 65536
+  },
+  "runtime": {
+    "concurrency": 32,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 32,
+    "max_model_len": 73728
+  },
+  "status": "completed",
+  "created_at": "2026-07-17T14:03:34.853954+00:00",
+  "updated_at": "2026-07-19T01:05:34.978054+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/Users/pavelvasilev/Desktop/MathAgent/results/runs/baseline-qwen35-4b-all-v1/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-07-18T14:24:27.055324+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 30,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 5443,
+        "output_tokens": 1031686,
+        "total_tokens": 1037129,
+        "wall_time_seconds": 0.0,
+        "tasks_per_second": 180361.0943
+      },
+      "resume_count": 4
+    },
+    "HMMT26": {
+      "dataset": "MathArena/hmmt_feb_2026",
+      "split": "train",
+      "total_tasks": 33,
+      "output": "/Users/pavelvasilev/Desktop/MathAgent/results/runs/baseline-qwen35-4b-all-v1/hmmt26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-07-18T14:24:33.954381+00:00",
+      "summary": {
+        "total_tasks": 33,
+        "successful_tasks": 33,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 4962,
+        "output_tokens": 1440860,
+        "total_tokens": 1445822,
+        "wall_time_seconds": 0.0,
+        "tasks_per_second": 189700.9422
+      },
+      "resume_count": 4
+    },
+    "IMOAnswerBench": {
+      "dataset": "OpenEvals/IMO-AnswerBench",
+      "split": "train",
+      "total_tasks": 400,
+      "output": "/Users/pavelvasilev/Desktop/MathAgent/results/runs/baseline-qwen35-4b-all-v1/imo_answerbench.jsonl",
+      "status": "completed",
+      "updated_at": "2026-07-19T01:05:34.428153+00:00",
+      "summary": {
+        "total_tasks": 400,
+        "successful_tasks": 400,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 65189,
+        "output_tokens": 18354046,
+        "total_tokens": 18419235,
+        "wall_time_seconds": 38455.525,
+        "tasks_per_second": 0.0104
+      },
+      "resume_count": 4
+    }
+  },
+  "summary": {
+    "total_tasks": 463,
+    "successful_tasks": 463,
+    "failed_tasks": 0,
+    "remaining_tasks": 0,
+    "input_tokens": 75594,
+    "output_tokens": 20826592,
+    "total_tokens": 20902186,
+    "wall_time_seconds": 38455.525,
+    "tasks_per_second": 0.012
+  }
+}
