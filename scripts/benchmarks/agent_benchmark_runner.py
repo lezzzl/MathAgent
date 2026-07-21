@@ -41,6 +41,10 @@ class BenchmarkConfig:
     task_id_field: str
     output_directory: str
     metadata_fields: tuple[str, ...] = ()
+    # Имена полей условия и эталона в датасете. Дефолты подходят AIME-датасетам
+    # (problem/answer); IMO-AnswerBench, например, использует Problem/Short Answer.
+    problem_field: str = "problem"
+    ground_truth_field: str = "answer"
 
 
 def parse_benchmark_args(
@@ -349,11 +353,11 @@ def load_completed_task_ids(path: Path) -> set[str]:
     return done
 
 
-def _solve_with_graph(graph, item: dict[str, Any], args: argparse.Namespace) -> tuple[str | None, dict]:
+def _solve_with_graph(graph, problem: str, args: argparse.Namespace) -> tuple[str | None, dict]:
     """Пошаговый режим: возвращает (ответ, метрики агента)."""
     reset_calculator_state()
     initial_state = {
-        "problem": item["problem"],
+        "problem": problem,
         "steps": [],
         "candidate_steps": [],
         "candidate_scores": [],
@@ -485,6 +489,8 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
 
     def solve_one(item: dict[str, Any]) -> dict[str, Any]:
         task_id = str(item[config.task_id_field])
+        problem = item[config.problem_field]
+        ground_truth = str(item.get(config.ground_truth_field, ""))
         started = time.perf_counter()
         solution: str | None = None
         error: str | None = None
@@ -492,7 +498,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
 
         if abort.is_set():
             return build_record(
-                config, task_id, None, str(item.get("answer", "")), args.model,
+                config, task_id, None, ground_truth, args.model,
                 {
                     "dataset": config.dataset_name,
                     "error": "skipped: сервер модели недоступен",
@@ -502,9 +508,9 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
 
         try:
             if args.role == "solver":
-                solution, agent_metrics = _solve_with_graph(graph, item, args)
+                solution, agent_metrics = _solve_with_graph(graph, problem, args)
             else:
-                result = solve_with_self_consistency(item["problem"], sc_config)
+                result = solve_with_self_consistency(problem, sc_config)
                 solution = result.final_answer
                 agent_metrics = build_sc_metrics(result)
         except Exception as exc:  # noqa: BLE001 — одна задача не валит прогон
@@ -533,7 +539,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             config,
             task_id,
             solution,
-            str(item.get("answer", "")),
+            ground_truth,
             args.model,
             {
                 "dataset": config.dataset_name,
