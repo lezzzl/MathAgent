@@ -85,6 +85,10 @@ def build_command(script: Path, args: argparse.Namespace) -> list[str]:
         str(args.vllm_max_model_len),
         "--pipeline",
         args.pipeline,
+        "--max-repairs",
+        str(args.max_repairs),
+        "--execution-timeout",
+        str(args.execution_timeout),
     ]
     command.append("--thinking" if args.thinking else "--no-thinking")
     if args.prompt is not None:

@@ -141,6 +141,12 @@ def ensure_manifest(
                 raise ValueError(
                     f"Cannot continue run: manifest field '{field}' does not match"
                 )
+        if (
+            "pipeline_config" in manifest or "pipeline_config" in expected
+        ) and manifest.get("pipeline_config") != expected.get("pipeline_config"):
+            raise ValueError(
+                "Cannot continue run: manifest field 'pipeline_config' does not match"
+            )
 
         # Технические параметры разрешено менять между сегментами resume
         manifest["runtime"] = expected["runtime"]
