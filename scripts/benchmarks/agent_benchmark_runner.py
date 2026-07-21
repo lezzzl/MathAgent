@@ -5,10 +5,10 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -45,6 +45,13 @@ class BenchmarkConfig:
     # (problem/answer); IMO-AnswerBench, например, использует Problem/Short Answer.
     problem_field: str = "problem"
     ground_truth_field: str = "answer"
+    # Необязательный предфильтр задач по строке эталона. Нужен датасетам со
+    # смешанным форматом ответа (IMO-AnswerBench: часть символьная/множественная),
+    # где числовая сверка math-verify применима лишь к подмножеству. Принимает
+    # строку Short Answer, возвращает True — оставить задачу. compare=False,
+    # чтобы Callable не участвовал в hash/eq frozen-датакласса.
+    answer_filter: Optional[Callable[[str], bool]] = field(default=None, compare=False)
+    answer_filter_name: str = ""
 
 
 def parse_benchmark_args(
@@ -52,10 +59,18 @@ def parse_benchmark_args(
     default_model: str,
     *,
     include_output: bool = True,
+    extra_flags: Optional[list[tuple[list[str], dict[str, Any]]]] = None,
 ) -> argparse.Namespace:
-    """Считывает общие параметры модели и запуска из командной строки."""
-    
+    """Считывает общие параметры модели и запуска из командной строки.
+
+    extra_flags — доп. аргументы конкретного бенчмарка в виде
+    [(["--flag"], {"action": ...}), ...]; их значения попадают в тот же
+    Namespace. Нужно, чтобы бенчмарк-специфичные опции (например, --all-answers
+    у IMO) не приходилось объявлять здесь, в общем парсере.
+    """
     parser = argparse.ArgumentParser(description=description)
+    for names, opts in (extra_flags or []):
+        parser.add_argument(*names, **opts)
     parser.add_argument("--model", default=os.getenv("MODEL", default_model))
     parser.add_argument(
         "--base-url",
@@ -429,6 +444,19 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     langgraph_math_solver.REQUEST_TIMEOUT = args.timeout
 
     dataset = load_dataset(config.dataset_name, split=config.split)
+
+    # Предфильтр по формату эталона (для датасетов со смешанными ответами).
+    # Применяется ДО skip/limit, чтобы --limit N отсчитывался от отобранных
+    # задач, а не от исходных с дырами.
+    if config.answer_filter is not None:
+        before = len(dataset)
+        gt = config.ground_truth_field
+        dataset = dataset.filter(lambda item: config.answer_filter(str(item.get(gt, ""))))
+        print(f"[filter] {config.answer_filter_name or 'answer_filter'}: "
+              f"оставлено {len(dataset)}/{before} задач")
+        if len(dataset) == 0:
+            raise ValueError("answer_filter отсеял все задачи — проверьте фильтр и поле эталона")
+
     start = max(0, args.skip)
     end = min(start + args.limit, len(dataset)) if args.limit else len(dataset)
     if args.limit is not None and args.limit < 1:

@@ -24,10 +24,6 @@ class Role:
     temperature: float = 0.6
     json_format: bool = False
     num_predict: Optional[int] = None
-    # None — не трогать поведение модели (для не-reasoning моделей это
-    # единственный корректный вариант). False у thinking-моделей вроде Qwen3.5
-    # выключает блок размышлений: замер на оценщике дал 420 токенов и 12 с
-    # против 5277 токенов и 153 с с размышлениями.
     enable_thinking: Optional[bool] = None
 
     def build_messages(self, **kwargs) -> List[dict]:
@@ -49,12 +45,6 @@ class Role:
             {"role": "user", "content": user_content},
         ]
 
-
-# Промпты живут в conf/base/prompts/agent-step-v1.yml — он единственный источник
-# правды. Здесь только аварийная заглушка на случай отсутствия файла и список
-# известных ролей для валидации. Раньше тут лежала полная копия всех промптов,
-# которая незаметно разошлась с YAML (упоминала уже переименованный инструмент
-# и старые лимиты токенов) и вводила в заблуждение при отладке.
 _FALLBACK_SYSTEM = (
     "You are a careful mathematician. Follow the output format requested by the "
     "user message exactly. Prompts failed to load from YAML — results will be poor."
@@ -132,19 +122,9 @@ def load_prompts_from_yaml(yaml_path: "Path | str") -> None:
 MODEL_NAME = os.getenv("MODEL", "Qwen/Qwen3.5-4B")
 BASE_URL = os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1")
 API_KEY = os.getenv("OPENAI_API_KEY", "token-abc123")
-
-# Лимит на ОДИН ответ модели, а не на весь контекст. Прежнее значение 8192
-# совпадало с полным контекстом сервера, из-за чего накопленный диалог плюс
-# запрошенная генерация гарантированно упирались в 400 (4 из 30 задач aime26).
 DEFAULT_MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
-
-# Сколько символов контекста считаем безопасными. ~4 символа на токен, плюс
-# запас под системный промпт и ответ. Служит защитой от переполнения при
-# длинных пошаговых решениях.
 MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "40000"))
 
-# Таймаут одного HTTP-запроса к серверу модели. Без него requests.post висит
-# бесконечно, если сервер перестал отвечать, и прогон замирает молча.
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
 
 def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=False,
@@ -161,7 +141,6 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
         "temperature": temperature,
     }
 
-    # Устанавливаем лимит токенов
     payload["max_tokens"] = num_predict if num_predict is not None else DEFAULT_MAX_TOKENS
 
     if seed is not None:
@@ -268,7 +247,6 @@ def _build_context(problem: str, steps: List[str]) -> str:
               f"в {MAX_CONTEXT_CHARS} символов контекста.")
         head += f"[... {dropped} earlier step(s) omitted for brevity ...]\n"
 
-    # Единственный оставшийся шаг всё ещё может быть длиннее бюджета.
     tail = "".join(rendered)
     if len(tail) > budget:
         tail = tail[: max(0, budget)] + "\n[... step truncated ...]\n"
@@ -325,7 +303,6 @@ def _extract_json_dict(content: str, expected_keys: Tuple[str, ...]) -> Optional
     """Достаёт из ответа модели JSON-объект с одним из ожидаемых ключей."""
     if not content:
         return None
-    # Рассуждения в <think>...</think> нам не нужны и только мешают.
     cleaned = _THINK_BLOCK_RE.sub("", content)
 
     candidates = [m.group(1) for m in _MD_JSON_RE.finditer(cleaned)]
@@ -387,17 +364,12 @@ def _parse_eval_response(content: str) -> Tuple[float, str, bool]:
             json_str = match.group(0)
 
     try:
-        # strict=False разрешает сырые управляющие символы внутри строк:
-        # модели постоянно вставляют настоящий перевод строки в "rationale",
-        # что по стандарту невалидно и раньше уводило разбор в регекс-фоллбек.
         result_dict = json.loads(json_str, strict=False)
         score = max(0.0, min(1.0, float(result_dict.get("score", 0.0))))
         rationale = str(result_dict.get("rationale", "No rationale provided"))
         return score, rationale, True
     except Exception as e_first:
         try:
-            # Тот же набор исключений, что у верификатора: без bfnrtu валидные
-            # escape-последовательности \n и \t портились при «починке».
             repaired_str = re.sub(r'\\(?![\\"/bfnrtu])', r'\\\\', json_str)
             result_dict = json.loads(repaired_str, strict=False)
             score = max(0.0, min(1.0, float(result_dict.get("score", 0.0))))
@@ -423,7 +395,6 @@ def _parse_eval_response(content: str) -> Tuple[float, str, bool]:
     if diagnosis:
         return 0.0, diagnosis, False
 
-    # Выводим до 400 символов ошибки, чтобы в логах было видно реальную причину, если даже регекс не сработал
     return 0.0, f"Invalid JSON from evaluator (raw preview: {content[:400]!r})", False
 
 
@@ -504,14 +475,7 @@ class AgentState(TypedDict):
 
     unreliable_eval_streak: int
     max_unreliable_evals: int
-
-    # История оценок по раундам — без неё поведение оценщика невозможно
-    # измерить постфактум: в результатах видно только итоговый ответ.
     eval_history: Annotated[List[Dict[str, Any]], operator.add]
-
-    # Сколько генераций пришлось повторить без размышлений из-за обрыва.
-    # Ненулевое значение означает, что прогон — смесь режимов, и замер
-    # "с ризонингом" не чистый.
     thinking_overruns: Annotated[int, operator.add]
 
     final_answer: Optional[str]
@@ -520,11 +484,8 @@ class AgentState(TypedDict):
     gave_up: bool         
     gave_up_reason: str    
 
-    step_recovery_attempts: int  # Сколько раз мы уже пытались перегенерировать этот шаг
-    max_step_attempts: int       # Максимальное число попыток на один шаг (например, 2 или 3)
-
-    # Ключи, не объявленные здесь, LangGraph молча отбрасывает: состояние
-    # фильтруется по схеме. Без этой строки --no-tools не имел никакого эффекта.
+    step_recovery_attempts: int  
+    max_step_attempts: int     
     use_tools: bool
 
 
@@ -576,9 +537,6 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
 
     result = call(role.enable_thinking)
     last = result["messages"][-1]
-    # Пусто только если нет ни content, ни reasoning_content: обрыв на середине
-    # размышлений даёт пустое и то и другое. Если reasoning_content есть, шаг
-    # может быть внутри него — тогда откат не нужен.
     truncated_empty = (
         not _message_text(last)
         and _finish_reason(last) == "length"
@@ -609,22 +567,11 @@ def generate_step(state: AgentState):
     context = _build_context(state['problem'], state.get('steps', []))
     
     use_tools = state.get("use_tools", True)
-    # База — температура роли из yaml. base_temperature раньше бралась из
-    # --temperature (дефолт 0.2) и полностью перекрывала yaml для генератора
-    # (в отличие от evaluate_steps/verify_solution, которые честно берут
-    # role.temperature). Для thinking-моделей вроде Qwen3 низкая температура в
-    # режиме размышлений — известный триггер вырождения в бесконечный повтор
-    # без выхода из <think>: модель жгла весь num_predict на размышления и
-    # обрывалась с пустым content. base_temperature остаётся явным override
-    # для тех, кто действительно хочет его задать через --temperature.
     base_temp = state.get('base_temperature')
     if base_temp is None:
         base_temp = role.temperature
     for i in range(k):
         attempt = state.get('step_recovery_attempts', 0)
-        # Потолок 1.1: с базой 0.6 (вместо прежних 0.2) эскалация по веткам и
-        # попыткам recovery иначе легко уходит за 1.2, где генерация у
-        # большинства моделей теряет связность.
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
         result, overran = _generate_one(role, context, temp, use_tools)
         overruns += overran
@@ -845,8 +792,6 @@ def verify_solution(state: AgentState):
 def route_after_eval(state: AgentState):
     scores = state.get('candidate_scores') or []
     if not scores:
-        # Генератор не вернул ни одного кандидата (например, все запросы упали).
-        # Раньше это был ValueError из max() и падение всей задачи.
         print("\n[Router] Кандидатов нет — генерация не дала результата. Giving up.")
         return "give_up"
     best_score = max(scores)
