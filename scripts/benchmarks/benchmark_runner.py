@@ -12,12 +12,15 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(ROOT / ".env")
 sys.path.insert(0, str(ROOT / "src"))
 
 from mathagent.agent.graph import (
     ModelConfig,
+    create_code_agent_graph,
     create_solver_graph,
 )
 from scripts.benchmarks.run_artifacts import (
@@ -35,6 +38,7 @@ from scripts.benchmarks.run_artifacts import (
 )
 
 DEFAULT_SOLVER_PROMPT = ROOT / "conf/base/prompts/solver-v0.yml"
+DEFAULT_CODE_AGENT_PROMPT = ROOT / "conf/base/prompts/code-agent-v1.yml"
 DEFAULT_MODEL = "Qwen/Qwen3.5-4B"
 
 
@@ -98,8 +102,14 @@ def parse_benchmark_args(
     parser.add_argument("--timeout", type=float, default=1800.0)
     parser.add_argument("--max-retries", type=int, default=1)
 
-    parser.add_argument("--pipeline", choices=("solver",), default="solver")
+    parser.add_argument(
+        "--pipeline",
+        choices=("solver", "code_agent"),
+        default="solver",
+    )
     parser.add_argument("--prompt", type=Path)
+    parser.add_argument("--max-repairs", type=int, default=2)
+    parser.add_argument("--execution-timeout", type=float, default=10.0)
     parser.add_argument("--limit", type=int) # ограничивает число задач из датасета, чтобы быстро проверить работу runner
 
     parser.add_argument("--concurrency", type=int, default=8) # количество параллельных запросов к модели
@@ -182,6 +192,10 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-consecutive-api-errors must be positive")
     if args.max_retries < 0:
         raise ValueError("--max-retries must be non-negative")
+    if args.max_repairs < 0:
+        raise ValueError("--max-repairs must be non-negative")
+    if args.execution_timeout <= 0:
+        raise ValueError("--execution-timeout must be positive")
     if args.vllm_max_num_seqs < 1:
         raise ValueError("--vllm-max-num-seqs must be positive")
     if args.vllm_max_model_len < 1:
@@ -230,6 +244,16 @@ def create_manifest_config(
             "max_num_seqs": args.vllm_max_num_seqs,
             "max_model_len": args.vllm_max_model_len,
         },
+        **(
+            {
+                "pipeline_config": {
+                    "max_repairs": args.max_repairs,
+                    "execution_timeout": args.execution_timeout,
+                }
+            }
+            if args.pipeline == "code_agent"
+            else {}
+        ),
     }
 
 
@@ -237,7 +261,7 @@ def create_graph(
     args: argparse.Namespace,
     prompt_path: Path,
 ) -> Any:
-    """Собирает solver-граф с параметрами текущего запуска."""
+    """Собирает выбранный граф с параметрами текущего запуска."""
     model_config = ModelConfig(
         name=args.model,
         base_url=args.base_url,
@@ -254,7 +278,16 @@ def create_graph(
         timeout=args.timeout,
         max_retries=args.max_retries,
     )
-    return create_solver_graph(model_config, prompt_path)
+    if args.pipeline == "solver":
+        return create_solver_graph(model_config, prompt_path)
+    if args.pipeline == "code_agent":
+        return create_code_agent_graph(
+            model_config,
+            prompt_path,
+            max_repairs=args.max_repairs,
+            execution_timeout=args.execution_timeout,
+        )
+    raise ValueError(f"Unknown pipeline: {args.pipeline}")
 
 
 def exception_names(exception: Exception) -> set[str]:
@@ -326,7 +359,26 @@ def solve_item(
     trace: dict[str, Any] | None = None
 
     try:
-        state = graph.invoke({"problem": item[config.problem_field]})
+        state = graph.invoke(
+            {"problem": item[config.problem_field]},
+            config={
+                "run_name": f"{config.name}:{task_id}",
+                "tags": [
+                    f"benchmark:{config.name}",
+                    f"pipeline:{args.pipeline}",
+                    f"model:{args.model}",
+                ],
+                "metadata": {
+                    "thread_id": f"{run_id}:{config.name}",
+                    "experiment_run_id": run_id,
+                    "benchmark_name": config.name,
+                    "task_id": task_id,
+                    "model_name": args.model,
+                    "pipeline": args.pipeline,
+                    "prompt_version": prompt_version,
+                },
+            },
+        )
         solution = state["solution"]
         reasoning = state.get("reasoning")
         usage = state["usage"]
@@ -576,7 +628,11 @@ def _run_benchmark(
     from datasets import load_dataset
 
     # Определяем prompt и JSONL-файл до запуска, чтобы заранее проверить конфигурацию
-    prompt_path = args.prompt or DEFAULT_SOLVER_PROMPT
+    default_prompts = {
+        "solver": DEFAULT_SOLVER_PROMPT,
+        "code_agent": DEFAULT_CODE_AGENT_PROMPT,
+    }
+    prompt_path = args.prompt or default_prompts[args.pipeline]
     prompt_path = prompt_path.resolve()
     prompt_version = load_prompt_version(prompt_path)
     output_path = resolve_output_path(config, getattr(args, "output", None), run_id)
