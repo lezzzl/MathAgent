@@ -535,6 +535,23 @@ def _finish_reason(message: Any) -> Optional[str]:
     return (getattr(message, "response_metadata", None) or {}).get("finish_reason")
 
 
+def _message_text(message: Any) -> str:
+    """content сообщения, а при его пустоте — reasoning_content.
+
+    Qwen3.5 не всегда уважает enable_thinking=false и иногда всё равно уходит в
+    размышления. reasoning-parser сервера вырезает их в reasoning_content
+    (langchain кладёт его в additional_kwargs), и content приходит пустым.
+    Раньше evaluate_steps/generate_step видели пустоту и репортили
+    'Empty response', хотя JSON или шаг лежали в reasoning_content. _chat для
+    верификатора уже читал этот фоллбек — теперь он общий для всех ролей.
+    """
+    content = (getattr(message, "content", "") or "").strip()
+    if content:
+        return content
+    extra = getattr(message, "additional_kwargs", None) or {}
+    return (extra.get("reasoning_content") or extra.get("reasoning") or "").strip()
+
+
 def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     """Один вызов генератора с откатом при обрыве на размышлениях.
 
@@ -559,8 +576,11 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
 
     result = call(role.enable_thinking)
     last = result["messages"][-1]
+    # Пусто только если нет ни content, ни reasoning_content: обрыв на середине
+    # размышлений даёт пустое и то и другое. Если reasoning_content есть, шаг
+    # может быть внутри него — тогда откат не нужен.
     truncated_empty = (
-        not (last.content or "").strip()
+        not _message_text(last)
         and _finish_reason(last) == "length"
     )
     if truncated_empty and role.enable_thinking:
@@ -613,7 +633,7 @@ def generate_step(state: AgentState):
             if isinstance(m, ToolMessage):
                 print(f"      [tool_result] {m.content[:200]}")
         final_msg = result["messages"][-1]
-        raw_text = final_msg.content
+        raw_text = _message_text(final_msg)
         step_text = _extract_step_content(raw_text)
         candidates.append(step_text)
 
@@ -678,7 +698,7 @@ def evaluate_steps(state: AgentState):
         else:
             result = {"messages": messages + [llm.invoke(messages)]}
         final_msg = result["messages"][-1]
-        content = final_msg.content or ""
+        content = _message_text(final_msg)
 
         tks = count_chain_tokens(result["messages"])
         total_tokens += tks
