@@ -18,7 +18,7 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 import langgraph_math_solver
-from langgraph_math_solver import build_solver_graph
+import langgraph_math_solver_qwen4b
 from self_consistency import (
     SelfConsistencyConfig,
     build_metrics as build_sc_metrics,
@@ -30,6 +30,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_PROMPT = ROOT / "conf/base/prompts/agent-step-v1.yml"
+
+# Пошаговые пайплайны, переключаемые флагом --pipeline (только для --role solver).
+#   default — оригинал под Qwen 7B/9B (langgraph_math_solver);
+#   qwen4b  — тот же граф + стадия сегментации одного шага, без тулов.
+PIPELINES = {
+    "default": langgraph_math_solver,
+    "qwen4b": langgraph_math_solver_qwen4b,
+}
+# Дефолтный yaml промптов на каждый пайплайн (если --prompt не задан явно).
+DEFAULT_PROMPTS = {
+    "default": DEFAULT_PROMPT,
+    "qwen4b": ROOT / "conf/base/prompts/agent-step-qwen4b-v1.yml",
+}
+
+# Активный модуль пайплайна. Переустанавливается в run_benchmark по --pipeline;
+# дефолт сохраняет прежнее поведение (оригинальный солвер), чтобы существующие
+# команды запуска работали без изменений.
+solver_mod = langgraph_math_solver
 
 
 @dataclass(frozen=True)
@@ -91,7 +109,18 @@ def parse_benchmark_args(
              "контекста сервера, иначе длинные диалоги упираются в 400.",
     )
     parser.add_argument("--timeout", type=float, default=600.0)
-    parser.add_argument("--prompt", type=Path, default=DEFAULT_PROMPT)
+    parser.add_argument(
+        "--prompt", type=Path, default=None,
+        help="YAML с промптами ролей. Если не задан — берётся дефолт под выбранный "
+             "--pipeline (default: agent-step-v1.yml).",
+    )
+    parser.add_argument(
+        "--pipeline", default="default", choices=tuple(PIPELINES),
+        help="Какой пошаговый пайплайн использовать при --role solver: "
+             "'default' — оригинал под Qwen 7B/9B (по умолчанию, поведение не "
+             "меняется); 'qwen4b' — тот же граф со стадией сегментации одного "
+             "шага. На --role sc не влияет.",
+    )
     parser.add_argument(
         "--role",
         default="sc",
@@ -194,8 +223,8 @@ def apply_thinking_override(mode: str) -> None:
     if mode == "auto":
         return
     enabled = mode == "on"
-    for role_name, role in langgraph_math_solver.ROLES.items():
-        langgraph_math_solver.ROLES[role_name] = replace(role, enable_thinking=enabled)
+    for role_name, role in solver_mod.ROLES.items():
+        solver_mod.ROLES[role_name] = replace(role, enable_thinking=enabled)
     print(f"[config] --thinking={mode}: размышления {'включены' if enabled else 'выключены'} "
           f"для всех ролей, per-role настройки yaml проигнорированы")
 
@@ -212,8 +241,8 @@ def warn_on_context_fit(context_length: int | None) -> None:
     # Запас под промпт: контекст обрезается по MAX_CONTEXT_CHARS (~4 символа
     # на токен), плюс системный промпт роли. Жёсткая константа тут врала бы
     # при изменении MAX_CONTEXT_CHARS.
-    reserve = langgraph_math_solver.MAX_CONTEXT_CHARS // 4 + 1500
-    for role_name, role in langgraph_math_solver.ROLES.items():
+    reserve = solver_mod.MAX_CONTEXT_CHARS // 4 + 1500
+    for role_name, role in solver_mod.ROLES.items():
         limit = role.num_predict or 0
         if limit >= context_length:
             print(
@@ -232,7 +261,7 @@ def warn_on_context_fit(context_length: int | None) -> None:
 
 def warn_on_thinking_budget() -> None:
     """Предупреждает, если у роли включены размышления при малом num_predict."""
-    for role_name, role in langgraph_math_solver.ROLES.items():
+    for role_name, role in solver_mod.ROLES.items():
         if role.enable_thinking and (role.num_predict or 0) < _THINKING_MIN_TOKENS:
             print(
                 f"[config] ВНИМАНИЕ: у роли '{role_name}' включены размышления, но "
@@ -371,35 +400,41 @@ def load_completed_task_ids(path: Path) -> set[str]:
 def _solve_with_graph(graph, problem: str, args: argparse.Namespace) -> tuple[str | None, dict]:
     """Пошаговый режим: возвращает (ответ, метрики агента)."""
     reset_calculator_state()
-    initial_state = {
-        "problem": problem,
-        "steps": [],
-        "candidate_steps": [],
-        "candidate_scores": [],
-        "k_branches": args.k_branches,
-        "score_threshold": args.score_threshold,
-        "branch_mode": args.branch_mode,
-        "base_temperature": args.temperature,
-        "tokens_used": 0,
-        "token_budget": args.token_budget,
-        "in_recovery": False,
-        "max_recoveries": args.max_recoveries,
-        "total_recovery_events": 0,
-        "stuck_streak": 0,
-        "max_stuck_steps": args.max_stuck_steps,
-        "unreliable_eval_streak": 0,
-        "max_unreliable_evals": args.max_unreliable_evals,
-        "eval_history": [],
-        "thinking_overruns": 0,
-        "final_answer": None,
-        "is_valid": False,
-        "verifier_rationale": "",
-        "gave_up": False,
-        "gave_up_reason": "",
-        "step_recovery_attempts": 0,
-        "max_step_attempts": 3,
-        "use_tools": not getattr(args, "no_tools", False),
-    }
+    # Каждый пайплайн знает форму своего состояния. qwen4b/-full предоставляют
+    # make_initial_state (у них есть свои поля вроде candidate_raw/segmented);
+    # оригинал такой функции не имеет — для него собираем состояние по-старому.
+    if hasattr(solver_mod, "make_initial_state"):
+        initial_state = solver_mod.make_initial_state(problem, args)
+    else:
+        initial_state = {
+            "problem": problem,
+            "steps": [],
+            "candidate_steps": [],
+            "candidate_scores": [],
+            "k_branches": args.k_branches,
+            "score_threshold": args.score_threshold,
+            "branch_mode": args.branch_mode,
+            "base_temperature": args.temperature,
+            "tokens_used": 0,
+            "token_budget": args.token_budget,
+            "in_recovery": False,
+            "max_recoveries": args.max_recoveries,
+            "total_recovery_events": 0,
+            "stuck_streak": 0,
+            "max_stuck_steps": args.max_stuck_steps,
+            "unreliable_eval_streak": 0,
+            "max_unreliable_evals": args.max_unreliable_evals,
+            "eval_history": [],
+            "thinking_overruns": 0,
+            "final_answer": None,
+            "is_valid": False,
+            "verifier_rationale": "",
+            "gave_up": False,
+            "gave_up_reason": "",
+            "step_recovery_attempts": 0,
+            "max_step_attempts": 3,
+            "use_tools": not getattr(args, "no_tools", False),
+        }
     state = graph.invoke(initial_state)
     history = state.get("eval_history") or []
     all_scores = [s for round_ in history for s in round_.get("scores", [])]
@@ -430,6 +465,16 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     """Решает задачи бенчмарка выбранным режимом и пишет результаты в JSONL."""
     from datasets import load_dataset
 
+    # Выбираем активный пайплайн и его дефолтный yaml промптов. Влияет только на
+    # --role solver; на --role sc не влияет.
+    global solver_mod
+    solver_mod = PIPELINES[getattr(args, "pipeline", "default")]
+    if getattr(args, "prompt", None) is None:
+        args.prompt = DEFAULT_PROMPTS[getattr(args, "pipeline", "default")]
+    if args.role == "solver":
+        print(f"[config] pipeline={args.pipeline} (модуль {solver_mod.__name__}), "
+              f"промпты: {args.prompt}")
+
     try:
         context_length = preflight_check(args.base_url, args.api_key, args.model)
     except ServerUnavailable as exc:
@@ -437,11 +482,11 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
         return 2
     report_resource_budget(args, context_length)
 
-    langgraph_math_solver.MODEL_NAME = args.model
-    langgraph_math_solver.BASE_URL = args.base_url
-    langgraph_math_solver.API_KEY = args.api_key
-    langgraph_math_solver.DEFAULT_MAX_TOKENS = args.max_tokens
-    langgraph_math_solver.REQUEST_TIMEOUT = args.timeout
+    solver_mod.MODEL_NAME = args.model
+    solver_mod.BASE_URL = args.base_url
+    solver_mod.API_KEY = args.api_key
+    solver_mod.DEFAULT_MAX_TOKENS = args.max_tokens
+    solver_mod.REQUEST_TIMEOUT = args.timeout
 
     dataset = load_dataset(config.dataset_name, split=config.split)
 
@@ -479,7 +524,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
         return 0
 
     if args.prompt:
-        langgraph_math_solver.load_prompts_from_yaml(args.prompt)
+        solver_mod.load_prompts_from_yaml(args.prompt)
     apply_thinking_override(args.thinking)
     warn_on_thinking_budget()
     warn_on_context_fit(context_length)
@@ -489,13 +534,13 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     effective_solver_temperature = (
         args.temperature
         if args.temperature is not None
-        else langgraph_math_solver.ROLES["generator"].temperature
+        else solver_mod.ROLES["generator"].temperature
     )
     if args.temperature is not None:
         print(f"[config] --temperature={args.temperature} переопределяет "
               f"generator.temperature из yaml для --role solver")
 
-    graph = build_solver_graph() if args.role == "solver" else None
+    graph = solver_mod.build_solver_graph() if args.role == "solver" else None
     sc_config = SelfConsistencyConfig(
         n_samples=args.n_samples,
         temperature=args.sc_temperature,
