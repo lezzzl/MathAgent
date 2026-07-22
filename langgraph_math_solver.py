@@ -186,6 +186,7 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
 
 _STEP_TAG_RE = re.compile(r"<step>(.*?)</step>", re.DOTALL | re.IGNORECASE)
 _STEP_OPEN_TAG_RE = re.compile(r"<step>", re.IGNORECASE)
+_STEP_ANY_TAG_RE = re.compile(r"</?step\s*>", re.IGNORECASE)
 _BOXED_START_RE = re.compile(r"\\boxed\s*\{")
 def _extract_step_content(raw: str) -> str:
     """
@@ -196,31 +197,33 @@ def _extract_step_content(raw: str) -> str:
     if not raw:
         return ""
 
-    m = _STEP_TAG_RE.search(raw)
-    if m:
-        step = m.group(1).strip()
+    # Берём ПОСЛЕДНИЙ закрытый блок: reasoning-модель перебирает черновики
+    # раньше, а финальный шаг пишет последним (и это согласовано с выбором
+    # последнего \boxed ниже). Прежний .search брал первый и возвращал черновик.
+    closed = list(_STEP_TAG_RE.finditer(raw))
+    if closed:
+        step = closed[-1].group(1).strip()
     else:
-        m_open = _STEP_OPEN_TAG_RE.search(raw)
-        if m_open:
-            step = raw[m_open.end():].strip()
-        else:
-            step = raw.strip()
+        # Незакрытый <step> (обрыв по лимиту) — берём от последнего открытия.
+        opens = list(_STEP_OPEN_TAG_RE.finditer(raw))
+        step = raw[opens[-1].end():].strip() if opens else raw.strip()
 
     matches = list(_BOXED_START_RE.finditer(raw))
-    
     if matches:
         last_match = matches[-1]
-        tail = raw[last_match.start():]
-
         if last_match.group(0) not in step:
-            clean_tail = tail.replace("</step>", "").strip()
-            
+            # Хвост от \boxed{ до конца, но обрезанный по первому же step-тегу:
+            # иначе открывающий <step> следующего черновика протекал в шаг и
+            # дальше в контекст ("блоки <step> в логах").
+            tail = raw[last_match.start():]
+            clean_tail = _STEP_ANY_TAG_RE.split(tail)[0].strip()
             if step:
                 step += f"\n\nFinal answer: {clean_tail}"
             else:
                 step = f"Final answer: {clean_tail}"
 
-    return step
+    # Страховка: срезаем любые уцелевшие теги, чтобы они не попали в контекст.
+    return _STEP_ANY_TAG_RE.sub("", step).strip()
 
 
 def _build_context(problem: str, steps: List[str]) -> str:
@@ -544,11 +547,15 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     if truncated_empty and role.enable_thinking:
         print(f"      [THINKING OVERRUN] Размышления съели весь лимит "
               f"({role.num_predict} токенов), ответ пуст. Повтор без размышлений.")
-        return call(False), True
+        # Токены оборванного вызова (обычно весь num_predict) нужно учесть:
+        # иначе token_budget и метрика tokens_used недосчитывают расход, а при
+        # частых обрывах на IMO это тысячи токенов на задачу.
+        overrun_tokens = count_chain_tokens(result["messages"])
+        return call(False), True, overrun_tokens
     if truncated_empty:
         print(f"      [TRUNCATED] Ответ пуст, finish_reason=length при лимите "
               f"{role.num_predict}. Поднимите num_predict генератора в yaml.")
-    return result, False
+    return result, False, 0
 
 
 def generate_step(state: AgentState):
@@ -573,7 +580,7 @@ def generate_step(state: AgentState):
     for i in range(k):
         attempt = state.get('step_recovery_attempts', 0)
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        result, overran = _generate_one(role, context, temp, use_tools)
+        result, overran, overrun_tokens = _generate_one(role, context, temp, use_tools)
         overruns += overran
 
         for m in result["messages"]:
@@ -584,7 +591,8 @@ def generate_step(state: AgentState):
         step_text = _extract_step_content(raw_text)
         candidates.append(step_text)
 
-        tks = count_chain_tokens(result["messages"])
+        # overrun_tokens — расход оборванной первой попытки при откате (0 без него).
+        tks = count_chain_tokens(result["messages"]) + overrun_tokens
         total_tokens += tks
 
         stripped_note = ""
