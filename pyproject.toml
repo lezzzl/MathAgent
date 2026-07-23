@@ -39,3 +39,6 @@ package_name = "mathagent"
 project_name = "MathAgent"
 kedro_init_version = "0.19.9"
 source_dir = "src"
+
+[tool.kedro_telemetry]
+project_id = "573d913c2fb8495eb894be395c4e6e81"
