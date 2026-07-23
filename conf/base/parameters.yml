@@ -24,3 +24,62 @@ rag:
   mode: similar_conditions        # similar_conditions | similar_solutions | reasoning_traces
   top_k: 3
   trigger: always                 # always = доставать до решения; agent = агент сам зовёт retrieval
+
+# ---------------------------------------------------------------------------
+# Оркестрация бенчмарков (пайплайн `benchmarks`). Всё, что влияет на прогон,
+# меняется ЗДЕСЬ — модель, sampling, runtime, список бенчей. Переопределять
+# можно тремя способами:
+#   1) env:    RUN_MODEL=... OPENAI_BASE_URL=... kedro run --pipeline benchmarks
+#   2) флагом: kedro run --pipeline benchmarks --params benchmarks.model.name=Qwen/Qwen3.5-9B
+#   3) эксп.:  оверрайд в conf/experiments/<name>/parameters.yml (--env <name>)
+# ---------------------------------------------------------------------------
+benchmarks:
+  # какие бенчи гонять (ключи из BENCHMARK_SCRIPTS): aime24 aime25 aime26
+  # hmmt25 hmmt26 imo_answerbench math500
+  select:
+    - aime24
+    - aime25
+    - aime26
+    - hmmt25
+    - imo_answerbench
+    - math500
+
+  model:
+    name: "${oc.env:RUN_MODEL,Qwen/Qwen3.5-9B}"   # served-name модели на vLLM
+    base_url: "${oc.env:OPENAI_BASE_URL,http://127.0.0.1:8000/v1}"
+    api_key_env: OPENAI_API_KEY     # ИМЯ env-переменной с ключом (не сам ключ!)
+
+  generation:                       # sampling; дефолты — как в MathArena
+    temperature: 0.6
+    top_p: 0.95
+    top_k: 20
+    min_p: 0.0
+    presence_penalty: 1.5
+    repetition_penalty: 1.0
+    seed: 42
+    thinking: true                  # включить reasoning (<think>…</think>)
+    max_tokens: 49152               # предел длины ответа модели
+
+  runtime:
+    concurrency: 32                 # параллельных запросов к модели
+    timeout: 3000.0                 # таймаут на задачу, сек
+    max_retries: 1
+    max_consecutive_api_errors: 3   # circuit breaker: подряд ошибок API до стопа
+
+  serving:                          # только для записи в manifest (инфо о vLLM)
+    reasoning_parser: qwen3
+    vllm_max_num_seqs: 8
+    vllm_max_model_len: 73728
+
+  prompt: conf/base/prompts/solver-reasoning.yml   # набор ролей/промптов (путь от корня)
+  pipeline: solver                  # какой граф собирать
+  run_id: null                      # null → сгенерируется; задать тот же для resume
+  resume: false                     # продолжить прерванный run (нужен явный run_id)
+  limit: null                       # напр. 2 — быстрый прогон на 2 задачах
+
+  # Наблюдаемость. Живой прогресс по задачам и так пишется в logs/<run_id>/runner.log
+  # и в терминал. Здесь — опциональная публикация готового прогона в LangSmith
+  # (src/langsmith/compare_runs.py): решения, reasoning и оценка каждой задачи в UI.
+  observability:
+    publish_langsmith: false        # true → после прогона Kedro зальёт run в LangSmith
+    langsmith_api_key_env: LANGSMITH_API_KEY   # ИМЯ env-переменной с ключом (не сам ключ)
