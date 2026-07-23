@@ -33,6 +33,7 @@ import json
 import operator
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, NamedTuple, Optional, Tuple
@@ -359,12 +360,18 @@ def _reattach_answer(step: str, answer: Optional[str]) -> str:
     return f"{step}\n\nFinal answer: {boxed}".strip() if step else f"Final answer: {boxed}"
 
 
-def _parse_segmenter_response(content: str, raw_fallback: str) -> Tuple[str, Optional[str], bool]:
+def _parse_segmenter_response(content: str, raw_fallback: str,
+                              allow_answer: bool = True) -> Tuple[str, Optional[str], bool]:
     """Разбирает ответ сегментатора формата ###STEP### / ###ANSWER###.
 
     Разделители вместо JSON выбраны намеренно: вывод сегментатора — сплошной
     LaTeX (\\frac, \\sqrt, \\boxed), а именно он ломает JSON-парсинг из-за
     неэкранированных бэкслэшей. Строчные маркеры такой проблемы лишены.
+
+    allow_answer=False запрещает приклеивать финальный ответ к шагу. Нужно на
+    малой глубине: qwen4b решает задачу целиком, сегментатор исправно возвращает
+    первый шаг, но заодно рапортует найденный в черновике \\boxed — и пайплайн
+    схлопывается в один шаг (де-факто обычный CoT). См. min_steps_before_answer.
 
     Возвращает (step_text, final_answer|None, reliable). При отсутствии маркеров
     деградируем к обычному экстрактору по <step> — сначала на самом ответе
@@ -378,7 +385,7 @@ def _parse_segmenter_response(content: str, raw_fallback: str) -> Tuple[str, Opt
     if not m:
         # Маркеры не пришли — не теряем шаг, чистим чем есть.
         fallback = _extract_step_content(text) or _extract_step_content(raw_fallback)
-        return fallback, extract_answer(fallback), False
+        return fallback, (extract_answer(fallback) if allow_answer else None), False
 
     step = _STEP_ANY_TAG_RE.sub("", m.group(1)).strip()
 
@@ -388,6 +395,10 @@ def _parse_segmenter_response(content: str, raw_fallback: str) -> Tuple[str, Opt
         cand = a.group(1).strip()
         if cand and cand.upper() != "NONE":
             answer = extract_answer(cand) or cand
+
+    if not allow_answer:
+        # Шаг оставляем как есть (математику не портим), но ответ не приклеиваем.
+        return step, None, True
 
     step = _reattach_answer(step, answer)
     return step, answer, True
@@ -578,6 +589,17 @@ class AgentState(TypedDict):
     thinking_overruns: Annotated[int, operator.add]
     # Сколько раз пришлось звать LLM-сегментатор (быстрый путь по тегам не сработал).
     segmenter_calls: Annotated[int, operator.add]
+    # Сколько сегментаций вернулись без распознанных маркеров (фоллбек-экстракция).
+    segmenter_unreliable: Annotated[int, operator.add]
+
+    # Минимум уже принятых шагов, прежде чем финальный ответ будет засчитан.
+    # 1 = запрещаем ответ на глубине 0 (ровно то, что декларируют промпты).
+    # 0 = прежнее поведение: ответ принимается сразу, пайплайн вырождается в CoT.
+    min_steps_before_answer: int
+    # Сколько раз ответ был отвергнут как преждевременный.
+    premature_answers: Annotated[int, operator.add]
+    # Глубина (число ранее принятых шагов), на которой ответ всё-таки засчитан.
+    answer_depth: Optional[int]
 
     final_answer: Optional[str]
     is_valid: bool
@@ -667,13 +689,18 @@ def segment_step(state: AgentState):
     которая возвращает чистый шаг и, если он есть, финальный ответ.
     """
     raw_candidates = state.get('candidate_raw') or []
-    print(f"\n[Node: Segment] Сегментирую {len(raw_candidates)} сырых кандидата(ов)...")
+    depth = len(state.get('steps', []))
+    min_before = state.get('min_steps_before_answer', 1)
+    allow_answer = depth >= min_before
+    print(f"\n[Node: Segment] Сегментирую {len(raw_candidates)} сырых кандидата(ов) "
+          f"(глубина {depth}, ответ {'разрешён' if allow_answer else 'ЗАПРЕЩЁН'})...")
     role = ROLES["segmenter"]
     context = _build_context(state['problem'], state.get('steps', []))
 
     steps: List[str] = []
     total_tokens = 0
     seg_calls = 0
+    seg_unreliable = 0
 
     for i, raw in enumerate(raw_candidates):
         if not (raw or "").strip():
@@ -693,7 +720,9 @@ def segment_step(state: AgentState):
             res = _chat(messages, temperature=role.temperature, num_predict=role.num_predict,
                         json_format=role.json_format, enable_thinking=role.enable_thinking)
             total_tokens += res.tokens
-            step, answer, reliable = _parse_segmenter_response(res.text, raw)
+            step, answer, reliable = _parse_segmenter_response(res.text, raw,
+                                                              allow_answer=allow_answer)
+            seg_unreliable += (not reliable)
             tag = "" if reliable else " ⚠️ [маркеры не распознаны, фоллбек-экстракция]"
             ans_note = f" | answer={answer}" if answer else ""
             print(f"    - Candidate {i+1}: сегментатор вернул шаг ({res.tokens} ток.){ans_note}{tag}")
@@ -702,7 +731,7 @@ def segment_step(state: AgentState):
         print(f"      Step:\n{step}\n")
 
     return {"candidate_steps": steps, "tokens_used": total_tokens,
-            "segmenter_calls": seg_calls}
+            "segmenter_calls": seg_calls, "segmenter_unreliable": seg_unreliable}
 
 
 def evaluate_steps(state: AgentState):
@@ -836,10 +865,25 @@ def commit_step(state: AgentState):
               f"— подряд {stuck_streak}/{state.get('max_stuck_steps', 2)}.")
 
     answer = extract_answer(best_step)
-    if answer:
+
+    # Страховка от вырождения в CoT. qwen4b решает задачу целиком, и ответ
+    # регулярно появляется уже на глубине 0 — тогда commit сразу уходит на
+    # верификацию, и «пошаговый» пайплайн превращается в обычный CoT с одним
+    # шагом (на прогоне aime26 так закончилась ровно половина задач). Промпты
+    # это запрещают, но 4B их не слушается, поэтому правило форсим кодом.
+    # Отвергаем только ЗАЧЁТ ответа; сам шаг принимаем как есть, не портя математику.
+    min_before = state.get('min_steps_before_answer', 1)
+    premature = 0
+    if answer and len(prior_steps) < min_before:
+        print(f"  ⚠️  [PREMATURE ANSWER] Ответ {answer!r} получен на глубине "
+              f"{len(prior_steps)}, требуется минимум {min_before} принятых шаг(ов). "
+              f"Не засчитываю, продолжаем вывод.")
+        answer = None
+        premature = 1
+    elif answer:
         print(f"  -> Explicit answer found: {answer}")
 
-    return {
+    result = {
         "steps": [best_step],
         "final_answer": answer if answer else "",
         "in_recovery": False,
@@ -848,7 +892,11 @@ def commit_step(state: AgentState):
         "candidate_scores": [],
         "stuck_streak": stuck_streak,
         "step_recovery_attempts": 0,
+        "premature_answers": premature,
     }
+    if answer:
+        result["answer_depth"] = len(prior_steps)
+    return result
 
 
 def verify_solution(state: AgentState):
@@ -1002,6 +1050,10 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "eval_history": [],
         "thinking_overruns": 0,
         "segmenter_calls": 0,
+        "segmenter_unreliable": 0,
+        "min_steps_before_answer": 1,
+        "premature_answers": 0,
+        "answer_depth": None,
         "final_answer": None,
         "is_valid": False,
         "verifier_rationale": "",
@@ -1022,6 +1074,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
             "max_stuck_steps": args.max_stuck_steps,
             "max_unreliable_evals": args.max_unreliable_evals,
             "use_tools": not getattr(args, "no_tools", False),
+            "min_steps_before_answer": getattr(args, "min_steps_before_answer", 1),
         })
     state.update(overrides)
     return state
@@ -1033,6 +1086,13 @@ DEFAULT_PROMPT_PATH = Path(__file__).resolve().parent / "conf/base/prompts/agent
 if __name__ == "__main__":
     # Автономный smoke-test: решает одну задачу против сервера qwen4b.
     # MODEL / OPENAI_BASE_URL / OPENAI_API_KEY берутся из окружения.
+    # Логи содержат кириллицу и эмодзи, а консоль Windows по умолчанию cp1251 —
+    # без этого первый же print падает с UnicodeEncodeError (раннер бенчмарков
+    # делает то же самое у себя на старте).
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+
     try:
         from dotenv import load_dotenv
         load_dotenv()

@@ -171,6 +171,15 @@ def parse_benchmark_args(
     group.add_argument("--max-stuck-steps", type=int, default=2)
     group.add_argument("--max-unreliable-evals", type=int, default=3)
     group.add_argument("--max-recoveries", type=int, default=5)
+    group.add_argument(
+        "--min-steps-before-answer", type=int, default=1,
+        help="Сколько шагов должно быть принято, прежде чем \\boxed{} засчитывается "
+             "как финальный ответ (только --pipeline qwen4b). 1 (по умолчанию) — "
+             "запрещает ответ на глубине 0, то есть ровно то, что и так декларируют "
+             "промпты. 0 — прежнее поведение: слабая модель отдаёт готовый ответ "
+             "первым же шагом, и пошаговый пайплайн вырождается в обычный CoT "
+             "(на прогоне aime26/qwen4b так завершилась ровно половина задач).",
+    )
 
     if include_output:
         parser.add_argument("--output", type=Path)
@@ -458,6 +467,13 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace) -> tuple[st
         # значение означает, что замер "с ризонингом" неоднородный.
         "thinking_overruns": state.get("thinking_overruns", 0),
     }
+    # Метрики, специфичные для пайплайнов с сегментацией. Без них из JSONL не
+    # видно ни как часто звался сегментатор, ни (главное) на какой глубине принят
+    # ответ — а именно это показывает, не выродился ли пошаговый режим в CoT.
+    for extra in ("segmenter_calls", "segmenter_unreliable",
+                  "premature_answers", "answer_depth"):
+        if extra in state:
+            metrics[extra] = state.get(extra)
     return state.get("final_answer"), metrics
 
 
