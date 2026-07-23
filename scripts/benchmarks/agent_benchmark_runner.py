@@ -153,6 +153,12 @@ def parse_benchmark_args(
         "--resume", type=Path,
         help="Дописать существующий JSONL, пропустив уже решённые task_id",
     )
+    parser.add_argument(
+        "--data-file", type=str, default=None,
+        help="Локальный файл датасета (jsonl/parquet/csv) вместо загрузки с HF Hub. "
+             "Нужно при недоступной сети: скачайте данные вручную (scp) и укажите "
+             "путь. Поля должны совпадать с ожидаемыми (problem/answer и т.п.).",
+    )
 
     group = parser.add_argument_group("self-consistency (--role sc)")
     group.add_argument("--n-samples", type=int, default=16, help="Число независимых решений на задачу")
@@ -214,16 +220,36 @@ def resolve_output_path(config: BenchmarkConfig, output: Path | None) -> Path:
     return ROOT / "results" / config.output_directory / f"agent_{timestamp}.jsonl"
 
 
-def load_dataset_offline_safe(config: BenchmarkConfig):
-    """load_dataset с фоллбеком на сырые parquet из hub-кэша.
+_LOCAL_LOADERS = {".jsonl": "json", ".json": "json", ".parquet": "parquet", ".csv": "csv"}
 
-    `hf download` кладёт файлы в ~/.cache/huggingface/hub/, а load_dataset в
-    offline-режиме ищет свой обработанный кэш в ~/.cache/huggingface/datasets/.
-    Если датасет качали через `hf download` (единственный способ при плохой сети
-    к HF), обычный путь падает с OfflineModeIsEnabled, хотя данные уже на диске.
-    Тогда читаем parquet напрямую — Hub при этом не опрашивается вообще.
+
+def load_dataset_offline_safe(config: BenchmarkConfig, data_file: "str | None" = None):
+    """Грузит датасет, устойчиво к отсутствию сети к HuggingFace Hub.
+
+    Порядок:
+      1. --data-file: локальный jsonl/parquet/csv, скачанный вручную (например
+         через scp). Hub не опрашивается вообще — самый надёжный путь при
+         недоступной сети.
+      2. обычный load_dataset по имени с Hub/кэша.
+      3. фоллбек на сырые parquet из hub-кэша: `hf download` кладёт файлы в
+         ~/.cache/huggingface/hub/, а load_dataset в offline-режиме ищет свой
+         обработанный кэш в ~/.cache/huggingface/datasets/ и падает с
+         OfflineModeIsEnabled, хотя данные уже на диске.
     """
     from datasets import load_dataset
+
+    if data_file:
+        path = os.path.expanduser(data_file)
+        loader = _LOCAL_LOADERS.get(os.path.splitext(path)[1].lower())
+        if loader is None:
+            raise ValueError(
+                f"--data-file: неподдерживаемое расширение {path!r}. "
+                f"Ожидается один из: {', '.join(_LOCAL_LOADERS)}"
+            )
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"--data-file: файл не найден: {path}")
+        print(f"[dataset] локальный файл {path} (loader={loader}), Hub не опрашивается")
+        return load_dataset(loader, data_files=[path], split="train")
 
     try:
         return load_dataset(config.dataset_name, split=config.split)
@@ -535,7 +561,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     solver_mod.DEFAULT_MAX_TOKENS = args.max_tokens
     solver_mod.REQUEST_TIMEOUT = args.timeout
 
-    dataset = load_dataset_offline_safe(config)
+    dataset = load_dataset_offline_safe(config, getattr(args, "data_file", None))
 
     # Предфильтр по формату эталона (для датасетов со смешанными ответами).
     # Применяется ДО skip/limit, чтобы --limit N отсчитывался от отобранных
