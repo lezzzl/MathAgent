@@ -1,4 +1,5 @@
 import argparse
+import glob
 import json
 import os
 import sys
@@ -211,6 +212,36 @@ def resolve_output_path(config: BenchmarkConfig, output: Path | None) -> Path:
         return output
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return ROOT / "results" / config.output_directory / f"agent_{timestamp}.jsonl"
+
+
+def load_dataset_offline_safe(config: BenchmarkConfig):
+    """load_dataset с фоллбеком на сырые parquet из hub-кэша.
+
+    `hf download` кладёт файлы в ~/.cache/huggingface/hub/, а load_dataset в
+    offline-режиме ищет свой обработанный кэш в ~/.cache/huggingface/datasets/.
+    Если датасет качали через `hf download` (единственный способ при плохой сети
+    к HF), обычный путь падает с OfflineModeIsEnabled, хотя данные уже на диске.
+    Тогда читаем parquet напрямую — Hub при этом не опрашивается вообще.
+    """
+    from datasets import load_dataset
+
+    try:
+        return load_dataset(config.dataset_name, split=config.split)
+    except Exception as exc:
+        cache_root = os.path.expanduser(
+            os.getenv("HF_HUB_CACHE")
+            or os.path.join(os.getenv("HF_HOME", "~/.cache/huggingface"), "hub")
+        )
+        slug = "datasets--" + config.dataset_name.replace("/", "--")
+        pattern = os.path.join(cache_root, slug, "snapshots", "*", "**", "*.parquet")
+        files = sorted(glob.glob(pattern, recursive=True))
+        if not files:
+            raise
+        print(f"[dataset] {type(exc).__name__} при обычной загрузке — беру сырые "
+              f"parquet из hub-кэша ({len(files)} файл(ов))")
+        # data_files без разбивки по сплитам кладёт всё в 'train'; наши бенчмарки
+        # используют одиночный сплит, поэтому этого достаточно.
+        return load_dataset("parquet", data_files=files, split="train")
 
 
 class ServerUnavailable(RuntimeError):
@@ -504,7 +535,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     solver_mod.DEFAULT_MAX_TOKENS = args.max_tokens
     solver_mod.REQUEST_TIMEOUT = args.timeout
 
-    dataset = load_dataset(config.dataset_name, split=config.split)
+    dataset = load_dataset_offline_safe(config)
 
     # Предфильтр по формату эталона (для датасетов со смешанными ответами).
     # Применяется ДО skip/limit, чтобы --limit N отсчитывался от отобранных
