@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 from uuid import UUID, uuid5
 
+from langsmith.evaluation import evaluate_comparative
 from langsmith.utils import LangSmithNotFoundError
 
 from artifact_io import LocalRun, TaskRecord, load_local_run
@@ -267,6 +268,83 @@ def report_project_name(
     return f"mathagent-compare::{left.name}::{right.name}::{suffix}"
 
 
+def _pairwise_accuracy(runs: list[Any]) -> dict[str, Any]:
+    """Score a native LangSmith pair by resolved per-task correctness."""
+
+    if len(runs) != 2:
+        raise ValueError("pairwise accuracy requires exactly two runs")
+    correctness = [
+        (run.outputs or {}).get("correct")
+        for run in runs
+    ]
+    if not all(isinstance(value, bool) for value in correctness):
+        return {
+            "key": "pairwise_accuracy",
+            "scores": {},
+            "comment": "Excluded because at least one correctness grade is unresolved.",
+        }
+    if correctness[0] == correctness[1]:
+        scores = {runs[0].id: 0.5, runs[1].id: 0.5}
+        comment = "Tie: both answers have the same correctness grade."
+    elif correctness[0]:
+        scores = {runs[0].id: 1.0, runs[1].id: 0.0}
+        comment = "Run-1 is correct and Run-2 is incorrect."
+    else:
+        scores = {runs[0].id: 0.0, runs[1].id: 1.0}
+        comment = "Run-2 is correct and Run-1 is incorrect."
+    return {"key": "pairwise_accuracy", "scores": scores, "comment": comment}
+
+
+def publish_native_comparison(
+    client: Any,
+    left: Any,
+    right: Any,
+) -> tuple[Any, str]:
+    """Create LangSmith's native comparative experiment for one ordered pair."""
+
+    prefix = f"mathagent-native::{left.name}::{right.name}"
+    results = evaluate_comparative(
+        (left.id, right.id),
+        evaluators=[_pairwise_accuracy],
+        experiment_prefix=prefix,
+        description=(
+            "Native paired correctness comparison. Run-1 is the existing "
+            "experiment and Run-2 is the newer experiment."
+        ),
+        max_concurrency=5,
+        client=client,
+        metadata={
+            "kind": "mathagent-native-comparison",
+            "schema_version": SCHEMA_VERSION,
+            "left_experiment_id": str(left.id),
+            "right_experiment_id": str(right.id),
+        },
+        randomize_order=False,
+    )
+    return results.comparative_experiment, results.url
+
+
+def _ensure_native_comparison(
+    client: Any, report_project: Any, left: Any, right: Any
+) -> Any:
+    """Backfill and remember the native comparison associated with a report."""
+
+    metadata = _metadata(report_project)
+    if metadata.get("native_comparative_experiment_id"):
+        return report_project
+    comparative, url = publish_native_comparison(client, left, right)
+    client.update_project(
+        report_project.id,
+        metadata={
+            **metadata,
+            "native_comparative_experiment_id": str(comparative.id),
+            "native_comparative_experiment_name": comparative.name,
+            "native_comparative_url": url,
+        },
+    )
+    return client.read_project(project_id=report_project.id)
+
+
 def publish_comparison(
     client: Any,
     left: Any,
@@ -283,7 +361,10 @@ def publish_comparison(
     if existing and list(
         client.list_runs(project_id=existing[0].id, is_root=True, limit=1)
     ):
-        return existing[0], _experiment_url(client, existing[0])
+        project = _ensure_native_comparison(
+            client, existing[0], left, right
+        )
+        return project, _experiment_url(client, project)
 
     rows = compare_score_maps(
         _score_map(client, left),
@@ -349,6 +430,7 @@ def publish_comparison(
         max_concurrency=0,
     )
     project = client.read_project(project_id=project.id)
+    project = _ensure_native_comparison(client, project, left, right)
     return project, _experiment_url(client, project)
 
 
