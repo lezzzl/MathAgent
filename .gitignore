@@ -219,3 +219,6 @@ __marimo__/
 
 # Generated dashboard evaluation sidecars
 results/evaluations/
+.DS_Store
+results/qwen35-*/
+results_qwen9b/
