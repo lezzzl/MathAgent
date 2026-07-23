@@ -34,6 +34,7 @@ import operator
 import os
 import re
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, NamedTuple, Optional, Tuple
@@ -181,11 +182,21 @@ REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
 MAX_STEP_CHARS = int(os.getenv("MAX_STEP_CHARS", "1500"))
 
 
+# Сетевые сбои (таймаут/обрыв) — не то же самое, что «модель ничего не ответила».
+# Раньше они молча превращались в пустой ответ с tokens=0, и это выглядело как
+# плохое качество модели: пустой шаг -> score 0 -> recovery, а у оценщика ещё и
+# «ненадёжный раунд». На прогоне aime26 так было 14 таймаутов, и одна задача
+# из-за них сдалась с диагнозом «формат JSON», израсходовав 0 токенов.
+CHAT_RETRIES = int(os.getenv("CHAT_RETRIES", "1"))
+CHAT_RETRY_BACKOFF = float(os.getenv("CHAT_RETRY_BACKOFF", "5"))
+
+
 class ChatResult(NamedTuple):
     content: str
     reasoning: str
     tokens: int
     finish_reason: Optional[str]
+    error: Optional[str] = None
 
     @property
     def text(self) -> str:
@@ -219,32 +230,42 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
     if enable_thinking is not None:
         payload["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
 
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
+    last_error: Optional[str] = None
+    for attempt in range(CHAT_RETRIES + 1):
+        response = None
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
 
-        choices = data.get("choices")
-        if not choices:
-            print(f"[WARN] No choices in response: {data}")
-            return ChatResult("", "", 0, None)
+            choices = data.get("choices")
+            if not choices:
+                print(f"[WARN] No choices in response: {data}")
+                return ChatResult("", "", 0, None)
 
-        choice = choices[0]
-        message = choice.get("message") or {}
-        content = message.get("content", "") or ""
-        reasoning = message.get("reasoning_content", "") or message.get("reasoning", "") or ""
-        if not content and not reasoning:
-            print(f"[WARN] Empty content and reasoning in response: {data}")
+            choice = choices[0]
+            message = choice.get("message") or {}
+            content = message.get("content", "") or ""
+            reasoning = message.get("reasoning_content", "") or message.get("reasoning", "") or ""
+            if not content and not reasoning:
+                print(f"[WARN] Empty content and reasoning in response: {data}")
 
-        tokens_used = data.get("usage", {}).get("total_tokens", 0)
-        finish_reason = choice.get("finish_reason")
-        return ChatResult(content, reasoning, tokens_used, finish_reason)
+            tokens_used = data.get("usage", {}).get("total_tokens", 0)
+            finish_reason = choice.get("finish_reason")
+            return ChatResult(content, reasoning, tokens_used, finish_reason)
 
-    except requests.exceptions.RequestException as e:
-        print(f"API Error: {e}")
-        if 'response' in locals() and response is not None:
-            print(f"Response content: {response.text}")
-        return ChatResult("", "", 0, None)
+        except requests.exceptions.RequestException as e:
+            last_error = f"{type(e).__name__}: {e}"
+            if attempt < CHAT_RETRIES:
+                print(f"  [API RETRY] {last_error} — попытка "
+                      f"{attempt + 2}/{CHAT_RETRIES + 1} через {CHAT_RETRY_BACKOFF:.0f}с")
+                time.sleep(CHAT_RETRY_BACKOFF)
+                continue
+            print(f"API Error (после {attempt + 1} попыт.): {e}")
+            if response is not None:
+                print(f"Response content: {response.text}")
+
+    return ChatResult("", "", 0, None, last_error)
 
 
 # ---------------------------------------------------------------------------
@@ -591,6 +612,9 @@ class AgentState(TypedDict):
     segmenter_calls: Annotated[int, operator.add]
     # Сколько сегментаций вернулись без распознанных маркеров (фоллбек-экстракция).
     segmenter_unreliable: Annotated[int, operator.add]
+    # Сетевые сбои (таймаут/обрыв) за задачу. Ненулевое значение означает, что
+    # часть шагов и оценок потеряна по вине инфраструктуры, а не модели.
+    api_errors: Annotated[int, operator.add]
 
     # Минимум уже принятых шагов, прежде чем финальный ответ будет засчитан.
     # 1 = запрещаем ответ на глубине 0 (ровно то, что декларируют промпты).
@@ -625,7 +649,7 @@ def _generate_one(role: Role, context: str, temp: float) -> Tuple[str, bool, int
     шаг теряется целиком. Повторяем один раз с выключенными размышлениями:
     лучше шаг без ризонинга, чем пустой шаг.
 
-    Возвращает (raw_content, overran, total_tokens).
+    Возвращает (raw_content, overran, total_tokens, api_failed).
     """
     messages = [
         {"role": "system", "content": role.system_prompt},
@@ -642,11 +666,11 @@ def _generate_one(role: Role, context: str, temp: float) -> Tuple[str, bool, int
         retry = _chat(messages, temperature=temp, num_predict=role.num_predict,
                       json_format=role.json_format, enable_thinking=False)
         # Учитываем и токены оборванной первой попытки, и токены повтора.
-        return retry.text, True, result.tokens + retry.tokens
+        return retry.text, True, result.tokens + retry.tokens, bool(retry.error)
     if truncated_empty:
         print(f"      [TRUNCATED] Ответ пуст, finish_reason=length при лимите "
               f"{role.num_predict}. Поднимите num_predict генератора в yaml.")
-    return result.text, False, result.tokens
+    return result.text, False, result.tokens, bool(result.error)
 
 
 def generate_step(state: AgentState):
@@ -660,6 +684,7 @@ def generate_step(state: AgentState):
     raw_candidates: List[str] = []
     total_tokens = 0
     overruns = 0
+    api_errors = 0
     context = _build_context(state['problem'], state.get('steps', []))
 
     base_temp = state.get('base_temperature')
@@ -669,16 +694,18 @@ def generate_step(state: AgentState):
     for i in range(k):
         attempt = state.get('step_recovery_attempts', 0)
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        raw_text, overran, tks = _generate_one(role, context, temp)
+        raw_text, overran, tks, api_failed = _generate_one(role, context, temp)
         overruns += overran
+        api_errors += api_failed
         total_tokens += tks
         raw_candidates.append(raw_text)
         preview = re.sub(r"\s+", " ", raw_text).strip()[:200]
-        print(f"    - Branch {i+1} raw generated (temp: {temp:.2f}, tokens: {tks})")
+        fail_note = " ⚠️ [СЕТЕВОЙ СБОЙ, ветка потеряна]" if api_failed else ""
+        print(f"    - Branch {i+1} raw generated (temp: {temp:.2f}, tokens: {tks}){fail_note}")
         print(f"      Raw preview: {preview}{'...' if len(raw_text) > 200 else ''}")
 
     return {"candidate_raw": raw_candidates, "tokens_used": total_tokens,
-            "thinking_overruns": overruns}
+            "thinking_overruns": overruns, "api_errors": api_errors}
 
 
 def segment_step(state: AgentState):
@@ -701,6 +728,7 @@ def segment_step(state: AgentState):
     total_tokens = 0
     seg_calls = 0
     seg_unreliable = 0
+    api_errors = 0
 
     for i, raw in enumerate(raw_candidates):
         if not (raw or "").strip():
@@ -720,6 +748,7 @@ def segment_step(state: AgentState):
             res = _chat(messages, temperature=role.temperature, num_predict=role.num_predict,
                         json_format=role.json_format, enable_thinking=role.enable_thinking)
             total_tokens += res.tokens
+            api_errors += bool(res.error)
             step, answer, reliable = _parse_segmenter_response(res.text, raw,
                                                               allow_answer=allow_answer)
             seg_unreliable += (not reliable)
@@ -731,7 +760,8 @@ def segment_step(state: AgentState):
         print(f"      Step:\n{step}\n")
 
     return {"candidate_steps": steps, "tokens_used": total_tokens,
-            "segmenter_calls": seg_calls, "segmenter_unreliable": seg_unreliable}
+            "segmenter_calls": seg_calls, "segmenter_unreliable": seg_unreliable,
+            "api_errors": api_errors}
 
 
 def evaluate_steps(state: AgentState):
@@ -742,6 +772,7 @@ def evaluate_steps(state: AgentState):
     seen: Dict[str, Tuple[float, str]] = {}
     total_tokens = 0
     any_reliable = False
+    api_errors = 0
     context = _build_context(state['problem'], state.get('steps', []))
 
     for i, step in enumerate(candidates):
@@ -768,13 +799,17 @@ def evaluate_steps(state: AgentState):
         res = _chat(messages, temperature=role.temperature, num_predict=role.num_predict,
                     json_format=role.json_format, enable_thinking=role.enable_thinking)
         total_tokens += res.tokens
+        api_errors += bool(res.error)
 
         score, rationale, reliable = _parse_eval_response(res.text)
+        if res.error:
+            # Иначе сетевой сбой выглядит как «оценщик выдал мусор».
+            rationale = f"СЕТЕВОЙ СБОЙ ({res.error}) — оценка не получена, не вина модели."
         any_reliable = any_reliable or reliable
         seen[key] = (score, rationale)
         scores.append(score)
 
-        tag = "" if reliable else " ⚠️ [ОЦЕНКА НЕНАДЁЖНА]"
+        tag = "" if reliable else (" ⚠️ [СЕТЕВОЙ СБОЙ]" if res.error else " ⚠️ [ОЦЕНКА НЕНАДЁЖНА]")
         print(f"    - Candidate {i+1} Score: {score:.4f}{tag} | Rationale: {rationale}")
 
     unreliable_streak = 0 if any_reliable else state.get('unreliable_eval_streak', 0) + 1
@@ -785,6 +820,7 @@ def evaluate_steps(state: AgentState):
     return {
         "candidate_scores": scores,
         "tokens_used": total_tokens,
+        "api_errors": api_errors,
         "unreliable_eval_streak": unreliable_streak,
         "eval_history": [{
             "depth": len(state.get('steps', [])),
@@ -815,11 +851,22 @@ def give_up(state: AgentState):
             f"({state.get('tokens_used', 0)}/{state.get('token_budget', 0)})."
         )
     elif state.get('unreliable_eval_streak', 0) >= state.get('max_unreliable_evals', 3):
-        reason = (
-            f"Evaluator returned unparseable JSON {state['unreliable_eval_streak']} rounds in a row — "
-            f"likely a format/server issue, not a step-quality problem. Stopping "
-            f"({state.get('tokens_used', 0)}/{state.get('token_budget', 0)} tokens used)."
-        )
+        if state.get('api_errors'):
+            # Не приписываем модели то, что сломала сеть: при таймаутах ответ
+            # оценщика пуст, и это неотличимо от «выдал не-JSON», хотя лечится
+            # это --timeout, а не промптом.
+            reason = (
+                f"Aborted after {state['unreliable_eval_streak']} unusable evaluator rounds, but the "
+                f"real cause looks like infrastructure: {state['api_errors']} network failure(s) "
+                f"(timeout/reset) during this task, {state.get('tokens_used', 0)} tokens actually spent. "
+                f"Raise --timeout or reduce --workers; this is not a model-quality result."
+            )
+        else:
+            reason = (
+                f"Evaluator returned unparseable JSON {state['unreliable_eval_streak']} rounds in a row — "
+                f"likely a format/server issue, not a step-quality problem. Stopping "
+                f"({state.get('tokens_used', 0)}/{state.get('token_budget', 0)} tokens used)."
+            )
     elif state.get('tokens_used', 0) >= state.get('token_budget', 0):
         reason = (
             f"The token budget is exhausted ({state.get('tokens_used', 0)}/{state.get('token_budget', 0)}), "
@@ -916,6 +963,7 @@ def verify_solution(state: AgentState):
         "is_valid": is_valid,
         "verifier_rationale": rationale,
         "tokens_used": res.tokens,
+        "api_errors": int(bool(res.error)),
     }
 
 
@@ -1051,6 +1099,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "thinking_overruns": 0,
         "segmenter_calls": 0,
         "segmenter_unreliable": 0,
+        "api_errors": 0,
         "min_steps_before_answer": 1,
         "premature_answers": 0,
         "answer_depth": None,

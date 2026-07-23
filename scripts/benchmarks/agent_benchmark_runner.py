@@ -471,7 +471,7 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace) -> tuple[st
     # видно ни как часто звался сегментатор, ни (главное) на какой глубине принят
     # ответ — а именно это показывает, не выродился ли пошаговый режим в CoT.
     for extra in ("segmenter_calls", "segmenter_unreliable",
-                  "premature_answers", "answer_depth"):
+                  "premature_answers", "answer_depth", "api_errors"):
         if extra in state:
             metrics[extra] = state.get(extra)
     return state.get("final_answer"), metrics

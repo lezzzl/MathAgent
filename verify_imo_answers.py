@@ -181,8 +181,11 @@ def main() -> int:
     ap.add_argument("--no-judge", action="store_true", help="Только math-verify, без судьи")
     ap.add_argument(
         "--timeout", type=int, default=None,
-        help="Таймаут парсинга/сверки math-verify. На Windows принудительно "
-             "отключается (иначе math-verify не парсит ничего), на Linux 5с.",
+        help="Таймаут парсинга/сверки math-verify. По умолчанию ОТКЛЮЧЁН и менять "
+             "это не нужно: math-verify реализует таймаут через signal.alarm, "
+             "который работает только в главном потоке, а сверка идёт в "
+             "ThreadPoolExecutor. С включённым таймаутом parse молча возвращает "
+             "пустоту, и ВСЕ задачи уходят к LLM-судье вместо точной сверки.",
     )
     ap.add_argument("--judge-base-url", default=os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8002/v1"))
     ap.add_argument("--judge-model", default=os.getenv("MODEL", "Qwen/Qwen3.5-9B"))
@@ -196,10 +199,14 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    if args.timeout is None and sys.platform == "win32":
-        args.timeout = None  # на Windows math-verify timeout нерабочий
-    elif args.timeout is None:
-        args.timeout = 5
+    # Таймаут math-verify оставляем выключенным: см. --help. Он несовместим и с
+    # Windows, и с многопоточностью, а его включение тихо ломает всю
+    # алгоритмическую ступень (прогон IMO ушёл к судье целиком именно из-за него).
+    if args.timeout is not None and args.workers > 1:
+        print(f"[warn] --timeout={args.timeout} с --workers>1: math-verify использует "
+              f"signal.alarm, который не работает вне главного потока — сверка "
+              f"молча деградирует к судье. Игнорирую таймаут.")
+        args.timeout = None
 
     judge_cfg = {
         "base_url": args.judge_base_url,
