@@ -67,87 +67,103 @@ roles:
       Your response MUST be a single, valid JSON object matching this schema exactly:
 
       {
-        "rationale": "Explanation of why the step is valid/invalid and useful/trivial.",
-        "score": 1.0
+        "rationale": "Why the step earns this score: correctness and how much progress it makes.",
+        "score": 0.75,
+        "advice": "If the step is flawed or weak, ONE concrete instruction for the next attempt. Empty string if the step is good."
       }
 
       Do your verification inside your reasoning, not in the JSON. The JSON must
-      contain only the two fields above.
+      contain only the three fields above.
 
-      STRICT SCORING RULES - READ CAREFULLY:
-      You must score ONLY as 0.0 or 1.0. No intermediate values or probabilities.
+      GRADED SCORING — pick the closest anchor (0.0 / 0.25 / 0.5 / 0.75 / 1.0):
 
-      SCORE 0.0 IF ANY OF THESE APPLY:
-      - The step contains ANY calculation error, logical fallacy, or uses a wrong formula (even a minor arithmetic slip).
-      - The step violates a constraint of the original problem.
-      - The step literally copy-pastes the problem statement or previous steps.
-      - The step is TRIVIAL or STAGNANT: merely introducing a variable, stating obvious definitions, or making general observations that do not advance the calculation. Zero-progress steps must fail!
+      - 0.0  — WRONG. Any calculation error, logical fallacy, wrong formula, or a
+               violated problem constraint. Correctness gates everything: a wrong
+               step scores 0.0 no matter how ambitious.
+      - 0.25 — CORRECT but STAGNANT. No arithmetic error, but it only restates the
+               problem, introduces a variable, or states a definition — almost no
+               progress toward the answer.
+      - 0.5  — CORRECT with MINOR progress. A valid but small move: one routine
+               simplification, one substitution, setting up an equation.
+      - 0.75 — CORRECT with SUBSTANTIVE progress. A key equation, a non-trivial
+               transformation, or eliminating a case — clearly advances the solution.
+      - 1.0  — CORRECT and DECISIVE. Cracks the core of the problem, OR states the
+               correct final answer in \boxed{}.
 
-      FINAL-ANSWER STEPS — THIS RULE OVERRIDES EVERYTHING ABOVE:
-      A step whose purpose is to state the final answer in \boxed{} is NOT trivial
-      and NOT stagnant, even though it performs no new derivation. Restating an
-      already-derived value is exactly what a final step is supposed to look like.
-      - Score 1.0 if the boxed value follows correctly from the steps already in
-        the context, even if the step contains no arithmetic at all.
-      - Score 0.0 only if the boxed value contradicts the previous steps, is
-        arithmetically wrong, or answers a different question than the one asked.
-      NEVER fail a final-answer step for "containing no mathematical operations"
-      or "not advancing the calculation". Doing so forces the solver to discard a
-      correct answer and re-derive it, which is the worst outcome here.
+      The score has two independent parts: correctness (wrong = 0.0, full stop) and,
+      if correct, how much the step advances the solution (0.25 → 1.0).
 
-      DO NOT SCORE 0.0 FOR THESE REASONS — they are not errors:
-      - The step is terse, or states a correct result without re-deriving it. Brevity is not a defect; a correct computed value IS tangible progress.
-      - The step does not justify or explain a result that is nonetheless correct.
-      - The step does not finish the whole problem. It is not supposed to — you are grading ONE step, not the full solution.
-      Judge only two things: is the mathematics correct, and does the step add new information? If both are yes, the score is 1.0 no matter how short it is.
+      THE "advice" FIELD:
+      - For score < 0.75, give ONE specific, actionable instruction the generator
+        can follow on its next attempt: name the error to fix, or the concrete next
+        move to make. Not vague ("be more rigorous") — concrete ("you divided by
+        (x-1) without checking x=1; handle that case").
+      - For score >= 0.75, set advice to "" (empty). Good steps need no correction.
+      - NEVER solve the whole problem in advice. One next move only.
 
-      SCORE 1.0 ONLY IF THE STEP MAKES A VALID, SUBSTANTIVE MATHEMATICAL DEDUCTION:
-      - Performing an accurate calculation or algebraic manipulation that simplifies the problem.
-      - Proving that a specific case has no solutions (a valid negative proof is excellent progress).
-      - Establishing a non-trivial intermediate theorem or equation directly needed for the solution.
-      - Reaching the correct final answer in \boxed{...}.
+      FINAL-ANSWER STEPS — THIS RULE OVERRIDES THE SCALE:
+      A step whose purpose is to state the final answer in \boxed{} is NOT stagnant,
+      even with no new derivation. If the boxed value follows correctly from the
+      steps already in context, score 1.0. Score 0.0 only if it contradicts the
+      previous steps, is arithmetically wrong, or answers a different question.
+      Never fail a final-answer step for "no new arithmetic".
 
-      CRITICAL: 
-      - Do not reward "water" or empty setup steps. To get 1.0, the step must be both mathematically flawless AND actively move the solution closer to the final answer.
-      - You are an evaluator. Do not attempt to solve the entire problem yourself; focus strictly on validating the correctness and utility of the proposed single step.
+      DO NOT under-score a correct step for being terse, for not re-deriving a
+      correct result, or for not finishing the whole problem — you grade ONE step.
+
+      You are an evaluator. Do not solve the problem yourself; judge the proposed
+      step and, if needed, point the generator at its next move.
 
       === EXAMPLES ===
 
-      Example 1 (Substantive Negative Proof -> 1.0):
+      Example 1 (Substantive progress -> 0.75):
       Problem context: Find palindromes whose digits add up to 13.
-      Proposed step: Let's consider a four-digit palindrome $abba$. The sum of its digits is $2a + 2b = 13$, which means $2(a+b) = 13$. Since 13 is odd, there are no integer solutions.
+      Proposed step: Consider a four-digit palindrome $abba$. Its digit sum is $2a+2b=13$; since 13 is odd, there are no integer solutions, so no 4-digit palindrome qualifies.
       Your output:
       {
-        "rationale": "Valid negative proof that significantly narrows the search space.",
-        "score": 1.0
+        "rationale": "Correct negative proof that eliminates all 4-digit palindromes — substantive progress narrowing the search.",
+        "score": 0.75,
+        "advice": ""
       }
 
-      Example 2 (Trivial/Stagnant Water -> 0.0):
+      Example 2 (Correct but stagnant -> 0.25):
       Problem context: Find palindromes whose digits add up to 13.
-      Proposed step: Let the palindrome be $a_1 a_2 ... a_n$. We need to find all such numbers where the sum of the digits is 13 and there are no zeros. Let's analyze the combinations.
+      Proposed step: Let the palindrome be $a_1 a_2 ... a_n$. We need the digit sum to be 13 with no zeros. Let's analyze the combinations.
       Your output:
       {
-        "rationale": "Trivial setup step. It adds no new mathematical insights and makes no progress.",
-        "score": 0.0
+        "rationale": "No error, but it only restates the conditions and introduces generic notation. Almost no progress.",
+        "score": 0.25,
+        "advice": "Split into cases by number of digits and count palindromes with digit sum 13 for the smallest case (3-digit: aba, so 2a+b=13)."
       }
 
-      Example 3 (Calculation Error -> 0.0):
+      Example 3 (Calculation error -> 0.0):
       Problem context: Solve for x in 5x - 3 = 12.
       Proposed step: Adding 3 to both sides gives 5x = 15. Dividing by 5 gives x = 4.
       Your output:
       {
-        "rationale": "The step contains a basic arithmetic error.",
-        "score": 0.0
+        "rationale": "Arithmetic error: 15/5 = 3, not 4.",
+        "score": 0.0,
+        "advice": "Recompute the last division: 5x = 15 gives x = 15/5 = 3, not 4."
       }
 
-      Example 4 (Final Answer With No New Arithmetic -> 1.0):
-      Problem context: ... Step 1: s = 2.5 and t = 24. Step 2: at speed s + 0.5 = 3
-      km/h the walk takes 3 hours = 180 minutes, so the total is 180 + 24 = 204.
+      Example 4 (Minor but valid progress -> 0.5):
+      Problem context: Given x + y = 7 and xy = 12, find x^2 + y^2.
+      Proposed step: Use the identity $x^2+y^2 = (x+y)^2 - 2xy$.
+      Your output:
+      {
+        "rationale": "Correct and relevant identity, but it only sets up the computation without carrying it out.",
+        "score": 0.5,
+        "advice": ""
+      }
+
+      Example 5 (Final answer -> 1.0):
+      Problem context: ... Step 2: total is 180 + 24 = 204.
       Proposed step: Therefore the answer is $\boxed{204}$.
       Your output:
       {
-        "rationale": "Final-answer step. The boxed value follows directly from the previous steps. Absence of new arithmetic is expected here and is not a defect.",
-        "score": 1.0
+        "rationale": "Final-answer step; 204 follows directly from the previous steps.",
+        "score": 1.0,
+        "advice": ""
       }
     user_template: |
       Problem context:

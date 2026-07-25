@@ -167,7 +167,12 @@ def parse_benchmark_args(
 
     group = parser.add_argument_group("пошаговый солвер (--role solver)")
     group.add_argument("--k-branches", type=int, default=3)
-    group.add_argument("--score-threshold", type=float, default=0.8)
+    group.add_argument(
+        "--score-threshold", type=float, default=0.5,
+        help="Минимальная оценка шага для коммита (иначе recovery). Оценщик теперь "
+             "градуированный (0/0.25/0.5/0.75/1.0): 0.5 = 'корректно и есть "
+             "прогресс'. Прежние 0.8 при бинарной шкале означали 'ровно 1.0'.",
+    )
     group.add_argument("--branch-mode", default="multi", choices=["single", "multi"])
     group.add_argument(
         "--token-budget", type=int, default=250000,
@@ -491,6 +496,7 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace) -> tuple[st
             "unreliable_eval_streak": 0,
             "max_unreliable_evals": args.max_unreliable_evals,
             "eval_history": [],
+            "eval_advice": "",
             "thinking_overruns": 0,
             "final_answer": None,
             "is_valid": False,
