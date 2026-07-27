@@ -1,0 +1,58 @@
+{
+  "base_url": "http://127.0.0.1:8000/v1",
+  "output_tokens": 4096,
+  "concurrencies": [1, 2, 4, 8, 12, 16, 20, 24, 32, 40],
+  "base_env": {
+    "MODEL": "Qwen/Qwen3.5-4B",
+    "SERVED_MODEL_NAME": "qwen3.5-4b",
+    "MAX_MODEL_LEN": "131072",
+    "GPU_MEMORY_UTILIZATION": "0.95",
+    "DTYPE": "bfloat16",
+    "ENABLE_PREFIX_CACHING": "0",
+    "ENABLE_ASYNC_SCHEDULING": "1"
+  },
+  "server_configs": [
+    {
+      "name": "bf16-b8192-s24",
+      "env": {
+        "KV_CACHE_DTYPE": "auto",
+        "MAX_NUM_BATCHED_TOKENS": "8192",
+        "MAX_NUM_SEQS": "24"
+      }
+    },
+    {
+      "name": "bf16-b16384-s24",
+      "env": {
+        "KV_CACHE_DTYPE": "auto",
+        "MAX_NUM_BATCHED_TOKENS": "16384",
+        "MAX_NUM_SEQS": "24"
+      }
+    },
+    {
+      "name": "bf16-b32768-s24",
+      "env": {
+        "KV_CACHE_DTYPE": "auto",
+        "MAX_NUM_BATCHED_TOKENS": "32768",
+        "MAX_NUM_SEQS": "24"
+      }
+    },
+    {
+      "name": "fp8kv-b16384-s40",
+      "env": {
+        "KV_CACHE_DTYPE": "fp8_e4m3",
+        "MAX_NUM_BATCHED_TOKENS": "16384",
+        "MAX_NUM_SEQS": "40"
+      }
+    },
+    {
+      "name": "mtp1-b16384-s24",
+      "enabled": false,
+      "env": {
+        "KV_CACHE_DTYPE": "auto",
+        "MAX_NUM_BATCHED_TOKENS": "16384",
+        "MAX_NUM_SEQS": "24",
+        "SPECULATIVE_CONFIG": "{\"method\":\"mtp\",\"num_speculative_tokens\":1}"
+      }
+    }
+  ]
+}

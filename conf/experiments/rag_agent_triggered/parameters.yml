@@ -1,0 +1,8 @@
+# Эксперимент: RAG, но retrieval вызывает сам агент (как инструмент), а не всегда.
+# Запуск: uv run kedro run --env experiments/rag_agent_triggered
+
+rag:
+  enabled: true
+  mode: similar_solutions
+  top_k: 3
+  trigger: agent

@@ -1,0 +1,26 @@
+# Гиперпараметры агента. Прокидываются в узлы как params:agent, params:rag.
+# Схема датасета (какие колонки за что отвечают) вынесена в sources.yml.
+
+agent:
+  # Yandex AI Studio через OpenAI-совместимый эндпоинт (langchain-openai).
+  base_url: "https://llm.api.cloud.yandex.net/v1"
+  model: "yandexgpt/latest"       # подставится в model_uri: gpt://<folder_id>/<model>
+  temperature: 0.0                # для математики нужен детерминизм
+  max_steps: 15                   # предохранитель от бесконечного лупа
+  tools:
+    - sympy                       # символьная математика
+    - python_exec                 # исполнение Python
+  prompt_path: ${globals:prompts_dir}/solver.yml   # набор промптов (роли/поля)
+
+  # Секреты/идентификаторы НИКОГДА не хранятся в конфиге — только имена
+  # переменных окружения (или путь к файлу с ключом).
+  api_key_env: YC_API_KEY         # имя переменной окружения с ключом Yandex AI Studio
+  api_key_file: null              # либо путь к файлу с ключом (например ~/.secrets/yc_api_key)
+  folder_id_env: YC_FOLDER_ID     # имя переменной окружения с folder_id каталога
+
+# Ретривал похожих решений/задач (ось экспериментов из твоей таски).
+rag:
+  enabled: false
+  mode: similar_conditions        # similar_conditions | similar_solutions | reasoning_traces
+  top_k: 3
+  trigger: always                 # always = доставать до решения; agent = агент сам зовёт retrieval
