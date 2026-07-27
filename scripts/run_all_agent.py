@@ -18,7 +18,6 @@ BENCHMARK_SCRIPTS = (
 def parse_args() -> argparse.Namespace:
     return parse_benchmark_args(
         __doc__ or "",
-        default_model="llama3.2",
         include_output=False,
     )
 
@@ -41,8 +40,6 @@ def build_command(script: Path, args: argparse.Namespace) -> list[str]:
         str(args.timeout),
         "--prompt",
         str(args.prompt),
-        "--role",
-        args.role,
         "--k-branches",
         str(args.k_branches),
         "--score-threshold",

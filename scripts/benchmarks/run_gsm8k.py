@@ -22,7 +22,7 @@ CONFIG = BenchmarkConfig(
 
 
 def main() -> int:
-    args = parse_benchmark_args(__doc__ or "", default_model="llama3.2")
+    args = parse_benchmark_args(__doc__ or "")
     return run_benchmark(CONFIG, args)
 
 

@@ -20,11 +20,6 @@ for _stream in (sys.stdout, sys.stderr):
 
 import langgraph_math_solver
 import langgraph_math_solver_qwen4b
-from self_consistency import (
-    SelfConsistencyConfig,
-    build_metrics as build_sc_metrics,
-    solve_with_self_consistency,
-)
 from tools import reset_calculator_state, shutdown_workers
 
 from dotenv import load_dotenv
@@ -32,7 +27,7 @@ load_dotenv()
 
 DEFAULT_PROMPT = ROOT / "conf/base/prompts/agent-step-v1.yml"
 
-# Пошаговые пайплайны, переключаемые флагом --pipeline (только для --role solver).
+# Пошаговые пайплайны, переключаемые флагом --pipeline.
 #   default — оригинал под Qwen 7B/9B (langgraph_math_solver);
 #   qwen4b  — тот же граф + стадия сегментации одного шага, без тулов.
 PIPELINES = {
@@ -75,12 +70,14 @@ class BenchmarkConfig:
 
 def parse_benchmark_args(
     description: str,
-    default_model: str,
     *,
     include_output: bool = True,
     extra_flags: Optional[list[tuple[list[str], dict[str, Any]]]] = None,
 ) -> argparse.Namespace:
     """Считывает общие параметры модели и запуска из командной строки.
+
+    Имя модели берётся из --model или переменной MODEL; дефолта нет —
+    бенчмарки гоняются на моделях с сервера, поэтому модель задаётся явно.
 
     extra_flags — доп. аргументы конкретного бенчмарка в виде
     [(["--flag"], {"action": ...}), ...]; их значения попадают в тот же
@@ -90,7 +87,12 @@ def parse_benchmark_args(
     parser = argparse.ArgumentParser(description=description)
     for names, opts in (extra_flags or []):
         parser.add_argument(*names, **opts)
-    parser.add_argument("--model", default=os.getenv("MODEL", default_model))
+    parser.add_argument(
+        "--model",
+        default=os.getenv("MODEL"),
+        required=os.getenv("MODEL") is None,
+        help="Имя модели на сервере. Обязателен, если не задана переменная MODEL.",
+    )
     parser.add_argument(
         "--base-url",
         default=os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:11434/v1"),
@@ -98,7 +100,7 @@ def parse_benchmark_args(
     parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", "ollama"))
     parser.add_argument(
         "--temperature", type=float, default=None,
-        help="Override для температуры генератора в --role solver (по умолчанию "
+        help="Override для температуры генератора (по умолчанию "
              "берётся temperature роли 'generator' из --prompt yaml). Для "
              "reasoning-моделей (Qwen3.5 и т.п.) не ставьте ниже ~0.5: низкая "
              "температура в режиме размышлений — известный триггер вырождения "
@@ -117,20 +119,10 @@ def parse_benchmark_args(
     )
     parser.add_argument(
         "--pipeline", default="default", choices=tuple(PIPELINES),
-        help="Какой пошаговый пайплайн использовать при --role solver: "
+        help="Какой пошаговый пайплайн использовать: "
              "'default' — оригинал под Qwen 7B/9B (по умолчанию, поведение не "
              "меняется); 'qwen4b' — тот же граф со стадией сегментации одного "
-             "шага. На --role sc не влияет.",
-    )
-    parser.add_argument(
-        "--role",
-        default="sc",
-        choices=["solver", "sc"],
-        help=(
-            "'sc' — self-consistency: N независимых решений и мажоритарное "
-            "голосование (по умолчанию); "
-            "'solver' — пошаговый LangGraph-пайплайн generate/evaluate/branch/verify."
-        ),
+             "шага.",
     )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--skip", type=int, default=0, help="Пропустить N первых задач")
@@ -160,12 +152,7 @@ def parse_benchmark_args(
              "путь. Поля должны совпадать с ожидаемыми (problem/answer и т.п.).",
     )
 
-    group = parser.add_argument_group("self-consistency (--role sc)")
-    group.add_argument("--n-samples", type=int, default=16, help="Число независимых решений на задачу")
-    group.add_argument("--sample-workers", type=int, default=4, help="Сэмплов параллельно внутри задачи")
-    group.add_argument("--sc-temperature", type=float, default=0.8, help="Температура сэмплирования")
-
-    group = parser.add_argument_group("пошаговый солвер (--role solver)")
+    group = parser.add_argument_group("пошаговый солвер")
     group.add_argument("--k-branches", type=int, default=3)
     group.add_argument(
         "--score-threshold", type=float, default=0.5,
@@ -361,12 +348,11 @@ def report_resource_budget(args: argparse.Namespace, context_length: int | None)
     """
     from tools import MAX_SANDBOX_WORKERS, MEMORY_LIMIT_MB
 
-    concurrent = max(1, args.workers) * (max(1, args.sample_workers) if args.role == "sc" else 1)
+    concurrent = max(1, args.workers)
     sandbox_ceiling_gb = MAX_SANDBOX_WORKERS * MEMORY_LIMIT_MB / 1024
 
     print(
-        f"[budget] одновременных запросов к серверу: {concurrent} "
-        f"(workers={args.workers} x sample-workers={args.sample_workers})"
+        f"[budget] одновременных запросов к серверу: {concurrent} (= workers)"
     )
     print(
         f"[budget] песочница: до {MAX_SANDBOX_WORKERS} процессов, "
@@ -554,15 +540,13 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     """Решает задачи бенчмарка выбранным режимом и пишет результаты в JSONL."""
     from datasets import load_dataset
 
-    # Выбираем активный пайплайн и его дефолтный yaml промптов. Влияет только на
-    # --role solver; на --role sc не влияет.
+    # Выбираем активный пайплайн и его дефолтный yaml промптов.
     global solver_mod
     solver_mod = PIPELINES[getattr(args, "pipeline", "default")]
     if getattr(args, "prompt", None) is None:
         args.prompt = DEFAULT_PROMPTS[getattr(args, "pipeline", "default")]
-    if args.role == "solver":
-        print(f"[config] pipeline={args.pipeline} (модуль {solver_mod.__name__}), "
-              f"промпты: {args.prompt}")
+    print(f"[config] pipeline={args.pipeline} (модуль {solver_mod.__name__}), "
+          f"промпты: {args.prompt}")
 
     try:
         context_length = preflight_check(args.base_url, args.api_key, args.model)
@@ -627,18 +611,9 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     )
     if args.temperature is not None:
         print(f"[config] --temperature={args.temperature} переопределяет "
-              f"generator.temperature из yaml для --role solver")
+              f"generator.temperature из yaml")
 
-    graph = solver_mod.build_solver_graph() if args.role == "solver" else None
-    sc_config = SelfConsistencyConfig(
-        n_samples=args.n_samples,
-        temperature=args.sc_temperature,
-        max_tokens=args.max_tokens,
-        sample_workers=args.sample_workers,
-        model_name=args.model,
-        base_url=args.base_url,
-        api_key=args.api_key,
-    )
+    graph = solver_mod.build_solver_graph()
 
     write_lock = threading.Lock()
     counters = {"done": 0, "errors": 0, "consecutive_dead": 0}
@@ -669,12 +644,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             )
 
         try:
-            if args.role == "solver":
-                solution, agent_metrics = _solve_with_graph(graph, problem, args)
-            else:
-                result = solve_with_self_consistency(problem, sc_config)
-                solution = result.final_answer
-                agent_metrics = build_sc_metrics(result)
+            solution, agent_metrics = _solve_with_graph(graph, problem, args)
         except Exception as exc:  # noqa: BLE001 — одна задача не валит прогон
             error = f"{type(exc).__name__}: {exc}"
             with write_lock:
@@ -715,8 +685,8 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             {
                 "dataset": config.dataset_name,
                 **{field: item.get(field) for field in config.metadata_fields},
-                "prompt_version": args.role,
-                "temperature": args.sc_temperature if args.role == "sc" else effective_solver_temperature,
+                "prompt_version": args.pipeline,
+                "temperature": effective_solver_temperature,
                 "max_tokens": args.max_tokens,
                 # Без этого прогоны с тулами и без них неразличимы в результатах.
                 "use_tools": not args.no_tools,
@@ -726,7 +696,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             },
         )
 
-    print(f"Режим: {args.role} | задач: {total} | параллельно: {args.workers} | вывод: {output_path}")
+    print(f"Пайплайн: {args.pipeline} | задач: {total} | параллельно: {args.workers} | вывод: {output_path}")
     try:
         with output_path.open(mode, encoding="utf-8") as output:
             with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:

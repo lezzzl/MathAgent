@@ -71,7 +71,6 @@ def main() -> int:
     """Читает аргументы и передаёт конфигурацию IMO AnswerBench общему runner."""
     args = parse_benchmark_args(
         __doc__ or "",
-        default_model="Qwen/Qwen3.5-9B",
         extra_flags=[
             (
                 ["--all-answers"],

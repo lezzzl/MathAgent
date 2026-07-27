@@ -37,7 +37,7 @@ CONFIG = BenchmarkConfig(
 
 def main() -> int:
     """Читает аргументы и передаёт конфигурацию MATH-500 общему runner."""
-    args = parse_benchmark_args(__doc__ or "", default_model="Qwen/Qwen3.5-9B")
+    args = parse_benchmark_args(__doc__ or "")
     return run_benchmark(CONFIG, args)
 
 
