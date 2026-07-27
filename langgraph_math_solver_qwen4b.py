@@ -1,32 +1,39 @@
-"""Пошаговый солвер под Qwen3-4B — вариант langgraph_math_solver БЕЗ инструментов
-и с дополнительной стадией сегментации.
+"""Пошаговый солвер под малые модели Qwen (Qwen3-4B, Qwen3.5-4B) — вариант
+langgraph_math_solver БЕЗ инструментов и с дополнительной стадией сегментации.
 
 Зачем отдельный файл
 --------------------
 Основной пайплайн (langgraph_math_solver.py) писался под Qwen 7B/9B, которые
-достаточно дисциплинированы, чтобы заворачивать один шаг в <step>...</step> и
-финальный ответ в \\boxed{}. Qwen3-4B этой инструкции почти не слушается: он
-вываливает в один ответ сразу всё решение вперемешку с рассуждениями. Прежний
-экстрактор _extract_step_content в этом случае откатывался к "весь сырой текст
-как шаг", и оценщик получал не атомарный шаг, а мусор — отсюда и провальные
-результаты на AIME24/25/26.
+дисциплинированно заворачивают шаг в <step>...</step>, а ответ в \\boxed{}. У
+малых моделей с этим бывает хуже, и прежний экстрактор _extract_step_content в
+таком случае откатывался к «весь сырой текст как шаг», отдавая оценщику мусор.
 
-Что изменено относительно оригинала
------------------------------------
-1. Убраны инструменты (тулы) целиком: все роли ходят в модель через простой
-   HTTP-хелпер _chat, без langchain-субграфа и без python_exec. Тулы вернём
-   позже отдельным шагом.
-2. Добавлена НОВАЯ стадия-узел `segment_step` между генерацией и оценкой. Она
-   берёт сырой ответ генератора и вырезает из него ровно один следующий шаг с
-   помощью дешёвой роли `segmenter` (размышления выключены). Так дисциплина
-   форматирования обеспечивается отдельным проходом, а не выпрашивается у 4B.
-3. Промпты берутся из conf/base/prompts/agent-step-qwen4b-v1.yml (там же живёт
-   роль segmenter).
+Стадия `segment_step` это чинит: берёт сырой ответ генератора и вырезает из него
+ровно один шаг отдельной дешёвой ролью `segmenter` (без размышлений), не
+полагаясь на дисциплину форматирования самой модели.
 
-Публичный интерфейс (ROLES, load_prompts_from_yaml, build_solver_graph,
-MODEL_NAME/BASE_URL/API_KEY/... и форма AgentState) намеренно совместим с
-langgraph_math_solver.py, чтобы существующий agent_benchmark_runner мог
-использовать этот модуль как drop-in.
+Насколько сегментация реально нужна — сильно зависит от модели (мерить по
+метрике segmenter_calls / eval_candidates):
+  * Qwen3-4B ставит теги в ~95% случаев, сегментатор нужен редко. ВАЖНО:
+    исходный симптом «не слушается инструкций» оказался не непослушанием, а
+    HTTP 400 — num_predict генератора (40–50k в 9B-конфиге) превышал
+    max_model_len сервера (32k). Держите num_predict генератора НИЖЕ контекста
+    сервера, иначе каждый вызов возвращает пустоту, похожую на мусор модели.
+  * Qwen3.5-4B ставит теги лишь в ~25%, и сегментатор реально несёт нагрузку
+    (~75% кандидатов) — вот где стадия оправдывает себя.
+
+Прочее
+------
+* Инструментов нет намеренно (исследовательское условие no-tools); все роли
+  ходят в модель простым HTTP-хелпером _chat.
+* Сетевые сбои _chat повторяет CHAT_RETRIES раз, считает в api_errors и не
+  выдаёт за «модель выдала мусор» (иначе таймаут неотличим от плохого ответа).
+* Гард min_steps_before_answer не даёт засчитать \\boxed на глубине 0 — иначе
+  малая модель решает задачу первым же шагом и пайплайн вырождается в CoT.
+* Публичный интерфейс (ROLES, load_prompts_from_yaml, build_solver_graph,
+  make_initial_state, MODEL_NAME/BASE_URL/... и форма AgentState) совместим с
+  langgraph_math_solver.py — agent_benchmark_runner подключает модуль как
+  drop-in через --pipeline qwen4b.
 """
 
 import json
@@ -593,7 +600,7 @@ class AgentState(TypedDict):
     k_branches: int
     score_threshold: float
     branch_mode: str
-    base_temperature: float
+    base_temperature: Optional[float]
 
     tokens_used: Annotated[int, operator.add]
     token_budget: int
@@ -633,9 +640,6 @@ class AgentState(TypedDict):
 
     step_recovery_attempts: int
     max_step_attempts: int
-    # Оставлено для совместимости формы состояния с основным раннером; в этом
-    # пайплайне тулов нет, значение игнорируется.
-    use_tools: bool
 
 
 # ---------------------------------------------------------------------------
@@ -1074,8 +1078,8 @@ def build_solver_graph():
 # ---------------------------------------------------------------------------
 def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
     """Начальное состояние. При переданном args (argparse Namespace из раннера)
-    берёт из него параметры поиска; иначе — разумные дефолты. Форма совместима с
-    _solve_with_graph из agent_benchmark_runner (use_tools здесь игнорируется)."""
+    берёт из него параметры поиска; иначе — разумные дефолты. Форму состояния
+    _solve_with_graph из agent_benchmark_runner получает именно отсюда."""
     state: Dict[str, Any] = {
         "problem": problem,
         "steps": [],
@@ -1110,7 +1114,6 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "gave_up_reason": "",
         "step_recovery_attempts": 0,
         "max_step_attempts": 3,
-        "use_tools": False,
     }
     if args is not None:
         state.update({
@@ -1122,7 +1125,6 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
             "max_recoveries": args.max_recoveries,
             "max_stuck_steps": args.max_stuck_steps,
             "max_unreliable_evals": args.max_unreliable_evals,
-            "use_tools": not getattr(args, "no_tools", False),
             "min_steps_before_answer": getattr(args, "min_steps_before_answer", 1),
         })
     state.update(overrides)
