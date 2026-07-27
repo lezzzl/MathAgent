@@ -294,10 +294,20 @@ def apply_thinking_override(mode: str) -> None:
     if mode == "auto":
         return
     enabled = mode == "on"
+    # segmenter — чисто механическая экстракция шага; размышления ей не помогают,
+    # а при малом num_predict (4000) обрывают ответ на середине think-блока, и
+    # маркеры ###STEP### не доезжают. Именно так --thinking on убил прогон на
+    # Qwen3.5-4B (41 ненадёжная сегментация). Поэтому флаг её не трогает —
+    # segmenter всегда работает по своему yaml-значению (без размышлений).
+    skip = {"segmenter"}
     for role_name, role in solver_mod.ROLES.items():
+        if role_name in skip:
+            continue
         solver_mod.ROLES[role_name] = replace(role, enable_thinking=enabled)
+    kept = [n for n in skip if n in solver_mod.ROLES]
+    note = f" (кроме {', '.join(kept)} — всегда без размышлений)" if kept else ""
     print(f"[config] --thinking={mode}: размышления {'включены' if enabled else 'выключены'} "
-          f"для всех ролей, per-role настройки yaml проигнорированы")
+          f"для ролей{note}, per-role настройки yaml проигнорированы")
 
 
 def warn_on_context_fit(context_length: int | None) -> None:
@@ -672,8 +682,17 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             print(f"  ❌ task {task_id}: {error}")
 
         # Задача, не давшая ни одного ответа, — сигнал что сервер отвалился.
-        # Две подряд считаем достаточным поводом остановиться.
-        produced_nothing = solution is None and not agent_metrics.get("n_valid_samples")
+        # Две подряд считаем достаточным поводом остановиться. НО: честный
+        # give_up (модель не смогла, сеть цела) — не улика падения сервера.
+        # Пайплайны с полем api_errors (qwen4b) позволяют это различить: без
+        # прямой улики сетевого сбоя give_up не должен абортить прогон. Иначе,
+        # как на Qwen3.5-4B, два give_up подряд ложно пометили 13 живых задач
+        # как "сервер недоступен" (api_errors=0). SC и оригинальный солвер такого
+        # поля не отдают — для них поведение прежнее.
+        if agent_metrics.get("api_errors") is not None:
+            produced_nothing = solution is None and bool(agent_metrics.get("api_errors") or error)
+        else:
+            produced_nothing = solution is None and not agent_metrics.get("n_valid_samples")
         with write_lock:
             if produced_nothing:
                 counters["consecutive_dead"] += 1

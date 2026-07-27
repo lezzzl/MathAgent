@@ -186,7 +186,6 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
 
 _STEP_TAG_RE = re.compile(r"<step>(.*?)</step>", re.DOTALL | re.IGNORECASE)
 _STEP_OPEN_TAG_RE = re.compile(r"<step>", re.IGNORECASE)
-_STEP_ANY_TAG_RE = re.compile(r"</?step\s*>", re.IGNORECASE)
 _BOXED_START_RE = re.compile(r"\\boxed\s*\{")
 def _extract_step_content(raw: str) -> str:
     """
@@ -197,33 +196,31 @@ def _extract_step_content(raw: str) -> str:
     if not raw:
         return ""
 
-    # Берём ПОСЛЕДНИЙ закрытый блок: reasoning-модель перебирает черновики
-    # раньше, а финальный шаг пишет последним (и это согласовано с выбором
-    # последнего \boxed ниже). Прежний .search брал первый и возвращал черновик.
-    closed = list(_STEP_TAG_RE.finditer(raw))
-    if closed:
-        step = closed[-1].group(1).strip()
+    m = _STEP_TAG_RE.search(raw)
+    if m:
+        step = m.group(1).strip()
     else:
-        # Незакрытый <step> (обрыв по лимиту) — берём от последнего открытия.
-        opens = list(_STEP_OPEN_TAG_RE.finditer(raw))
-        step = raw[opens[-1].end():].strip() if opens else raw.strip()
+        m_open = _STEP_OPEN_TAG_RE.search(raw)
+        if m_open:
+            step = raw[m_open.end():].strip()
+        else:
+            step = raw.strip()
 
     matches = list(_BOXED_START_RE.finditer(raw))
+    
     if matches:
         last_match = matches[-1]
+        tail = raw[last_match.start():]
+
         if last_match.group(0) not in step:
-            # Хвост от \boxed{ до конца, но обрезанный по первому же step-тегу:
-            # иначе открывающий <step> следующего черновика протекал в шаг и
-            # дальше в контекст ("блоки <step> в логах").
-            tail = raw[last_match.start():]
-            clean_tail = _STEP_ANY_TAG_RE.split(tail)[0].strip()
+            clean_tail = tail.replace("</step>", "").strip()
+            
             if step:
                 step += f"\n\nFinal answer: {clean_tail}"
             else:
                 step = f"Final answer: {clean_tail}"
 
-    # Страховка: срезаем любые уцелевшие теги, чтобы они не попали в контекст.
-    return _STEP_ANY_TAG_RE.sub("", step).strip()
+    return step
 
 
 def _build_context(problem: str, steps: List[str]) -> str:
@@ -341,28 +338,21 @@ def _diagnose_non_json(content: str, role: str) -> Optional[str]:
     return None
 
 
-def _eval_from_dict(d: Dict[str, Any]) -> Tuple[float, str, str, bool]:
-    """(score, rationale, advice, reliable) из уже распарсенного JSON оценщика."""
-    score = max(0.0, min(1.0, float(d.get("score", 0.0))))
-    rationale = str(d.get("rationale", "No rationale provided"))
-    advice = str(d.get("advice", "") or "").strip()
-    return score, rationale, advice, True
-
-
-def _parse_eval_response(content: str) -> Tuple[float, str, str, bool]:
+def _parse_eval_response(content: str) -> Tuple[float, str, bool]:
     """
-    Разбирает ответ оценщика с несколькими уровнями защиты от типичных сбоев LLM
+    Разбирает ответ оценщика с 3 уровнями защиты от типичных сбоев LLM
     (неэкранированные слэши LaTeX, markdown-блоки, битый синтаксис JSON).
-    Возвращает (score, rationale, advice, is_reliable). score градуированный
-    (0.0/0.25/0.5/0.75/1.0), advice — совет генератору на recovery ("" если нет).
+    Возвращает (score, rationale, is_reliable).
     """
     if not content:
-        return 0.0, "Empty response from evaluator", "", False
+        return 0.0, "Empty response from evaluator", False
 
     parsed = _extract_json_dict(content, ("score", "rationale"))
     if parsed is not None and "score" in parsed:
         try:
-            return _eval_from_dict(parsed)
+            score = max(0.0, min(1.0, float(parsed["score"])))
+            rationale = str(parsed.get("rationale", "No rationale provided"))
+            return score, rationale, True
         except (TypeError, ValueError):
             pass
 
@@ -373,31 +363,38 @@ def _parse_eval_response(content: str) -> Tuple[float, str, str, bool]:
         if match:
             json_str = match.group(0)
 
-    for candidate in (json_str, re.sub(r'\\(?![\\"/bfnrtu])', r'\\\\', json_str)):
+    try:
+        result_dict = json.loads(json_str, strict=False)
+        score = max(0.0, min(1.0, float(result_dict.get("score", 0.0))))
+        rationale = str(result_dict.get("rationale", "No rationale provided"))
+        return score, rationale, True
+    except Exception as e_first:
         try:
-            return _eval_from_dict(json.loads(candidate, strict=False))
+            repaired_str = re.sub(r'\\(?![\\"/bfnrtu])', r'\\\\', json_str)
+            result_dict = json.loads(repaired_str, strict=False)
+            score = max(0.0, min(1.0, float(result_dict.get("score", 0.0))))
+            rationale = str(result_dict.get("rationale", "No rationale provided"))
+            return score, rationale, True
         except Exception:
-            continue
+            pass
 
-    # РЕГЕКС-ФОЛЛБЕК: если JSON разрушен, спасаем score/rationale/advice регуляркой
     score_match = re.search(r'"score"\s*:\s*([0-1](?:\.[0-9]+)?)', content, re.IGNORECASE)
     rat_match = re.search(r'"rationale"\s*:\s*"([^"]*)"', content, re.IGNORECASE)
-    adv_match = re.search(r'"advice"\s*:\s*"([^"]*)"', content, re.IGNORECASE)
+    
     if score_match:
         try:
             score = max(0.0, min(1.0, float(score_match.group(1))))
-            rationale = rat_match.group(1) if rat_match else "Extracted via regex (JSON parse failed)"
-            advice = adv_match.group(1) if adv_match else ""
-            print(f"  ℹ️ [JSON RECOVERY] Парсер спас оценку score={score:.4f} регуляркой!")
-            return score, rationale, advice, True
+            rationale = rat_match.group(1) if rat_match else f"Extracted via regex (JSON parse failed: {e_first})"
+            print(f"  ℹ️ [JSON RECOVERY] Парсер спас оценку score={score:.4f} регулярным выражением!")
+            return score, rationale, True
         except ValueError:
             pass
 
     diagnosis = _diagnose_non_json(content, "оценщик")
     if diagnosis:
-        return 0.0, diagnosis, "", False
+        return 0.0, diagnosis, False
 
-    return 0.0, f"Invalid JSON from evaluator (raw preview: {content[:400]!r})", "", False
+    return 0.0, f"Invalid JSON from evaluator (raw preview: {content[:400]!r})", False
 
 
 def _parse_verify_response(content: str) -> Tuple[bool, str, bool]:
@@ -477,10 +474,6 @@ class AgentState(TypedDict):
 
     unreliable_eval_streak: int
     max_unreliable_evals: int
-
-    # Совет оценщика по забракованной попытке — прокидывается в generate_step
-    # при recovery (reflection-петля критик→генератор).
-    eval_advice: str
     eval_history: Annotated[List[Dict[str, Any]], operator.add]
     thinking_overruns: Annotated[int, operator.add]
 
@@ -521,7 +514,6 @@ def _message_text(message: Any) -> str:
 
 def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     """Один вызов генератора с откатом при обрыве на размышлениях.
-
     У thinking-моделей размышления идут в тот же num_predict, что и ответ. Если
     их не хватило, сервер возвращает finish_reason='length' и ПУСТОЙ content —
     шаг теряется целиком. Recovery тут не помогает: он меняет температуру, а
@@ -550,15 +542,11 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     if truncated_empty and role.enable_thinking:
         print(f"      [THINKING OVERRUN] Размышления съели весь лимит "
               f"({role.num_predict} токенов), ответ пуст. Повтор без размышлений.")
-        # Токены оборванного вызова (обычно весь num_predict) нужно учесть:
-        # иначе token_budget и метрика tokens_used недосчитывают расход, а при
-        # частых обрывах на IMO это тысячи токенов на задачу.
-        overrun_tokens = count_chain_tokens(result["messages"])
-        return call(False), True, overrun_tokens
+        return call(False), True
     if truncated_empty:
         print(f"      [TRUNCATED] Ответ пуст, finish_reason=length при лимите "
               f"{role.num_predict}. Поднимите num_predict генератора в yaml.")
-    return result, False, 0
+    return result, False
 
 
 def generate_step(state: AgentState):
@@ -575,17 +563,7 @@ def generate_step(state: AgentState):
     total_tokens = 0
     overruns = 0
     context = _build_context(state['problem'], state.get('steps', []))
-
-    # На recovery добавляем в контекст совет оценщика по забракованной попытке —
-    # генератор перегенерирует шаг с учётом того, что было не так, а не вслепую
-    # (раньше recovery только повышал температуру). Вне recovery совета нет.
-    if state.get('in_recovery') and state.get('eval_advice'):
-        context += (
-            f"\nThe previous attempt at this step was rejected by the evaluator. "
-            f"Its feedback: {state['eval_advice']}\n"
-            f"Address it directly in this attempt.\n"
-        )
-
+    
     use_tools = state.get("use_tools", True)
     base_temp = state.get('base_temperature')
     if base_temp is None:
@@ -593,7 +571,7 @@ def generate_step(state: AgentState):
     for i in range(k):
         attempt = state.get('step_recovery_attempts', 0)
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        result, overran, overrun_tokens = _generate_one(role, context, temp, use_tools)
+        result, overran = _generate_one(role, context, temp, use_tools)
         overruns += overran
 
         for m in result["messages"]:
@@ -604,8 +582,7 @@ def generate_step(state: AgentState):
         step_text = _extract_step_content(raw_text)
         candidates.append(step_text)
 
-        # overrun_tokens — расход оборванной первой попытки при откате (0 без него).
-        tks = count_chain_tokens(result["messages"]) + overrun_tokens
+        tks = count_chain_tokens(result["messages"])
         total_tokens += tks
 
         stripped_note = ""
@@ -627,8 +604,7 @@ def evaluate_steps(state: AgentState):
     print(f"\n[Node: Evaluate] Checking {len(candidates)} candidate(s)...")
     role = ROLES["evaluator"]
     scores: List[float] = []
-    advices: List[str] = []
-    seen: Dict[str, Tuple[float, str, str]] = {}
+    seen: Dict[str, Tuple[float, str]] = {}
     total_tokens = 0
     any_reliable = False
     use_tools = state.get("use_tools", True)
@@ -638,14 +614,15 @@ def evaluate_steps(state: AgentState):
         key = _normalize_step_text(step)
         
         if not key:
-            score, rationale, advice = 0.0, "Step is entirely empty. Generator produced whitespace or failed to output tags.", "Produce a real reasoning step inside <step>...</step> tags — the previous attempt was empty."
-            seen[key] = (score, rationale, advice)
-            scores.append(score); advices.append(advice)
+            score = 0.0
+            rationale = "Step is entirely empty. Generator produced whitespace or failed to output tags."
+            seen[key] = (score, rationale)
+            scores.append(score)
             print(f"    - Candidate {i+1} Score: {score:.4f} | Rationale: {rationale}")
             continue
         if key in seen:
-            score, rationale, advice = seen[key]
-            scores.append(score); advices.append(advice)
+            score, rationale = seen[key]
+            scores.append(score)
             print(f"    - Candidate {i+1} Score: {score:.4f} | Rationale: {rationale} "
                   f"♻️ [ДУБЛИКАТ шага, оценщик повторно не вызывался]")
             continue
@@ -671,34 +648,26 @@ def evaluate_steps(state: AgentState):
         tks = count_chain_tokens(result["messages"])
         total_tokens += tks
 
-        score, rationale, advice, reliable = _parse_eval_response(content)
+        score, rationale, reliable = _parse_eval_response(content)
         any_reliable = any_reliable or reliable
-        seen[key] = (score, rationale, advice)
-        scores.append(score); advices.append(advice)
+        seen[key] = (score, rationale)
+        scores.append(score)
 
         n_eval_tools = sum(1 for m in result["messages"] if getattr(m, "tool_calls", None))
         tool_note = f" (калькулятор вызван {n_eval_tools} раз)" if n_eval_tools > 0 else ""
 
         tag = "" if reliable else " ⚠️ [ОЦЕНКА НЕНАДЁЖНА]"
-        adv_note = f" | 💡 {advice}" if advice else ""
-        print(f"    - Candidate {i+1} Score: {score:.4f}{tag}{tool_note} | Rationale: {rationale}{adv_note}")
+        print(f"    - Candidate {i+1} Score: {score:.4f}{tag}{tool_note} | Rationale: {rationale}")
 
     unreliable_streak = 0 if any_reliable else state.get('unreliable_eval_streak', 0) + 1
     if unreliable_streak > 0:
         print(f"  ⚠️  [ОЦЕНЩИК] Ни один ответ в этом раунде не распарсился — подряд "
               f"{unreliable_streak}/{state.get('max_unreliable_evals', 3)} ненадёжных раундов.")
 
-    # Совет для recovery — от кандидата с максимальной оценкой (его и будем
-    # улучшать). Если шаг пройдёт порог, recovery не случится и совет не
-    # используется; поле всё равно чистим, чтобы не протёк совет прошлого шага.
-    best_idx = max(range(len(scores)), key=lambda j: scores[j]) if scores else None
-    eval_advice = advices[best_idx] if best_idx is not None else ""
-
     return {
         "candidate_scores": scores,
         "tokens_used": total_tokens,
         "unreliable_eval_streak": unreliable_streak,
-        "eval_advice": eval_advice,
         "eval_history": [{
             "depth": len(state.get('steps', [])),
             "scores": scores,
