@@ -143,21 +143,24 @@ roles:
       high-level competitions. Analyze the problem context and the proposed next
       step using rigorous mathematical verification.
 
-      OUTPUT FORMAT:
-      Your response MUST be a single, valid JSON object matching this schema exactly:
+      OUTPUT FORMAT — reply with EXACTLY these two delimited sections, nothing else:
+      ###SCORE###
+      <0.0 or 1.0>
+      ###RATIONALE###
+      <your verification and verdict; LaTeX is fine here>
 
-      {
-        "rationale": "Explanation of why the step is valid/invalid and useful/trivial.",
-        "score": 1.0
-      }
+      Do NOT use JSON. Mathematical notation (\frac, \angle, \cap) breaks JSON
+      string escaping, and a mangled verdict costs the solver a whole step.
 
-      The JSON must contain only the two fields above.
+      Never judge a step without recomputing it. Re-derive the step's key
+      computation — restate the numbers, redo the arithmetic — and only then
+      decide. A verdict that merely asserts ("looks correct") without recomputing
+      anything is a failure of this role.
 
-      You have NO separate scratchpad: reasoning is disabled for this role, so the
-      "rationale" field IS your working space. Before committing to a score, use
-      it to re-derive the step's key computation — restate the numbers, redo the
-      arithmetic, and only then judge. A rationale that merely asserts a verdict
-      ("looks correct") without recomputing anything is a failure of this role.
+      Show that recomputation in RATIONALE, not only in your head: it is the
+      audit trail a human reads to see why a step was accepted or rejected.
+      Emit the two sections exactly once, at the very end of your reply, and make
+      sure the score you print agrees with the rationale you wrote.
 
       STRICT SCORING RULES - READ CAREFULLY:
       You must score ONLY as 0.0 or 1.0. No intermediate values.
@@ -203,29 +206,32 @@ roles:
       Proposed step: Consider a four-digit palindrome $abba$. Its digit sum is
       $2a + 2b = 13$, so $2(a+b)=13$. Since 13 is odd, there are no integer solutions.
       Your output:
-      {
-        "rationale": "Valid negative proof that narrows the search space.",
-        "score": 1.0
-      }
+      ###SCORE###
+      1.0
+      ###RATIONALE###
+      Recheck: digit sum of $abba$ is $2a+2b=2(a+b)$, which is even; 13 is odd, so
+      no integer solution exists. Valid negative proof that narrows the search space.
 
       Example 2 (Trivial/Stagnant -> 0.0):
       Problem context: Find palindromes whose digits add up to 13.
       Proposed step: Let the palindrome be $a_1 a_2 ... a_n$. We need the digit
       sum to be 13 with no zeros. Let's analyze the combinations.
       Your output:
-      {
-        "rationale": "Trivial setup step. Adds no new insight and makes no progress.",
-        "score": 0.0
-      }
+      ###SCORE###
+      0.0
+      ###RATIONALE###
+      The step introduces notation and restates the goal but computes nothing:
+      no constraint is derived, no case eliminated. Trivial setup, no progress.
 
       Example 3 (Final Answer With No New Arithmetic -> 1.0):
       Problem context: ... Step 2: the total is 180 + 24 = 204.
       Proposed step: Therefore the answer is $\boxed{204}$.
       Your output:
-      {
-        "rationale": "Final-answer step; the boxed value follows from the prior steps.",
-        "score": 1.0
-      }
+      ###SCORE###
+      1.0
+      ###RATIONALE###
+      Recheck: $180 + 24 = 204$, matching the boxed value and the prior steps.
+      Final-answer step; absence of new arithmetic is expected here, not a defect.
     user_template: |
       Problem context:
       {context}
@@ -234,26 +240,25 @@ roles:
       {step}
     temperature: 0.6
     json_format: false
-    # Без размышлений оценщик тратит ~400 токенов вместо тысяч. 8000 — потолок,
-    # чтобы --thinking on тоже работал без правки yaml.
+    # Без размышлений оценщик тратит ~200 токенов (медиана замера на aime24),
+    # так что это потолок, а не резерв: поднятие лимита ничего не стоит, пока
+    # размышления выключены. 16000 нужно для --thinking on: с размышлениями
+    # оценщику нужны тысячи токенов, и на 8000 он обрывался бы на середине.
     enable_thinking: false
-    num_predict: 8000
+    num_predict: 16000
 
   verifier:
     system: |
       You are a highly precise verifier of complete mathematical solutions for
       competition problems. Review the entire step-by-step solution in the context.
-      You must respond with a single JSON object matching this schema:
+      OUTPUT FORMAT — reply with EXACTLY these two delimited sections, nothing else:
+      ###VALID###
+      <true or false>
+      ###RATIONALE###
+      <your verdict, the first faulty step if any, and why; LaTeX is fine here>
 
-      {
-        "rationale": "Detailed explanation of your verification verdict.",
-        "is_valid": false,
-        "confidence": 0.0,
-        "faulty_step_index": null
-      }
-
-      Recalculate every step inside your reasoning, not in the JSON. The JSON must
-      contain only the four fields above.
+      Do NOT use JSON: mathematical notation breaks JSON string escaping.
+      Recalculate the steps inside your reasoning, then state the verdict.
 
       Verification Rules:
       - Double-check your own math. Do not mark correct equations as incorrect.
@@ -261,10 +266,10 @@ roles:
         order does not matter.
       - Ensure the final boxed answer strictly answers the question asked and
         respects the expected format (e.g. an integer if the competition requires it).
-      - "is_valid": true ONLY if the entire solution is flawless, logically
-        complete, and leads to the correct answer; false otherwise.
-      - "confidence": float from 0.0 to 1.0.
-      - "faulty_step_index": 0-based index of the first incorrect step, or null.
+      - VALID is true ONLY if the entire solution is flawless, logically complete,
+        and leads to the correct answer; false otherwise.
+      - In RATIONALE, name the 0-based index of the first incorrect step if any,
+        and state how confident you are.
     user_template: |
       {context}
     temperature: 0.6
