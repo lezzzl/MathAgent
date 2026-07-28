@@ -523,10 +523,66 @@ def _extract_json_dict(content: str, expected_keys: Tuple[str, ...]) -> Optional
     return None
 
 
+_SEG_SCORE_RE = re.compile(r"###SCORE###\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
+_SEG_VALID_RE = re.compile(r"###VALID###\s*(true|false|yes|no)", re.IGNORECASE)
+_SEG_RATIONALE_MARK_RE = re.compile(r"###RATIONALE###", re.IGNORECASE)
+_SEG_END_RE = re.compile(r"###END###", re.IGNORECASE)
+
+
+def _parse_delimited(content: str) -> Optional[Tuple[Optional[float], Optional[bool], str]]:
+    """Разбирает формат ###SCORE###/###VALID### + ###RATIONALE###.
+
+    Зачем не JSON: обоснование оценщика — сплошной LaTeX (\\angle, \\frac,
+    \\cap), а бэкслеш внутри строки JSON невалиден. На прогоне aime24 14%
+    ответов (17 из 123) не парсились как JSON и спасались регуляркой, которая
+    режет rationale по первой кавычке. Со строчными маркерами этой проблемы нет
+    — ровно та же причина, по которой их использует сегментатор.
+    """
+    if not content:
+        return None
+    text = _THINK_BLOCK_RE.sub("", content)
+    # Берём ПОСЛЕДНЕЕ вхождение каждого маркера. С включёнными размышлениями
+    # сервер не отделяет reasoning_content, блок размышлений приходит в content,
+    # и модель успевает отрепетировать формат внутри него. Первое вхождение —
+    # это черновик, финальный вердикт всегда последний.
+    score_all = list(_SEG_SCORE_RE.finditer(text))
+    valid_all = list(_SEG_VALID_RE.finditer(text))
+    if not score_all and not valid_all:
+        return None
+    score_m = score_all[-1] if score_all else None
+    valid_m = valid_all[-1] if valid_all else None
+    # Не регуляркой с (.*?)$: при DOTALL первое же вхождение дотягивается до
+    # конца строки, и finditer возвращает только его. Берём позицию последнего
+    # маркера и режем текст вручную.
+    rat_marks = list(_SEG_RATIONALE_MARK_RE.finditer(text))
+    if rat_marks:
+        tail = text[rat_marks[-1].end():]
+        end = _SEG_END_RE.search(tail)
+        rationale = (tail[: end.start()] if end else tail).strip()
+    else:
+        rationale = "No rationale provided"
+    score = None
+    if score_m:
+        try:
+            score = max(0.0, min(1.0, float(score_m.group(1))))
+        except ValueError:
+            score = None
+    valid = None
+    if valid_m:
+        valid = valid_m.group(1).lower() in ("true", "yes")
+    return score, valid, rationale
+
+
 def _parse_eval_response(content: str) -> Tuple[float, str, bool]:
     """Разбирает ответ оценщика. Возвращает (score, rationale, is_reliable)."""
     if not content:
         return 0.0, "Empty response from evaluator", False
+
+    # Основной путь — разделители (LaTeX-безопасны). JSON ниже оставлен, чтобы
+    # модуль продолжал понимать старые промпты и прогоны.
+    delim = _parse_delimited(content)
+    if delim is not None and delim[0] is not None:
+        return delim[0], delim[2], True
 
     parsed = _extract_json_dict(content, ("score", "rationale"))
     if parsed is not None and "score" in parsed:
@@ -577,6 +633,10 @@ def _parse_verify_response(content: str) -> Tuple[bool, str, bool]:
     """Аналогично _parse_eval_response, но для схемы верификатора."""
     if not content:
         return False, "Empty response from verifier", False
+
+    delim = _parse_delimited(content)
+    if delim is not None and delim[1] is not None:
+        return delim[1], delim[2], True
 
     parsed = _extract_json_dict(content, ("is_valid", "rationale"))
     if parsed is not None and "is_valid" in parsed:
