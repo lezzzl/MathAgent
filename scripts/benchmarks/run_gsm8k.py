@@ -1,4 +1,4 @@
-"""Запускает агента на задачах AIME 2024."""
+"""Запускает агента на задачах GSM8K."""
 
 import sys
 from pathlib import Path
@@ -13,11 +13,11 @@ from scripts.benchmarks.agent_benchmark_runner import (
 )
 
 CONFIG = BenchmarkConfig(
-    name="AIME24",
-    dataset_name="HuggingFaceH4/aime_2024",
-    split="train",
-    task_id_field="id",
-    output_directory="aime24",
+    name="GSM8K",
+    dataset_name="openai/gsm8k",
+    split="test",                     # стандартный оценочный сплит
+    task_id_field=None,               # в датасете нет поля id – будет использован индекс
+    output_directory="gsm8k",
 )
 
 

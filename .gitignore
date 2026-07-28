@@ -216,6 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.vscode/
+results/**/*.jsonl
 
 # Generated dashboard evaluation sidecars
 results/evaluations/
