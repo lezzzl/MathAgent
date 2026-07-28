@@ -15,6 +15,7 @@ from typing_extensions import TypedDict
 from answer_utils import extract_answer
 from tool_generator_subgraph import count_chain_tokens, generator_with_tools, make_llm
 from tools import reset_calculator_state
+from trajectory import RECORDER
 
 @dataclass
 class Role:
@@ -591,6 +592,17 @@ def generate_step(state: AgentState):
         n_tool_calls = sum(1 for m in result["messages"] if getattr(m, "tool_calls", None))
         fr = _finish_reason(final_msg)
         fr_note = f", finish={fr}" if fr and fr != "stop" else ""
+        RECORDER.record(
+            stage="generate", depth=current_depth, branch=i + 1,
+            system=role.system_prompt, user=context,
+            content=raw_text, finish_reason=fr,
+            tokens={"total": tks}, temperature=temp, model=MODEL_NAME,
+            tool_calls=n_tool_calls, num_predict=role.num_predict,
+            enable_thinking=role.enable_thinking,
+        )
+        # Шаг после экстракции тегов — ровно то, что уйдёт оценщику.
+        RECORDER.record(stage="segment_result", depth=current_depth, branch=i + 1,
+                        content=step_text, fast_path=True, reliable=True)
         print(f"    - Branch {i+1} generated (temp: {temp:.2f}, tokens: {tks}, "
               f"tool-вызовов: {n_tool_calls}{fr_note}{stripped_note})")
         print(f"      Step:\n{step_text}\n")
@@ -652,6 +664,18 @@ def evaluate_steps(state: AgentState):
         any_reliable = any_reliable or reliable
         seen[key] = (score, rationale)
         scores.append(score)
+
+        _depth_now = len(state.get('steps', []))
+        RECORDER.record(
+            stage="evaluate", depth=_depth_now, branch=i + 1,
+            system=role.system_prompt, user=user_content,
+            content=content, finish_reason=_finish_reason(final_msg),
+            tokens={"total": tks}, temperature=role.temperature, model=MODEL_NAME,
+        )
+        RECORDER.record(
+            stage="evaluate_result", depth=_depth_now, branch=i + 1,
+            content=rationale, score=score, reliable=reliable, step_text=step,
+        )
 
         n_eval_tools = sum(1 for m in result["messages"] if getattr(m, "tool_calls", None))
         tool_note = f" (калькулятор вызван {n_eval_tools} раз)" if n_eval_tools > 0 else ""
@@ -751,9 +775,15 @@ def commit_step(state: AgentState):
     answer = extract_answer(best_step)
     if answer:
         print(f"  -> Explicit answer found: {answer}")
-        
+
+    RECORDER.record(
+        stage="commit", depth=len(prior_steps), branch=best_idx + 1,
+        content=best_step, score=best_score, answer=answer,
+        no_progress=no_progress, all_scores=list(scores),
+    )
+
     return {
-        "steps": [best_step],       
+        "steps": [best_step],
         "final_answer": answer if answer else "",
         "in_recovery": False,       
         "candidate_steps": [],      
@@ -775,6 +805,14 @@ def verify_solution(state: AgentState):
     if not reliable:
         print(f"  ⚠️  [НЕНАДЁЖНЫЙ ВЕРДИКТ] {rationale}")
 
+    _vdepth = len(state.get('steps', []))
+    RECORDER.record(
+        stage="verify", depth=_vdepth, system=role.system_prompt, user=context,
+        content=content, tokens={"total": tks}, model=MODEL_NAME,
+        temperature=role.temperature, num_predict=role.num_predict,
+    )
+    RECORDER.record(stage="verify_result", depth=_vdepth, content=rationale,
+                    is_valid=is_valid, reliable=reliable)
     print(f"  -> Valid: {is_valid} | Rationale: {rationale}")
     
     return {
