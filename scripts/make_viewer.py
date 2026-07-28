@@ -19,9 +19,12 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Dict
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from answer_utils import normalize_answer
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -172,12 +175,17 @@ function stats(t){
     steps: new Set(r.filter(x=>x.stage==="commit").map(x=>x.depth)).size,
   };
 }
+/* Вердикт берём из поля correct, посчитанного при сборке: там либо результат
+   math-verify из *_verified.jsonl, либо нормализация answer_utils. Наивное
+   сравнение строк здесь врало: эталоны AIME дополнены нулями ("025" vs "25"),
+   и точность занижалась на треть. */
 function verdict(t){
-  if(t.final_answer==null||t.final_answer==="") return {cls:"none",txt:"нет ответа"};
+  const a=(t.final_answer==null?"":String(t.final_answer)).trim();
+  if(!a) return {cls:"none",txt:"нет ответа"};
   const gt=(t.ground_truth??"").toString().trim();
-  const a=t.final_answer.toString().trim();
-  if(!gt) return {cls:"none",txt:a};
-  return a===gt ? {cls:"ok",txt:a+" ✓"} : {cls:"bad",txt:a+" ≠ "+gt};
+  if(t.correct===true) return {cls:"ok",txt:a+" ✓"};
+  if(t.correct===false) return {cls:"bad",txt:a+" ≠ "+gt};
+  return {cls:"none",txt:a};
 }
 
 /* ---- список задач ---- */
@@ -460,17 +468,53 @@ select(0);
 """
 
 
-def build_html(data: dict) -> str:
+def annotate_correctness(data: dict, verified: "Path | None") -> str:
+    """Проставляет task["correct"], предпочитая вердикт math-verify.
+
+    Сравнивать ответ с эталоном строкой нельзя: у AIME эталоны дополнены нулями
+    ("025"), и строковое равенство занижало точность на треть (19/30 -> 13/30).
+    Порядок источников: is_correct из *_verified.jsonl (math-verify, он же
+    авторитетный), иначе нормализация answer_utils.
+    """
+    verdicts: Dict[str, bool] = {}
+    source = "answer_utils.normalize_answer"
+    if verified and verified.exists():
+        with verified.open(encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if rec.get("is_correct") is not None:
+                    verdicts[str(rec.get("task_id"))] = bool(rec["is_correct"])
+        if verdicts:
+            source = f"math-verify ({verified.name})"
+
+    for task in data.get("tasks", []) or []:
+        tid = str(task.get("task_id"))
+        if tid in verdicts:
+            task["correct"] = verdicts[tid]
+            continue
+        answer = str(task.get("final_answer") or "").strip()
+        if not answer:
+            task["correct"] = False
+            continue
+        task["correct"] = (
+            normalize_answer(answer) == normalize_answer(str(task.get("ground_truth") or ""))
+        )
+    return source
+
+
+def build_html(data: dict, verdict_source: str = "") -> str:
     run = data.get("run", {}) or {}
     tasks = data.get("tasks", []) or []
 
     # Сводка по прогону: считаем ровно то, что нужно для сравнения прогонов.
     n = len(tasks)
-    correct = sum(
-        1 for t in tasks
-        if str(t.get("final_answer") or "").strip()
-        and str(t.get("final_answer")).strip() == str(t.get("ground_truth") or "").strip()
-    )
+    correct = sum(1 for t in tasks if t.get("correct"))
     recs = [r for t in tasks for r in (t.get("records") or [])]
     tokens = sum((r.get("tokens") or {}).get("total", 0) for r in recs)
     cost = sum(r.get("cost") or 0 for r in recs)
@@ -492,6 +536,8 @@ def build_html(data: dict) -> str:
         f"{tokens:,} токенов · обрывов {trunc} · {wall / 3600:.1f} ч"
         + (f" · ${cost:.4f}" if cost else "")
     ).replace(",", " ")
+    if verdict_source:
+        sub += f" · сверка: {verdict_source}"
 
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     return f"""<!doctype html>
@@ -530,6 +576,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("trajectory", type=Path, help="JSON от --trajectory")
     ap.add_argument("-o", "--output", type=Path, help="куда писать HTML (по умолчанию рядом)")
+    ap.add_argument(
+        "--verified", type=Path,
+        help="JSONL после verify_answers.py — из него берутся вердикты math-verify. "
+             "По умолчанию ищется файл *_verified.jsonl рядом с траекторией.",
+    )
     args = ap.parse_args()
 
     if not args.trajectory.exists():
@@ -541,8 +592,17 @@ def main() -> int:
         print("В файле нет задач — записывался ли прогон с --trajectory?")
         return 1
 
+    verified = args.verified
+    if verified is None:
+        # Имя траектории: <run>_trajectory.json, рядом лежит <run>_verified.jsonl.
+        stem = args.trajectory.stem.replace("_trajectory", "")
+        guess = args.trajectory.with_name(stem + "_verified.jsonl")
+        verified = guess if guess.exists() else None
+    source = annotate_correctness(data, verified)
+    print(f"Сверка ответов: {source}")
+
     out = args.output or args.trajectory.with_suffix(".html")
-    out.write_text(build_html(data), encoding="utf-8")
+    out.write_text(build_html(data, source), encoding="utf-8")
     size_mb = out.stat().st_size / 1024 ** 2
     print(f"Готово: {out}  ({size_mb:.1f} МБ, задач: {len(data['tasks'])})")
     print("Откройте файл в браузере — данные встроены, сервер не нужен.")
