@@ -21,6 +21,7 @@ for _stream in (sys.stdout, sys.stderr):
 import langgraph_math_solver
 import langgraph_math_solver_qwen4b
 from tools import reset_calculator_state, shutdown_workers
+from trajectory import RECORDER
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -144,6 +145,13 @@ def parse_benchmark_args(
     parser.add_argument(
         "--resume", type=Path,
         help="Дописать существующий JSONL, пропустив уже решённые task_id",
+    )
+    parser.add_argument(
+        "--trajectory", nargs="?", const="auto", default=None, metavar="PATH",
+        help="Записать полные траектории решения (промпты, сырые генерации, "
+             "оценки, вердикты, токены, время) в JSON для просмотрщика. Без "
+             "значения путь берётся рядом с --output. Затем: "
+             "python scripts/make_viewer.py <файл.json>. Работает для --role solver.",
     )
     parser.add_argument(
         "--data-file", type=str, default=None,
@@ -584,6 +592,29 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
 
     output_path = args.resume or resolve_output_path(config, args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    trajectory_path: Path | None = None
+    if args.trajectory:
+        trajectory_path = (
+            output_path.with_name(output_path.stem + "_trajectory.json")
+            if args.trajectory == "auto" else Path(args.trajectory)
+        )
+        RECORDER.enabled = True
+        RECORDER.run_meta = {
+            "benchmark": config.name,
+            "dataset": config.dataset_name,
+            "model": args.model,
+            "pipeline": getattr(args, "pipeline", "default"),
+            "prompt": str(args.prompt),
+            "thinking": args.thinking,
+            "use_tools": not args.no_tools,
+            "branch_mode": args.branch_mode,
+            "k_branches": args.k_branches,
+            "score_threshold": args.score_threshold,
+            "token_budget": args.token_budget,
+            "started_utc": datetime.now(timezone.utc).isoformat(),
+        }
+        print(f"[trajectory] запись траекторий включена -> {trajectory_path}")
     completed = load_completed_task_ids(output_path) if args.resume else set()
     if completed:
         print(f"[resume] {len(completed)} задач уже решено в {output_path}, пропускаю их")
@@ -643,6 +674,8 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
                 },
             )
 
+        RECORDER.start_task(task_id, problem, ground_truth=ground_truth,
+                            benchmark=config.name)
         try:
             solution, agent_metrics = _solve_with_graph(graph, problem, args)
         except Exception as exc:  # noqa: BLE001 — одна задача не валит прогон
@@ -650,6 +683,12 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             with write_lock:
                 counters["errors"] += 1
             print(f"  ❌ task {task_id}: {error}")
+        finally:
+            RECORDER.finish_task(
+                final_answer=solution, ground_truth=ground_truth, error=error,
+                latency_seconds=round(time.perf_counter() - started, 3),
+                metrics=agent_metrics,
+            )
 
         # Задача, не давшая ни одного ответа, — сигнал что сервер отвалился.
         # Две подряд считаем достаточным поводом остановиться. НО: честный
@@ -714,6 +753,12 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
         # Процессы-песочницы переиспользуются между задачами, поэтому гасим их
         # один раз в конце — в том числе при Ctrl+C, чтобы не оставлять сирот.
         shutdown_workers()
+        # Дамп даже при обрыве: половина траекторий полезнее, чем ничего.
+        if trajectory_path is not None:
+            saved = RECORDER.dump(trajectory_path)
+            if saved:
+                print(f"[trajectory] сохранено: {saved}")
+                print(f"[trajectory] просмотр:  python scripts/make_viewer.py {saved}")
 
     print(f"Saved {counters['done']} records to {output_path}")
     if counters["errors"]:

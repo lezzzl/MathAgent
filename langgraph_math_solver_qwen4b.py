@@ -52,6 +52,7 @@ from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
 
 from answer_utils import extract_answer, iter_boxed
+from trajectory import RECORDER
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +218,10 @@ class ChatResult(NamedTuple):
 
 
 def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=False,
-          enable_thinking=None) -> ChatResult:
+          enable_thinking=None, *, stage="chat", depth=None, branch=None,
+          record_extra=None) -> ChatResult:
+    """Один вызов модели. Всё, что здесь происходит, попадает в траекторию:
+    промпт, сырой ответ, размышления, finish_reason, токены и время."""
     url = f"{BASE_URL}/chat/completions"
     headers = {
         "Content-Type": "application/json",
@@ -237,7 +241,30 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
     if enable_thinking is not None:
         payload["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
 
+    system_text = next((m["content"] for m in messages if m.get("role") == "system"), "")
+    user_text = next((m["content"] for m in messages if m.get("role") == "user"), "")
+
+    def _emit(result: ChatResult, elapsed: float, usage: Optional[dict] = None) -> ChatResult:
+        usage = usage or {}
+        RECORDER.record(
+            stage=stage, depth=depth, branch=branch,
+            system=system_text, user=user_text,
+            content=result.content, reasoning=result.reasoning,
+            finish_reason=result.finish_reason,
+            tokens={
+                "input": usage.get("prompt_tokens", 0),
+                "output": usage.get("completion_tokens", 0),
+                "total": result.tokens,
+            },
+            elapsed=elapsed, error=result.error,
+            temperature=temperature, num_predict=num_predict,
+            enable_thinking=enable_thinking, model=MODEL_NAME,
+            **(record_extra or {}),
+        )
+        return result
+
     last_error: Optional[str] = None
+    started = time.perf_counter()
     for attempt in range(CHAT_RETRIES + 1):
         response = None
         try:
@@ -248,7 +275,7 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
             choices = data.get("choices")
             if not choices:
                 print(f"[WARN] No choices in response: {data}")
-                return ChatResult("", "", 0, None)
+                return _emit(ChatResult("", "", 0, None), time.perf_counter() - started)
 
             choice = choices[0]
             message = choice.get("message") or {}
@@ -257,9 +284,16 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
             if not content and not reasoning:
                 print(f"[WARN] Empty content and reasoning in response: {data}")
 
-            tokens_used = data.get("usage", {}).get("total_tokens", 0)
+            usage = data.get("usage", {}) or {}
+            tokens_used = usage.get("total_tokens", 0)
             finish_reason = choice.get("finish_reason")
-            return ChatResult(content, reasoning, tokens_used, finish_reason)
+            # Обрыв по лимиту больше не молчит: раньше он был заметен, только
+            # если content пуст целиком, и частичные обрывы никак не всплывали.
+            if finish_reason == "length":
+                print(f"      ⚠️  [TRUNCATED] {stage}: finish_reason=length при лимите "
+                      f"{num_predict} — ответ оборван{' (и пуст)' if not content.strip() else ''}.")
+            return _emit(ChatResult(content, reasoning, tokens_used, finish_reason),
+                         time.perf_counter() - started, usage)
 
         except requests.exceptions.RequestException as e:
             last_error = f"{type(e).__name__}: {e}"
@@ -272,7 +306,7 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
             if response is not None:
                 print(f"Response content: {response.text}")
 
-    return ChatResult("", "", 0, None, last_error)
+    return _emit(ChatResult("", "", 0, None, last_error), time.perf_counter() - started)
 
 
 # ---------------------------------------------------------------------------
@@ -645,7 +679,9 @@ class AgentState(TypedDict):
 # ---------------------------------------------------------------------------
 # 6. Узлы графа
 # ---------------------------------------------------------------------------
-def _generate_one(role: Role, context: str, temp: float) -> Tuple[str, bool, int]:
+def _generate_one(role: Role, context: str, temp: float,
+                  depth: Optional[int] = None, branch: Optional[int] = None
+                  ) -> Tuple[str, bool, int, bool]:
     """Один вызов генератора с откатом при обрыве размышлений.
 
     У thinking-моделей размышления идут в тот же num_predict, что и ответ. Если
@@ -661,19 +697,19 @@ def _generate_one(role: Role, context: str, temp: float) -> Tuple[str, bool, int
     ]
 
     result = _chat(messages, temperature=temp, num_predict=role.num_predict,
-                   json_format=role.json_format, enable_thinking=role.enable_thinking)
+                   json_format=role.json_format, enable_thinking=role.enable_thinking,
+                   stage="generate", depth=depth, branch=branch)
 
     truncated_empty = (not result.content.strip()) and result.finish_reason == "length"
     if truncated_empty and role.enable_thinking:
         print(f"      [THINKING OVERRUN] Размышления съели весь лимит "
               f"({role.num_predict} токенов), ответ пуст. Повтор без размышлений.")
         retry = _chat(messages, temperature=temp, num_predict=role.num_predict,
-                      json_format=role.json_format, enable_thinking=False)
+                      json_format=role.json_format, enable_thinking=False,
+                      stage="generate", depth=depth, branch=branch,
+                      record_extra={"thinking_retry": True})
         # Учитываем и токены оборванной первой попытки, и токены повтора.
         return retry.text, True, result.tokens + retry.tokens, bool(retry.error)
-    if truncated_empty:
-        print(f"      [TRUNCATED] Ответ пуст, finish_reason=length при лимите "
-              f"{role.num_predict}. Поднимите num_predict генератора в yaml.")
     return result.text, False, result.tokens, bool(result.error)
 
 
@@ -698,7 +734,8 @@ def generate_step(state: AgentState):
     for i in range(k):
         attempt = state.get('step_recovery_attempts', 0)
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        raw_text, overran, tks, api_failed = _generate_one(role, context, temp)
+        raw_text, overran, tks, api_failed = _generate_one(
+            role, context, temp, depth=current_depth, branch=i + 1)
         overruns += overran
         api_errors += api_failed
         total_tokens += tks
@@ -740,8 +777,10 @@ def segment_step(state: AgentState):
             print(f"    - Candidate {i+1}: пустая генерация, пропускаю сегментацию.")
             continue
 
-        if _has_clean_single_step(raw):
+        fast_path = _has_clean_single_step(raw)
+        if fast_path:
             step = _extract_step_content(raw)
+            reliable, answer = True, None
             print(f"    - Candidate {i+1}: чистый <step> найден — быстрый путь без сегментатора.")
         else:
             seg_calls += 1
@@ -750,7 +789,8 @@ def segment_step(state: AgentState):
                 {"role": "user", "content": role.user_template.format(context=context, raw=raw)},
             ]
             res = _chat(messages, temperature=role.temperature, num_predict=role.num_predict,
-                        json_format=role.json_format, enable_thinking=role.enable_thinking)
+                        json_format=role.json_format, enable_thinking=role.enable_thinking,
+                        stage="segment", depth=depth, branch=i + 1)
             total_tokens += res.tokens
             api_errors += bool(res.error)
             step, answer, reliable = _parse_segmenter_response(res.text, raw,
@@ -760,6 +800,12 @@ def segment_step(state: AgentState):
             ans_note = f" | answer={answer}" if answer else ""
             print(f"    - Candidate {i+1}: сегментатор вернул шаг ({res.tokens} ток.){ans_note}{tag}")
 
+        # Итог сегментации ветки: именно этот текст уйдёт оценщику.
+        RECORDER.record(
+            stage="segment_result", depth=depth, branch=i + 1,
+            content=step, fast_path=fast_path, reliable=reliable,
+            answer=answer, answer_allowed=allow_answer,
+        )
         steps.append(step)
         print(f"      Step:\n{step}\n")
 
@@ -800,8 +846,10 @@ def evaluate_steps(state: AgentState):
             {"role": "system", "content": role.system_prompt},
             {"role": "user", "content": role.user_template.format(context=context, step=step)},
         ]
+        depth_now = len(state.get('steps', []))
         res = _chat(messages, temperature=role.temperature, num_predict=role.num_predict,
-                    json_format=role.json_format, enable_thinking=role.enable_thinking)
+                    json_format=role.json_format, enable_thinking=role.enable_thinking,
+                    stage="evaluate", depth=depth_now, branch=i + 1)
         total_tokens += res.tokens
         api_errors += bool(res.error)
 
@@ -812,6 +860,12 @@ def evaluate_steps(state: AgentState):
         any_reliable = any_reliable or reliable
         seen[key] = (score, rationale)
         scores.append(score)
+
+        # Разобранный вердикт отдельно от сырого ответа: виден и балл, и почему.
+        RECORDER.record(
+            stage="evaluate_result", depth=depth_now, branch=i + 1,
+            content=rationale, score=score, reliable=reliable, step_text=step,
+        )
 
         tag = "" if reliable else (" ⚠️ [СЕТЕВОЙ СБОЙ]" if res.error else " ⚠️ [ОЦЕНКА НЕНАДЁЖНА]")
         print(f"    - Candidate {i+1} Score: {score:.4f}{tag} | Rationale: {rationale}")
@@ -934,6 +988,13 @@ def commit_step(state: AgentState):
     elif answer:
         print(f"  -> Explicit answer found: {answer}")
 
+    RECORDER.record(
+        stage="commit", depth=len(prior_steps), branch=best_idx + 1,
+        content=best_step, score=best_score, answer=answer,
+        premature=bool(premature), no_progress=no_progress,
+        all_scores=list(scores),
+    )
+
     result = {
         "steps": [best_step],
         "final_answer": answer if answer else "",
@@ -956,12 +1017,17 @@ def verify_solution(state: AgentState):
     context = _build_context(state['problem'], state.get('steps', []))
     messages = role.build_messages(context=context)
     res = _chat(messages, json_format=role.json_format, temperature=role.temperature,
-                num_predict=role.num_predict, enable_thinking=role.enable_thinking)
+                num_predict=role.num_predict, enable_thinking=role.enable_thinking,
+                stage="verify", depth=len(state.get('steps', [])))
 
     is_valid, rationale, reliable = _parse_verify_response(res.text)
     if not reliable:
         print(f"  ⚠️  [НЕНАДЁЖНЫЙ ВЕРДИКТ] {rationale}")
 
+    RECORDER.record(
+        stage="verify_result", depth=len(state.get('steps', [])),
+        content=rationale, is_valid=is_valid, reliable=reliable,
+    )
     print(f"  -> Valid: {is_valid} | Rationale: {rationale}")
     return {
         "is_valid": is_valid,
