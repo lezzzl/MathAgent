@@ -61,8 +61,8 @@ h1{font-size:16px;margin:0;font-weight:650}
 button{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);
   border-radius:8px;padding:6px 11px;cursor:pointer}
 button:hover{border-color:var(--accent)}
-.wrap{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;
-  padding:16px;align-items:start;max-width:1600px;margin:0 auto}
+.wrap{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;
+  padding:16px;align-items:start;max-width:1900px;margin:0 auto}
 @media(max-width:980px){.wrap{grid-template-columns:1fr}}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
 .side{position:sticky;top:70px;max-height:calc(100vh - 90px);display:flex;flex-direction:column}
@@ -113,10 +113,28 @@ input[type=search]{font:inherit;color:inherit;background:var(--panel);
 .sec{margin:9px 0}
 .sec>.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
   margin-bottom:4px;cursor:pointer;user-select:none}
+/* Высокие поля: генерации на 15-25k токенов, и в 5 строк их читать невозможно.
+   Свёрнутое состояние — обзорное, развёрнутое занимает почти весь экран. */
 pre{margin:0;background:var(--code);border:1px solid var(--line);border-radius:8px;
-  padding:10px;white-space:pre-wrap;word-break:break-word;overflow-x:auto;
-  font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;max-height:460px;overflow-y:auto}
-pre.collapsed{max-height:110px}
+  padding:12px;white-space:pre-wrap;word-break:break-word;overflow-x:auto;
+  font:12.5px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;
+  max-height:78vh;overflow-y:auto;resize:vertical}
+pre.collapsed{max-height:340px}
+/* --- рендер LaTeX (без внешних библиотек: файл должен открываться офлайн) --- */
+pre.tex{font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;font-size:13px}
+.m{font-family:"Cambria Math","Latin Modern Math",Georgia,"Times New Roman",serif;
+  font-style:italic;white-space:normal}
+.m .up{font-style:normal}
+.m.disp{display:block;text-align:center;margin:6px 0}
+.frac{display:inline-flex;flex-direction:column;vertical-align:-0.55em;
+  text-align:center;margin:0 .18em;font-size:.95em}
+.frac>.n{border-bottom:1px solid currentColor;padding:0 .28em;line-height:1.25}
+.frac>.d{padding:0 .28em;line-height:1.25}
+.sqrt{border-top:1px solid currentColor;padding:0 .18em 0 .1em;margin-left:-.08em}
+.boxed{border:1px solid currentColor;border-radius:3px;padding:0 .3em;margin:0 .1em;
+  font-style:normal;display:inline-block}
+.m sup,.m sub{font-size:.72em;font-style:normal}
+.texerr{color:var(--warn)}
 .hidden{display:none!important}
 .empty{color:var(--muted);padding:24px;text-align:center}
 mark{background:var(--warn);color:#000;border-radius:2px}
@@ -177,6 +195,129 @@ DATA.tasks.forEach((t,i)=>{
   listEl.appendChild(el);
 });
 
+/* ================= мини-рендер LaTeX =================
+   Внешние библиотеки (KaTeX/MathJax) не годятся: HTML должен открываться
+   офлайн двойным щелчком, без CDN. Поэтому — компактный конвертер того
+   подмножества, которое реально встречается в олимпиадных логах.
+   Неизвестные команды остаются как есть: лучше показать \foo, чем съесть текст.
+   Исходник всегда доступен переключателем «LaTeX». */
+const SYM={alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",varepsilon:"ε",zeta:"ζ",
+ eta:"η",theta:"θ",vartheta:"ϑ",iota:"ι",kappa:"κ",lambda:"λ",mu:"μ",nu:"ν",xi:"ξ",
+ pi:"π",rho:"ρ",sigma:"σ",tau:"τ",upsilon:"υ",phi:"φ",varphi:"φ",chi:"χ",psi:"ψ",
+ omega:"ω",Gamma:"Γ",Delta:"Δ",Theta:"Θ",Lambda:"Λ",Xi:"Ξ",Pi:"Π",Sigma:"Σ",
+ Phi:"Φ",Psi:"Ψ",Omega:"Ω",cdot:"·",cdots:"⋯",ldots:"…",dots:"…",vdots:"⋮",
+ times:"×",div:"÷",pm:"±",mp:"∓",le:"≤",leq:"≤",ge:"≥",geq:"≥",ne:"≠",neq:"≠",
+ approx:"≈",equiv:"≡",sim:"∼",cong:"≅",propto:"∝",infty:"∞",sum:"∑",prod:"∏",
+ int:"∫",oint:"∮",partial:"∂",nabla:"∇",forall:"∀",exists:"∃",neg:"¬",
+ in:"∈",notin:"∉",ni:"∋",subset:"⊂",subseteq:"⊆",supset:"⊃",supseteq:"⊇",
+ cup:"∪",cap:"∩",setminus:"∖",emptyset:"∅",varnothing:"∅",
+ to:"→",rightarrow:"→",leftarrow:"←",Rightarrow:"⇒",Leftarrow:"⇐",
+ leftrightarrow:"↔",Leftrightarrow:"⇔",mapsto:"↦",implies:"⟹",iff:"⟺",
+ angle:"∠",triangle:"△",square:"□",circ:"∘",deg:"°",perp:"⊥",parallel:"∥",
+ mid:"∣",nmid:"∤",lfloor:"⌊",rfloor:"⌋",lceil:"⌈",rceil:"⌉",
+ langle:"⟨",rangle:"⟩",aleph:"ℵ",ell:"ℓ",hbar:"ℏ",Re:"ℜ",Im:"ℑ",
+ star:"⋆",ast:"∗",bullet:"∙",oplus:"⊕",otimes:"⊗",wedge:"∧",vee:"∨",
+ lor:"∨",land:"∧",bmod:"mod",pmod:"mod",binom:null};
+const UPRIGHT=new Set(["text","mathrm","mathbf","mathbb","mathcal","mathsf","mathtt",
+ "operatorname","textbf","textit","mbox","rm"]);
+const FUNCS=new Set(["sin","cos","tan","cot","sec","csc","log","ln","exp","lim","max",
+ "min","gcd","lcm","det","dim","deg","arg","sup","inf","sinh","cosh","tanh","arcsin",
+ "arccos","arctan","mod"]);
+const SPACE=new Set(["quad","qquad",",",";",":","!"," "]);
+
+/* Читает аргумент команды: {группа} с учётом вложенности, либо один символ. */
+function grp(s,i){
+  while(i<s.length&&s[i]===" ")i++;
+  if(s[i]!=="{") return [s[i]===undefined?"":s[i], i+1];
+  let d=0;
+  for(let j=i;j<s.length;j++){
+    if(s[j]==="{")d++;
+    else if(s[j]==="}"){d--;if(d===0)return [s.slice(i+1,j),j+1];}
+  }
+  return [s.slice(i+1),s.length];
+}
+
+function tex(s){
+  let o="",i=0;
+  while(i<s.length){
+    const c=s[i];
+    if(c==="\\"){
+      const m=/^\\([a-zA-Z]+|\\|[,;:!\s])/.exec(s.slice(i));
+      if(!m){o+=c;i++;continue;}
+      const name=m[1].trim();
+      i+=m[0].length;
+      if(m[1]==="\\"){o+="<br>";continue;}
+      if(SPACE.has(name)||m[1].trim()===""){o+=" ";continue;}
+      if(name==="left"||name==="right"){continue;}
+      if(name==="frac"||name==="dfrac"||name==="tfrac"){
+        let a,b;[a,i]=grp(s,i);[b,i]=grp(s,i);
+        o+=`<span class="frac"><span class="n">${tex(a)}</span><span class="d">${tex(b)}</span></span>`;
+        continue;
+      }
+      if(name==="binom"||name==="dbinom"){
+        let a,b;[a,i]=grp(s,i);[b,i]=grp(s,i);
+        o+=`(<span class="frac"><span class="n" style="border:none">${tex(a)}</span><span class="d">${tex(b)}</span></span>)`;
+        continue;
+      }
+      if(name==="sqrt"){
+        let idx="";
+        if(s[i]==="["){const j=s.indexOf("]",i);if(j>0){idx=s.slice(i+1,j);i=j+1;}}
+        let a;[a,i]=grp(s,i);
+        o+=(idx?`<sup>${tex(idx)}</sup>`:"")+`√<span class="sqrt">${tex(a)}</span>`;
+        continue;
+      }
+      if(name==="boxed"||name==="fbox"){
+        let a;[a,i]=grp(s,i);
+        o+=`<span class="boxed">${tex(a)}</span>`;continue;
+      }
+      if(UPRIGHT.has(name)){
+        let a;[a,i]=grp(s,i);
+        o+=`<span class="up">${tex(a)}</span>`;continue;
+      }
+      if(FUNCS.has(name)){o+=`<span class="up">${name}</span>`;continue;}
+      if(name in SYM&&SYM[name]){o+=`<span class="up">${SYM[name]}</span>`;continue;}
+      if(name==="overline"||name==="bar"){
+        let a;[a,i]=grp(s,i);
+        o+=`<span style="border-top:1px solid currentColor">${tex(a)}</span>`;continue;
+      }
+      o+=`<span class="texerr">\\${name}</span>`;      // неизвестное — показываем
+      continue;
+    }
+    if(c==="^"||c==="_"){
+      let a;[a,i]=grp(s,i+1);
+      o+=c==="^"?`<sup>${tex(a)}</sup>`:`<sub>${tex(a)}</sub>`;
+      continue;
+    }
+    if(c==="{"||c==="}"){i++;continue;}
+    if(/[0-9]/.test(c)){                                 // цифры прямым шрифтом
+      let j=i;while(j<s.length&&/[0-9.]/.test(s[j]))j++;
+      o+=`<span class="up">${s.slice(i,j)}</span>`;i=j;continue;
+    }
+    o+=c;i++;
+  }
+  return o;
+}
+
+/* Ищет математику в уже экранированном тексте и рендерит её. */
+function renderTex(escaped){
+  let out="",i=0;
+  const push=t=>{                                        // \boxed вне $...$ тоже частый случай
+    out+=t.replace(/\\boxed\{([^{}]*)\}/g,(_,g)=>`<span class="m"><span class="boxed">${tex(g)}</span></span>`);
+  };
+  while(i<escaped.length){
+    const rest=escaped.slice(i);
+    let m=/^\$\$([\s\S]*?)\$\$/.exec(rest)||/^\\\[([\s\S]*?)\\\]/.exec(rest);
+    if(m){out+=`<span class="m disp">${tex(m[1])}</span>`;i+=m[0].length;continue;}
+    m=/^\$([^$\n]+?)\$/.exec(rest)||/^\\\(([\s\S]*?)\\\)/.exec(rest);
+    if(m){out+=`<span class="m">${tex(m[1])}</span>`;i+=m[0].length;continue;}
+    const next=escaped.slice(i+1).search(/\$|\\\[|\\\(/);
+    const end=next===-1?escaped.length:i+1+next;
+    push(escaped.slice(i,end));
+    i=end;
+  }
+  return out;
+}
+
 /* ---- рендер одной задачи ---- */
 let current=0;
 function select(i){
@@ -198,7 +339,8 @@ function select(i){
   ].map(([k,val,color,small])=>`<div class="metric"><div class="k">${k}</div>
       <div class="v ${small?"small":""}" ${color?`style="color:${color}"`:""}>${esc(String(val))}</div></div>`).join("");
 
-  $("#problem").textContent=t.problem||"";
+  const probEsc=esc(t.problem||"");
+  $("#problem").innerHTML=$("#tex").checked?renderTex(probEsc):probEsc;
   const gu=(t.metrics||{}).gave_up_reason;
   $("#gaveup").innerHTML = gu ? `<div class="panel problem" style="border-left-color:var(--bad)">
       <b>Сдался:</b> ${esc(gu)}</div>` : "";
@@ -260,11 +402,14 @@ function renderRec(r){
   if(r.elapsed) pills.push(`<span class="pill">${fmtSec(r.elapsed)}</span>`);
 
   const secs=[];
+  const texOn=$("#tex").checked;
   const add=(lbl,blob,collapsed)=>{
     if(!blob||!blob.text) return;
     const note=blob.clipped?` (показано ${blob.text.length} из ${blob.full_chars} символов)`:"";
+    const escaped=esc(blob.text);
+    const body=texOn?renderTex(escaped):escaped;
     secs.push(`<div class="sec"><div class="lbl" onclick="this.nextElementSibling.classList.toggle('collapsed')">
-      ${lbl}${note} ▾</div><pre class="${collapsed?"collapsed":""}">${esc(blob.text)}</pre></div>`);
+      ${lbl}${note} ▾</div><pre class="${collapsed?"collapsed":""} ${texOn?"tex":""}">${body}</pre></div>`);
   };
   add("system-промпт", r.system, true);
   add("user-промпт", r.user, true);
@@ -288,6 +433,11 @@ $("#chips").addEventListener("click",e=>{
   applyFilters();
 });
 $("#q").addEventListener("input",applyFilters);
+$("#tex").addEventListener("change",()=>{
+  try{localStorage.setItem("tv-tex",$("#tex").checked?"1":"0")}catch(e){}
+  select(current);                       // перерисовать с/без формул
+});
+try{const v=localStorage.getItem("tv-tex"); if(v==="0") $("#tex").checked=false;}catch(e){}
 function applyFilters(){
   const q=$("#q").value.trim().toLowerCase();
   document.querySelectorAll(".rec").forEach(el=>{
@@ -364,6 +514,8 @@ def build_html(data: dict) -> str:
     <div id="gaveup"></div>
     <div class="controls">
       <input id="q" type="search" placeholder="Поиск по промптам, ответам, обоснованиям…  (/)">
+      <label class="chip" style="cursor:pointer"><input type="checkbox" id="tex" checked
+        style="vertical-align:-1px;margin-right:5px">LaTeX</label>
       <span id="chips">{chips}</span>
     </div>
     <div id="steps"></div>

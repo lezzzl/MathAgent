@@ -71,10 +71,13 @@ roles:
       Now produce ONLY the next single step.
     temperature: 0.6
     json_format: false
-    # Qwen3-4B в режиме размышлений многословен. 24000 покрывает первый шаг с
-    # запасом и требует --max-model-len не ниже 32768. Если сервер поднят с
-    # меньшим контекстом — снижайте это число (иначе HTTP 400 / обрыв).
-    num_predict: 24000
+    # Замер на aime24/Qwen3.5-4B (трасса agent_20260728T102744Z): 9 из 18
+    # генераций упёрлись РОВНО в 24000 (100% лимита) — половина шагов обрывалась
+    # на середине. Поднято до 40000; требует --max-model-len >= 52000 на сервере
+    # (рекомендуется 65536). Раннер сам урежет это значение под фактический
+    # контекст сервера и предупредит, так что HTTP 400 не будет — но при
+    # маленьком контексте обрывы вернутся, поэтому поднимайте max-model-len.
+    num_predict: 40000
     # Размышления генератору нужны — в них и есть решение шага.
     enable_thinking: true
 
@@ -148,8 +151,13 @@ roles:
         "score": 1.0
       }
 
-      Do your verification inside your reasoning, not in the JSON. The JSON must
-      contain only the two fields above.
+      The JSON must contain only the two fields above.
+
+      You have NO separate scratchpad: reasoning is disabled for this role, so the
+      "rationale" field IS your working space. Before committing to a score, use
+      it to re-derive the step's key computation — restate the numbers, redo the
+      arithmetic, and only then judge. A rationale that merely asserts a verdict
+      ("looks correct") without recomputing anything is a failure of this role.
 
       STRICT SCORING RULES - READ CAREFULLY:
       You must score ONLY as 0.0 or 1.0. No intermediate values.
@@ -263,4 +271,6 @@ roles:
     json_format: false
     # Один вызов на задачу, смотрит всё решение сразу — размышления по карману.
     enable_thinking: true
-    num_predict: 16000
+    # На том же замере верификатор дал p90=14611 при лимите 16000 (91%) — то
+    # есть стоял в очереди на обрывы следующим. 24000 даёт реальный запас.
+    num_predict: 24000
