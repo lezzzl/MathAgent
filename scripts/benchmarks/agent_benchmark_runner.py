@@ -279,6 +279,11 @@ class ServerUnavailable(RuntimeError):
 # роль молча перестаёт работать, что выглядит как "модель выдаёт мусор".
 _THINKING_MIN_TOKENS = 6000
 
+# Сколько токенов оставить под промпт, урезая num_predict под контекст сервера.
+# Типичный промпт роли — условие задачи плюс принятые шаги, это заметно меньше;
+# запас берём с двойным перекрытием, чтобы не ловить 400 на глубоких шагах.
+_PROMPT_MARGIN = int(os.getenv("PROMPT_MARGIN", "4096"))
+
 
 def apply_thinking_override(mode: str) -> None:
     """Принудительно включает или выключает размышления для всех ролей.
@@ -306,32 +311,45 @@ def apply_thinking_override(mode: str) -> None:
 
 
 def warn_on_context_fit(context_length: int | None) -> None:
-    """Проверяет, что num_predict ролей помещается в контекст сервера.
+    """Подгоняет num_predict ролей под фактический контекст сервера.
 
-    num_predict больше max_model_len означает HTTP 400 на каждом вызове роли;
-    близкое к нему — обрыв ответа, как только контекст подрастёт на пару шагов.
-    Обе ситуации выглядят в логах как "модель сломалась", поэтому ловим заранее.
+    Не просто предупреждает, а УРЕЗАЕТ лимит, если он не влезает. Причина: в
+    yaml лимиты подняты под большой контекст (генератору нужно 40000), и на
+    сервере с --max-model-len 32768 каждый вызов возвращал бы HTTP 400 с пустым
+    ответом — ровно тот сбой, который однажды выглядел как «модель не слушается
+    инструкций». Урезание даёт деградацию (ответы будут обрываться, это видно
+    в метрике обрывов), а не молчаливую поломку всего прогона.
     """
     if not isinstance(context_length, int):
         return
-    # Запас под промпт: контекст обрезается по MAX_CONTEXT_CHARS (~4 символа
-    # на токен), плюс системный промпт роли. Жёсткая константа тут врала бы
-    # при изменении MAX_CONTEXT_CHARS.
-    reserve = solver_mod.MAX_CONTEXT_CHARS // 4 + 1500
+    # vLLM отклоняет запрос, когда prompt + max_tokens > max_model_len, то есть
+    # проверка идёт НА КАЖДЫЙ запрос, а не по худшему случаю. Поэтому урезаем
+    # только до значения, при котором остаётся место под типичный промпт:
+    # так лимит режется лишь когда 400 практически неизбежен, а не «на всякий
+    # случай» (иначе мы бы сами занижали бюджет генератора и плодили обрывы).
+    hard_cap = context_length - _PROMPT_MARGIN
     for role_name, role in solver_mod.ROLES.items():
         limit = role.num_predict or 0
-        if limit >= context_length:
+        if limit > hard_cap:
+            if hard_cap < 1000:
+                print(f"[config] ОШИБКА: контекст сервера {context_length} слишком мал "
+                      f"для роли '{role_name}'. Поднимите --max-model-len.")
+                continue
+            solver_mod.ROLES[role_name] = replace(role, num_predict=hard_cap)
             print(
-                f"[config] ОШИБКА: у роли '{role_name}' num_predict={limit} >= "
-                f"max_model_len={context_length}. Каждый вызов вернёт HTTP 400. "
-                f"Поднимите --max-model-len на сервере или снизьте num_predict."
+                f"[config] num_predict роли '{role_name}' урезан {limit} -> {hard_cap} "
+                f"под контекст сервера {context_length} (иначе HTTP 400 на каждом "
+                f"вызове). Для полного лимита поднимите --max-model-len до "
+                f"{limit + _PROMPT_MARGIN} (генератору комфортно 65536)."
             )
-        elif limit + reserve > context_length:
+            limit = hard_cap
+        # Мягкое предупреждение: запрос пройдёт, но на промпт остаётся мало.
+        soft_reserve = solver_mod.MAX_CONTEXT_CHARS // 4 + 1500
+        if limit + soft_reserve > context_length:
             print(
                 f"[config] ВНИМАНИЕ: у роли '{role_name}' num_predict={limit} при "
                 f"контексте {context_length} — на промпт и накопленные шаги остаётся "
-                f"{context_length - limit} токенов. На глубоких шагах ответы начнут "
-                f"обрываться. Рекомендуется --max-model-len 32768."
+                f"{context_length - limit} токенов. На глубоких шагах возможны обрывы."
             )
 
 
