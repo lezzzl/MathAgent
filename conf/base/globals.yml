@@ -10,4 +10,4 @@ raw_dir: data/raw
 processed_dir: data/processed
 output_dir: data/output
 prompts_dir: conf/base/prompts
-metrics_dir: runs/${globals:run_name}/metrics
+metrics_dir: runs/${run_name}/metrics

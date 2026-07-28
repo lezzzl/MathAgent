@@ -25,6 +25,7 @@ def extract_and_verify(model_answer: str, ground_truth, timeout_seconds) -> dict
     """
     result = {
         "is_correct": False,
+        "extracted_text": None,
         "parsed_answer": None,
         "parsed_ground_truth": None,
         "error": None,

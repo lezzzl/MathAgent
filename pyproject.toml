@@ -16,7 +16,6 @@ dependencies = [
     "langgraph>=0.2",
     "langchain-core>=0.3",
     "langchain-openai>=0.2",
-    "langsmith>=0.10",
     # --- Математика и данные ---
     "sympy>=1.12",
     "pandas>=2.0",
@@ -39,3 +38,6 @@ package_name = "mathagent"
 project_name = "MathAgent"
 kedro_init_version = "0.19.9"
 source_dir = "src"
+
+[tool.kedro_telemetry]
+project_id = "3c33bc05af7445fbbf204742dc629c71"

@@ -24,3 +24,30 @@ rag:
   mode: similar_conditions        # similar_conditions | similar_solutions | reasoning_traces
   top_k: 3
   trigger: always                 # always = доставать до решения; agent = агент сам зовёт retrieval
+
+# Модульный benchmark workflow.
+experiment:
+  project_root: .
+  runs_dir: results/runs
+  comparisons_path: results/comparisons.parquet
+
+  # Необязательный список общих аргументов добавляется к каждому скрипту:
+  # args: [--pipeline, qwen4b, --workers, 4]
+  # MODEL, OPENAI_BASE_URL и OPENAI_API_KEY наследуются из окружения.
+  agent:
+    benchmarks:
+      - name: AIME24
+        script: scripts/benchmarks/run_aime24.py
+      - name: AIME25
+        script: scripts/benchmarks/run_aime25.py
+      - name: MATH500
+        script: scripts/benchmarks/run_math500.py
+
+  evaluation:
+    default:
+      script: verify_answers.py
+    # MATH-500 содержит символьные и текстовые ответы, поэтому использует
+    # гибрид math-verify + LLM judge из отдельного скрипта.
+    by_benchmark:
+      MATH500:
+        script: verify_imo_answers.py

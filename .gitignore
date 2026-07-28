@@ -219,5 +219,5 @@ __marimo__/
 .vscode/
 results/**/*.jsonl
 
-# Generated dashboard evaluation sidecars
-results/evaluations/
+# Generated dashboard comparison table
+results/comparisons.parquet

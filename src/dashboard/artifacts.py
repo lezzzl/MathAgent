@@ -1,4 +1,4 @@
-"""Read benchmark manifests, JSONL records, and evaluation sidecars."""
+"""Read benchmark manifests and pre-scored JSONL records."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from typing import Any, Iterator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUNS_DIR = PROJECT_ROOT / "results" / "runs"
-DEFAULT_EVALUATIONS_DIR = PROJECT_ROOT / "results" / "evaluations"
+DEFAULT_COMPARISONS_PATH = PROJECT_ROOT / "results" / "comparisons.parquet"
 RUNS_DIR_ENV = "MATHAGENT_RESULTS_DIR"
-EVALUATIONS_DIR_ENV = "MATHAGENT_EVALUATIONS_DIR"
+COMPARISONS_PATH_ENV = "MATHAGENT_COMPARISONS_PATH"
 
 
 class ArtifactError(ValueError):
@@ -49,11 +49,11 @@ def resolve_runs_dir(value: str | Path | None = None) -> Path:
     return Path(raw).expanduser().resolve() if raw else DEFAULT_RUNS_DIR
 
 
-def resolve_evaluations_dir(value: str | Path | None = None) -> Path:
-    """Resolve an explicit, environment, or repository-default cache directory."""
+def resolve_comparisons_path(value: str | Path | None = None) -> Path:
+    """Resolve the persistent comparison-table path."""
 
-    raw = value if value is not None else os.getenv(EVALUATIONS_DIR_ENV)
-    return Path(raw).expanduser().resolve() if raw else DEFAULT_EVALUATIONS_DIR
+    raw = value if value is not None else os.getenv(COMPARISONS_PATH_ENV)
+    return Path(raw).expanduser().resolve() if raw else DEFAULT_COMPARISONS_PATH
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -193,33 +193,3 @@ def file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
         for chunk in iter(lambda: stream.read(chunk_size), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def evaluation_cache_path(
-    evaluations_dir: Path,
-    artifact: BenchmarkArtifact,
-    source_fingerprint: str,
-    grader_version: str,
-) -> Path:
-    """Build a cache filename that identifies both source and grading logic."""
-
-    grader_slug = re.sub(r"[^A-Za-z0-9._-]+", "-", grader_version)
-    return (
-        evaluations_dir
-        / artifact.run_id
-        / f"{artifact.path.stem}.{source_fingerprint[:16]}.{grader_slug}.jsonl"
-    )
-
-
-def find_evaluation_cache(
-    evaluations_dir: Path,
-    artifact: BenchmarkArtifact,
-    source_fingerprint: str,
-    grader_version: str,
-) -> Path | None:
-    """Return the exact valid cache for an artifact, if it exists."""
-
-    candidate = evaluation_cache_path(
-        evaluations_dir, artifact, source_fingerprint, grader_version
-    )
-    return candidate if candidate.is_file() else None

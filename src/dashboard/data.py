@@ -1,244 +1,140 @@
-"""Prepare artifact, evaluation, and pairwise data for the dashboard UI."""
+"""Shape persistent comparison rows for the dashboard views."""
 
 from __future__ import annotations
 
-from itertools import combinations
-from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import pandas as pd
 
-from dashboard.artifacts import (
-    RunArtifact,
-    evaluation_cache_path,
-    file_sha256,
-    load_task_records,
-)
-from dashboard.evaluation import grader_version, load_evaluations
-from dashboard.statistics import (
-    PairwiseResult,
-    adjust_results,
-    compare_paired_scores,
-)
+
+def comparison_run_ids(comparisons: pd.DataFrame) -> list[str]:
+    """Return every run represented in at least one comparison."""
+
+    if comparisons.empty:
+        return []
+    return sorted(
+        set(comparisons["left_run"].astype(str))
+        | set(comparisons["right_run"].astype(str))
+    )
 
 
-EVALUATION_COLUMNS = [
-    "run_id",
-    "benchmark_name",
-    "task_id",
-    "status",
-    "score",
-    "extracted_prediction",
-    "extracted_ground_truth",
-    "reason",
-]
+def _display_p_value(row: pd.Series) -> float | None:
+    adjusted = row.get("adjusted_p_value")
+    if adjusted is not None and not pd.isna(adjusted):
+        return float(adjusted)
+    raw = row.get("p_value")
+    return None if raw is None or pd.isna(raw) else float(raw)
 
 
-def load_available_evaluations(
-    runs: dict[str, RunArtifact], evaluations_dir: Path
-) -> pd.DataFrame:
-    """Load only sidecars matching current artifact content and grader version."""
+def _oriented_rows(
+    comparisons: pd.DataFrame, left_run: str, right_run: str
+) -> list[dict[str, Any]]:
+    """Orient canonical stored pairs to the run order requested by the UI."""
 
-    rows: list[dict[str, Any]] = []
-    current_version = grader_version()
-    for run in runs.values():
-        for artifact in run.benchmarks.values():
-            fingerprint = file_sha256(artifact.path)
-            path = evaluation_cache_path(
-                evaluations_dir, artifact, fingerprint, current_version
-            )
-            if not path.is_file():
-                continue
-            for record in load_evaluations(
-                path,
-                artifact=artifact,
-                source_fingerprint=fingerprint,
-                version_string=current_version,
-            ):
-                rows.append(
-                    {
-                        column: getattr(record, column)
-                        for column in EVALUATION_COLUMNS
-                    }
-                )
-    return pd.DataFrame(rows, columns=EVALUATION_COLUMNS)
-
-
-def manifest_rows(runs: dict[str, RunArtifact]) -> pd.DataFrame:
-    """Flatten stable run configuration and operational metrics."""
-
-    rows: list[dict[str, Any]] = []
-    for run in runs.values():
-        manifest = run.manifest
-        generation = manifest.get("generation") or {}
-        for benchmark_name, artifact in run.benchmarks.items():
-            entry = artifact.manifest_entry
-            summary = entry.get("summary") or {}
-            rows.append(
-                {
-                    "run_id": run.run_id,
-                    "model": manifest.get("model"),
-                    "prompt_version": manifest.get("prompt_version"),
-                    "status": entry.get("status"),
-                    "benchmark_name": benchmark_name,
-                    "tasks": summary.get("total_tasks", entry.get("total_tasks")),
-                    "successful_calls": summary.get("successful_tasks"),
-                    "failed_calls": summary.get("failed_tasks"),
-                    "input_tokens": summary.get("input_tokens"),
-                    "output_tokens": summary.get("output_tokens"),
-                    "total_tokens": summary.get("total_tokens"),
-                    "wall_time_seconds": summary.get("wall_time_seconds"),
-                    "tasks_per_second": summary.get("tasks_per_second"),
-                    "temperature": generation.get("temperature"),
-                    "seed": generation.get("seed"),
-                    "thinking": generation.get("thinking"),
-                    "max_tokens": generation.get("max_tokens"),
-                }
-            )
-    return pd.DataFrame(rows)
-
-
-def accuracy_rows(evaluations: pd.DataFrame) -> pd.DataFrame:
-    """Summarize correctness while keeping unresolved grades visible."""
-
-    if evaluations.empty:
-        return pd.DataFrame(
-            columns=[
-                "run_id",
-                "benchmark_name",
-                "scored",
-                "correct",
-                "incorrect",
-                "unresolved",
-                "accuracy",
-            ]
-        )
-    rows: list[dict[str, Any]] = []
-    for (run_id, benchmark), group in evaluations.groupby(
-        ["run_id", "benchmark_name"], sort=True
-    ):
-        scored = group["score"].notna()
-        correct = int((group.loc[scored, "score"] == True).sum())  # noqa: E712
-        scored_count = int(scored.sum())
-        rows.append(
-            {
-                "run_id": run_id,
-                "benchmark_name": benchmark,
-                "scored": scored_count,
-                "correct": correct,
-                "incorrect": scored_count - correct,
-                "unresolved": int((~scored).sum()),
-                "accuracy": correct / scored_count if scored_count else None,
-            }
-        )
-    return pd.DataFrame(rows)
-
-
-def _score_map(
-    evaluations: pd.DataFrame, run_id: str, benchmarks: Iterable[str]
-) -> dict[tuple[str, str], bool | None]:
-    selected = evaluations[
-        (evaluations["run_id"] == run_id)
-        & evaluations["benchmark_name"].isin(list(benchmarks))
+    canonical_left, canonical_right = sorted((left_run, right_run))
+    selected = comparisons[
+        (comparisons["left_run"] == canonical_left)
+        & (comparisons["right_run"] == canonical_right)
     ]
-    return {
-        (str(row.benchmark_name), str(row.task_id)): (
-            None if pd.isna(row.score) else bool(row.score)
-        )
-        for row in selected.itertuples()
-    }
-
-
-def pairwise_results(
-    evaluations: pd.DataFrame,
-    run_ids: list[str],
-    benchmarks: list[str],
-    *,
-    n_resamples: int = 10_000,
-    seed: int = 42,
-) -> list[PairwiseResult]:
-    """Build a Holm-adjusted displayed family across runs and scopes."""
-
-    results: list[PairwiseResult] = []
-    for left_run, right_run in combinations(sorted(run_ids), 2):
-        for benchmark in sorted(benchmarks):
-            left = _score_map(evaluations, left_run, [benchmark])
-            right = _score_map(evaluations, right_run, [benchmark])
-            results.append(
-                compare_paired_scores(
-                    left_run,
-                    right_run,
-                    left,
-                    right,
-                    scope=benchmark,
-                    weighting="task",
-                    n_resamples=n_resamples,
-                    seed=seed,
-                )
-            )
-    return adjust_results(results)
-
-
-def pairwise_frame(results: list[PairwiseResult]) -> pd.DataFrame:
-    """Convert comparison results to user-facing percentage-point columns."""
-
-    rows = []
-    for result in results:
+    rows: list[dict[str, Any]] = []
+    requested_is_canonical = left_run == canonical_left
+    for row in selected.sort_values("benchmark_name").to_dict("records"):
+        if requested_is_canonical:
+            left_score = row["left_avg_score"]
+            right_score = row["right_avg_score"]
+            difference = row["diff"]
+        else:
+            left_score = row["right_avg_score"]
+            right_score = row["left_avg_score"]
+            difference = -row["diff"]
         rows.append(
             {
-                "left_run": result.left_run,
-                "right_run": result.right_run,
-                "scope": result.scope,
-                "paired_tasks": result.paired_tasks,
-                "unresolved": result.unresolved_tasks,
-                "left_accuracy": _percent(result.left_accuracy),
-                "right_accuracy": _percent(result.right_accuracy),
-                "delta_pp": _percent(result.accuracy_delta),
-                "ci_low_pp": _percent(result.ci_low),
-                "ci_high_pp": _percent(result.ci_high),
-                "left_wins": result.left_wins,
-                "right_wins": result.right_wins,
-                "ties": result.ties,
-                "p_value": result.p_value,
-                "adjusted_p_value": result.adjusted_p_value,
+                "benchmark_name": row["benchmark_name"],
+                "left_score": left_score,
+                "right_score": right_score,
+                "difference": difference,
+                "p_value": _display_p_value(pd.Series(row)),
             }
         )
-    return pd.DataFrame(rows)
+    return rows
 
 
-def pairwise_display_tables(
-    results: list[PairwiseResult],
-) -> dict[tuple[str, str], pd.DataFrame]:
-    """Build the compact, dynamically named table shown for each run pair."""
+def two_run_comparison_table(
+    comparisons: pd.DataFrame, left_run: str, right_run: str
+) -> pd.DataFrame:
+    """Build the five-column side-by-side comparison table."""
 
-    grouped: dict[tuple[str, str], list[PairwiseResult]] = {}
-    for result in results:
-        grouped.setdefault((result.left_run, result.right_run), []).append(result)
+    rows = _oriented_rows(comparisons, left_run, right_run)
+    return pd.DataFrame(
+        [
+            {
+                "Benchmark": row["benchmark_name"],
+                left_run: _percent(row["left_score"]),
+                right_run: _percent(row["right_score"]),
+                "Diff": _percent(row["difference"]),
+                "p-value": row["p_value"],
+            }
+            for row in rows
+        ],
+        columns=["Benchmark", left_run, right_run, "Diff", "p-value"],
+    )
 
-    tables: dict[tuple[str, str], pd.DataFrame] = {}
-    for (left_run, right_run), pair_results in grouped.items():
-        diff_column = f"Diff ({right_run} − {left_run})"
-        rows: list[dict[str, Any]] = []
-        for result in pair_results:
-            rows.append(
-                {
-                    "Benchmark": result.scope,
-                    left_run: _percent(result.left_accuracy),
-                    right_run: _percent(result.right_accuracy),
-                    diff_column: _percent(
-                        None
-                        if result.accuracy_delta is None
-                        else -result.accuracy_delta
-                    ),
-                    "p-value": result.adjusted_p_value,
-                }
+
+def baseline_comparison_table(
+    comparisons: pd.DataFrame,
+    baseline_run: str,
+    compared_runs: list[str],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build baseline scores, comparison deltas, and a parallel p-value matrix."""
+
+    oriented = {
+        run_id: {
+            str(row["benchmark_name"]): row
+            for row in _oriented_rows(comparisons, baseline_run, run_id)
+        }
+        for run_id in compared_runs
+        if run_id != baseline_run
+    }
+    benchmarks = sorted(
+        {
+            benchmark
+            for rows_by_benchmark in oriented.values()
+            for benchmark in rows_by_benchmark
+        }
+    )
+    display_rows: list[dict[str, Any]] = []
+    p_value_rows: list[dict[str, Any]] = []
+    for benchmark in benchmarks:
+        available = [
+            rows_by_benchmark[benchmark]
+            for rows_by_benchmark in oriented.values()
+            if benchmark in rows_by_benchmark
+        ]
+        baseline_score = available[0]["left_score"] if available else None
+        display_row: dict[str, Any] = {
+            "Benchmark": benchmark,
+            baseline_run: _percent(baseline_score),
+        }
+        p_value_row: dict[str, Any] = {"Benchmark": benchmark}
+        for run_id in compared_runs:
+            row = oriented.get(run_id, {}).get(benchmark)
+            display_row[run_id] = (
+                None if row is None else _percent(row["difference"])
             )
-        tables[(left_run, right_run)] = pd.DataFrame(rows)
-    return tables
+            p_value_row[run_id] = None if row is None else row["p_value"]
+        display_rows.append(display_row)
+        p_value_rows.append(p_value_row)
+
+    columns = ["Benchmark", baseline_run, *compared_runs]
+    p_value_columns = ["Benchmark", *compared_runs]
+    return (
+        pd.DataFrame(display_rows, columns=columns),
+        pd.DataFrame(p_value_rows, columns=p_value_columns),
+    )
 
 
 def p_value_style(p_value: float | None, difference: float | None) -> str:
-    """Return directional significance coloring for one p-value cell."""
+    """Return directional significance coloring based on a p-value."""
 
     if (
         p_value is None
@@ -263,31 +159,4 @@ def p_value_style(p_value: float | None, difference: float | None) -> str:
 
 
 def _percent(value: float | None) -> float | None:
-    return None if value is None else 100.0 * value
-
-
-def task_rows(run: RunArtifact, benchmark_name: str) -> pd.DataFrame:
-    """Lazily load full task text for one selected run and benchmark."""
-
-    artifact = run.benchmarks[benchmark_name]
-    rows: list[dict[str, Any]] = []
-    for record in load_task_records(artifact.path):
-        metadata = record.get("metadata") or {}
-        usage = metadata.get("usage") or {}
-        rows.append(
-            {
-                "run_id": run.run_id,
-                "benchmark_name": benchmark_name,
-                "task_id": str(record["task_id"]),
-                "solution": record.get("solution"),
-                "reasoning": record.get("reasoning"),
-                "ground_truth": record.get("ground_truth"),
-                "latency_seconds": metadata.get("latency_seconds"),
-                "input_tokens": usage.get("input_tokens"),
-                "output_tokens": usage.get("output_tokens"),
-                "error": metadata.get("error"),
-                "category": metadata.get("Category"),
-                "subcategory": metadata.get("Subcategory"),
-            }
-        )
-    return pd.DataFrame(rows)
+    return None if value is None or pd.isna(value) else 100.0 * float(value)

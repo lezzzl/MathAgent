@@ -74,6 +74,54 @@ uv run kedro run --env experiments/rag_agent_triggered    # RAG как инст�
 
 Разовые оверрайды — через `--params rag.top_k=8`.
 
+### Полный benchmark workflow
+
+Kedro также оркестрирует agentic benchmark loop, проверку ответов и
+инкрементальное обновление dashboard comparison table:
+
+```bash
+export MODEL=Qwen/Qwen3.5-9B
+export OPENAI_BASE_URL=http://127.0.0.1:8000/v1
+export OPENAI_API_KEY=token-abc123
+
+# 1) agent -> 2) evaluate -> 3) compare
+uv run python scripts/run_experiment.py --config experiment.yml
+
+# Только 2) evaluate -> 3) compare для уже готового запуска
+uv run python scripts/evaluate_experiment.py \
+  --run-id my-agent-run
+```
+
+`run_experiment.py` всегда выполняет все три этапа. `--config` указывает на YAML
+с параметрами конкретного эксперимента; корень файла — сама секция experiment,
+поэтому повторять ключ `experiment` не нужно:
+
+```yaml
+run_id: qwen4b-v1
+agent:
+  args:
+    - --pipeline
+    - qwen4b
+    - --workers
+    - "4"
+```
+
+Этот YAML частично и рекурсивно объединяется с общими настройками
+`experiment` из `conf/base/parameters.yml`. Поле `run_id` обязательно и
+определяет каталог `results/runs/<run_id>`.
+
+`evaluate_experiment.py` требует `--run-id`, потому что должен выбрать уже
+существующие результаты.
+
+Настройки benchmark-скриптов и evaluators находятся в `experiment` внутри
+`conf/base/parameters.yml`. Для частичных Kedro environment overrides включён
+soft merge: файл эксперимента может указывать только изменяемые поля, не
+повторяя всю секцию `experiment`.
+
+Сырые JSONL сохраняются рядом с manifest. Этап evaluation пишет отдельные
+`*_verified.jsonl`, добавляет в них `is_correct` и переключает manifest на
+проверенный файл; исходные ответы не перезаписываются.
+
 ### Бенчмарки
 
 ```bash
@@ -91,65 +139,42 @@ python scripts/run_all_benchmarks.py --limit 2
 ## Results dashboard
 
 The local Streamlit dashboard discovers run manifests under `results/runs` and
-compares correctness, latency, and token usage. Generate compact correctness
-sidecars first, then launch the app:
+compares pre-scored benchmark runs. Each task record must contain a numeric
+`score` from 0 to 1 or the Boolean `is_correct` field written by the standalone
+verification scripts. The dashboard does not grade solutions.
 
 ```bash
-uv run python -m dashboard.evaluate
+uv run python -m dashboard.compare
 uv run streamlit run src/dashboard/app.py
 ```
 
-Evaluation runs in an isolated worker with a 15-second hard timeout per task.
-Progress is checkpointed every 10 tasks, so rerunning the same command resumes
-an interrupted benchmark. Use `--task-timeout <seconds>` to change the limit.
+The comparison command writes `results/comparisons.parquet`. On later runs it
+detects run IDs already represented in that table and computes only pairs that
+involve newly discovered scored runs. This includes new-versus-existing and
+new-versus-new pairs; existing pair statistics are not recomputed.
+
+Use the sidebar's **Update comparison table** button to discover newly added
+pre-scored runs. This incrementally updates `results/comparisons.parquet` with
+average scores and paired p-values without recomputing existing run pairs. The
+two dashboard views compare one run with another or several runs against a
+selected baseline. The app polls the comparison table, so updates made by
+another process appear automatically.
+
 The app uses PyArrow's system allocator and serializes dataframe conversion so
 multiple browser tabs can safely share one Streamlit server on macOS.
 
-Use `--results-dir` and `--evaluations-dir` with the evaluator, or
-`MATHAGENT_RESULTS_DIR` and `MATHAGENT_EVALUATIONS_DIR` for both commands, to
-read artifacts from different locations. Dashboard code is isolated under
-`src/dashboard` and does not import the agent or benchmark runner.
+Set `MATHAGENT_RESULTS_DIR` to read runs from another directory and
+`MATHAGENT_COMPARISONS_PATH` to store the comparison table elsewhere. Dashboard
+code is isolated under `src/dashboard` and does not import the agent or
+benchmark runner.
 
-## LangSmith benchmark comparison
-
-The independent tooling under `src/langsmith` publishes existing benchmark
-artifacts without rerunning the model and never imports `src/dashboard`. Set
-`LANGSMITH_API_KEY` and, for a non-default installation, `LANGSMITH_ENDPOINT`.
+Explicit paths can also be passed to the comparison command:
 
 ```bash
-uv run python src/langsmith/compare_runs.py publish \
-  --run-id baseline-qwen35-9b-all-v1
-
-uv run python src/langsmith/compare_runs.py compare \
-  --left mathagent::baseline-qwen35-4b-all-v1 \
-  --right mathagent::baseline-qwen35-9b-all-v1
+uv run python -m dashboard.compare \
+  --runs-dir /path/to/runs \
+  --output /path/to/comparisons.parquet
 ```
-
-Publishing automatically compares the new run (Run-2) against every compatible
-existing source experiment (Run-1), so a positive difference means the new run
-improved. Comparisons continue independently after failures, all successful
-report URLs are printed, and the command exits nonzero if any comparison fails.
-Deterministic source and report names make retries idempotent.
-
-Each pair produces two complementary LangSmith artifacts: a native comparative
-experiment with per-task `pairwise_accuracy` preferences, and the materialized
-bootstrap/Holm report used by the five-column custom renderer. Resolved ties
-receive `0.5` for both runs; tasks with an unresolved grade receive no pairwise
-feedback. The native comparison URL is printed by the LangSmith SDK and stored
-in the report experiment metadata.
-
-Both commands accept `--resamples` (default `10000`), `--seed` (default `42`),
-`--source-dataset`, and `--report-dataset`; `publish` also accepts
-`--results-dir`. Reports use a paired centered-null bootstrap test with Holm
-correction. Only shared tasks with resolved grades enter the accuracies and
-test, while missing and unresolved counts remain in the report payload.
-
-To show the five-column table inside LangSmith, host
-`src/langsmith/renderer/index.html` over HTTPS and configure that URL as the
-custom output renderer for the `mathagent-comparison-reports-v1` dataset. For a
-self-hosted UI, append its allowed origin, for example
-`?origins=https://smith.internal.example`. The renderer performs no network
-requests and accepts report messages only from configured origins.
 
 ## Структура
 

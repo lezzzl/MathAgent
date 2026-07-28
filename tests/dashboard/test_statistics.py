@@ -3,8 +3,12 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from dashboard.data import pairwise_display_tables, pairwise_results, p_value_style
-from dashboard.statistics import PairwiseResult, compare_paired_scores, holm_adjust
+from dashboard.data import (
+    baseline_comparison_table,
+    p_value_style,
+    two_run_comparison_table,
+)
+from dashboard.statistics import compare_paired_scores, holm_adjust
 
 
 def test_paired_comparison_aligns_by_task_id_and_counts_unresolved() -> None:
@@ -106,42 +110,74 @@ def test_holm_adjustment_is_monotonic_in_sorted_order() -> None:
     assert adjusted[3] is None
 
 
-def test_pairwise_display_table_uses_third_minus_second_difference() -> None:
-    result = PairwiseResult(
-        left_run="run-a",
-        right_run="run-b",
-        scope="AIME",
-        weighting="task",
-        paired_tasks=30,
-        unresolved_tasks=0,
-        left_accuracy=0.7,
-        right_accuracy=0.8,
-        accuracy_delta=-0.1,
-        ci_low=-0.2,
-        ci_high=0,
-        left_wins=1,
-        right_wins=4,
-        ties=25,
-        p_value=0.03,
-        adjusted_p_value=0.04,
+def _comparison_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "benchmark_name": "AIME",
+                "left_run": "run-a",
+                "right_run": "run-b",
+                "left_avg_score": 0.7,
+                "right_avg_score": 0.8,
+                "diff": 0.1,
+                "p_value": 0.03,
+                "adjusted_p_value": 0.04,
+            },
+            {
+                "benchmark_name": "AIME",
+                "left_run": "run-a",
+                "right_run": "run-c",
+                "left_avg_score": 0.7,
+                "right_avg_score": 0.6,
+                "diff": -0.1,
+                "p_value": 0.01,
+                "adjusted_p_value": 0.02,
+            },
+        ]
     )
 
-    table = pairwise_display_tables([result])[("run-a", "run-b")]
+
+def test_two_run_table_uses_right_minus_left_difference() -> None:
+    table = two_run_comparison_table(_comparison_frame(), "run-a", "run-b")
 
     assert list(table.columns) == [
         "Benchmark",
         "run-a",
         "run-b",
-        "Diff (run-b − run-a)",
+        "Diff",
         "p-value",
     ]
     assert table.iloc[0].to_dict() == {
         "Benchmark": "AIME",
         "run-a": pytest.approx(70),
         "run-b": pytest.approx(80),
-        "Diff (run-b − run-a)": pytest.approx(10),
+        "Diff": pytest.approx(10),
         "p-value": pytest.approx(0.04),
     }
+
+
+def test_two_run_table_reorients_canonical_stored_pair() -> None:
+    table = two_run_comparison_table(_comparison_frame(), "run-b", "run-a")
+
+    assert table.iloc[0]["run-b"] == pytest.approx(80)
+    assert table.iloc[0]["run-a"] == pytest.approx(70)
+    assert table.iloc[0]["Diff"] == pytest.approx(-10)
+
+
+def test_baseline_table_contains_score_then_differences() -> None:
+    table, p_values = baseline_comparison_table(
+        _comparison_frame(), "run-a", ["run-b", "run-c"]
+    )
+
+    assert list(table.columns) == ["Benchmark", "run-a", "run-b", "run-c"]
+    assert table.iloc[0].to_dict() == {
+        "Benchmark": "AIME",
+        "run-a": pytest.approx(70),
+        "run-b": pytest.approx(10),
+        "run-c": pytest.approx(-10),
+    }
+    assert p_values.iloc[0]["run-b"] == pytest.approx(0.04)
+    assert p_values.iloc[0]["run-c"] == pytest.approx(0.02)
 
 
 def test_p_value_coloring_uses_significance_strength_and_direction() -> None:
@@ -151,27 +187,3 @@ def test_p_value_coloring_uses_significance_strength_and_direction() -> None:
     assert "#fde2e2" in p_value_style(0.03, -5)
     assert p_value_style(0.05, 5) == ""
     assert p_value_style(0.001, 0) == ""
-
-
-def test_pairwise_results_contains_benchmarks_without_all_rows() -> None:
-    evaluations = pd.DataFrame(
-        [
-            {
-                "run_id": run_id,
-                "benchmark_name": benchmark,
-                "task_id": "1",
-                "score": score,
-            }
-            for run_id, score in (("run-a", True), ("run-b", False))
-            for benchmark in ("AIME", "HMMT")
-        ]
-    )
-
-    results = pairwise_results(
-        evaluations,
-        ["run-a", "run-b"],
-        ["AIME", "HMMT"],
-        n_resamples=10,
-    )
-
-    assert [result.scope for result in results] == ["AIME", "HMMT"]

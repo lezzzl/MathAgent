@@ -1,4 +1,4 @@
-"""Paired statistical comparisons for benchmark correctness outcomes."""
+"""Paired statistical comparisons for precomputed benchmark scores."""
 
 from __future__ import annotations
 
@@ -72,12 +72,12 @@ def _bootstrap_interval(
 def compare_paired_scores(
     left_run: str,
     right_run: str,
-    left: Mapping[ScoreKey, bool | None],
-    right: Mapping[ScoreKey, bool | None],
+    left: Mapping[ScoreKey, float | bool | None],
+    right: Mapping[ScoreKey, float | bool | None],
     *,
     scope: str,
     weighting: str = "task",
-    n_resamples: int = 10_000,
+    n_resamples: int | None = 10_000,
     confidence_level: float = 0.95,
     seed: int = 42,
 ) -> PairwiseResult:
@@ -85,11 +85,13 @@ def compare_paired_scores(
 
     if weighting not in {"task", "benchmark"}:
         raise ValueError("weighting must be 'task' or 'benchmark'")
-    if n_resamples < 1:
+    if n_resamples is not None and n_resamples < 1:
         raise ValueError("n_resamples must be positive")
 
     shared = sorted(set(left) & set(right))
-    eligible = [key for key in shared if left[key] is not None and right[key] is not None]
+    eligible = [
+        key for key in shared if left[key] is not None and right[key] is not None
+    ]
     unresolved = len(shared) - len(eligible)
     if not eligible:
         return PairwiseResult(
@@ -110,8 +112,8 @@ def compare_paired_scores(
             None,
         )
 
-    left_values = np.asarray([bool(left[key]) for key in eligible], dtype=float)
-    right_values = np.asarray([bool(right[key]) for key in eligible], dtype=float)
+    left_values = np.asarray([float(left[key]) for key in eligible], dtype=float)
+    right_values = np.asarray([float(right[key]) for key in eligible], dtype=float)
     differences = left_values - right_values
     groups: dict[str, np.ndarray] = {}
     for benchmark in sorted({key[0] for key in eligible}):
@@ -143,16 +145,19 @@ def compare_paired_scores(
             )
         )
     delta = left_accuracy - right_accuracy
-    ci_low, ci_high = _bootstrap_interval(
-        groups,
-        weighting=weighting,
-        n_resamples=n_resamples,
-        confidence_level=confidence_level,
-        seed=seed,
-    )
+    if n_resamples is None:
+        ci_low, ci_high = None, None
+    else:
+        ci_low, ci_high = _bootstrap_interval(
+            groups,
+            weighting=weighting,
+            n_resamples=n_resamples,
+            confidence_level=confidence_level,
+            seed=seed,
+        )
 
-    left_wins = int(np.sum(differences == 1))
-    right_wins = int(np.sum(differences == -1))
+    left_wins = int(np.sum(differences > 0))
+    right_wins = int(np.sum(differences < 0))
     ties = int(np.sum(differences == 0))
     discordant = left_wins + right_wins
     p_value = (
@@ -183,7 +188,11 @@ def holm_adjust(p_values: Sequence[float | None]) -> list[float | None]:
     """Adjust a family of p-values with Holm's step-down procedure."""
 
     adjusted: list[float | None] = [None] * len(p_values)
-    valid = [(index, float(value)) for index, value in enumerate(p_values) if value is not None]
+    valid = [
+        (index, float(value))
+        for index, value in enumerate(p_values)
+        if value is not None
+    ]
     valid.sort(key=lambda item: item[1])
     running_max = 0.0
     total = len(valid)

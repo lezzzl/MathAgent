@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from streamlit.testing.v1 import AppTest
+
 from dashboard.artifacts import discover_runs, load_task_records
 
 
@@ -11,8 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def test_current_runs_have_expected_pairable_task_counts() -> None:
     runs = discover_runs(PROJECT_ROOT / "results" / "runs")
-    assert len(runs) == 2
-    run_values = list(runs.values())
+    assert len(runs) >= 2
 
     for benchmark, expected in {
         "AIME26": 30,
@@ -20,11 +21,14 @@ def test_current_runs_have_expected_pairable_task_counts() -> None:
         "IMOAnswerBench": 400,
     }.items():
         task_sets = []
-        for run in run_values:
+        for run in runs.values():
+            if benchmark not in run.benchmarks:
+                continue
             records = load_task_records(run.benchmarks[benchmark].path)
             task_sets.append({str(record["task_id"]) for record in records})
-        assert len(task_sets[0]) == expected
-        assert task_sets[0] == task_sets[1]
+        assert len(task_sets) >= 2
+        assert all(len(task_set) == expected for task_set in task_sets)
+        assert all(task_set == task_sets[0] for task_set in task_sets[1:])
 
 
 def test_dashboard_does_not_import_repository_application_code() -> None:
@@ -43,3 +47,13 @@ def test_dashboard_does_not_import_repository_application_code() -> None:
             if roots & forbidden:
                 violations.append(f"{path.name}:{node.lineno}")
     assert not violations
+
+
+def test_dashboard_has_one_incremental_update_button() -> None:
+    app = AppTest.from_file(str(PROJECT_ROOT / "src" / "dashboard" / "app.py")).run(
+        timeout=20
+    )
+
+    assert not app.exception
+    assert [button.label for button in app.button] == ["Update comparison table"]
+    assert all(selectbox.label != "Pre-scored run" for selectbox in app.selectbox)
