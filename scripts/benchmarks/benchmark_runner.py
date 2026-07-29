@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from mathagent.agent.graph import (
     ModelConfig,
+    NodeGeneration,
     create_code_agent_graph,
     create_solver_graph,
 )
@@ -62,6 +63,14 @@ class TaskOutcome:
 
     record: dict[str, Any]
     error_category: str | None
+
+
+@dataclass(frozen=True)
+class GraphBuild:
+    """Хранит скомпилированный граф и параметры его активных LLM-нод"""
+
+    graph: Any
+    node_generation: NodeGeneration
 
 
 def parse_benchmark_args(
@@ -209,6 +218,7 @@ def create_manifest_config(
     args: argparse.Namespace,
     prompt_path: Path,
     prompt_version: str,
+    node_generation: NodeGeneration,
 ) -> dict[str, Any]:
     """Формирует конфигурацию эксперимента, которая будет сохранена в manifest.
 
@@ -232,6 +242,7 @@ def create_manifest_config(
             "seed": args.seed,
             "max_tokens": args.max_tokens,
         },
+        "node_generation": node_generation,
         "runtime": {
             "concurrency": args.concurrency,
             "timeout": args.timeout,
@@ -260,7 +271,7 @@ def create_manifest_config(
 def create_graph(
     args: argparse.Namespace,
     prompt_path: Path,
-) -> Any:
+) -> GraphBuild:
     """Собирает выбранный граф с параметрами текущего запуска."""
     model_config = ModelConfig(
         name=args.model,
@@ -278,15 +289,23 @@ def create_graph(
         timeout=args.timeout,
         max_retries=args.max_retries,
     )
+    node_generation: NodeGeneration = {}
     if args.pipeline == "solver":
-        return create_solver_graph(model_config, prompt_path)
+        graph = create_solver_graph(
+            model_config,
+            prompt_path,
+            node_generation=node_generation,
+        )
+        return GraphBuild(graph, node_generation)
     if args.pipeline == "code_agent":
-        return create_code_agent_graph(
+        graph = create_code_agent_graph(
             model_config,
             prompt_path,
             max_repairs=args.max_repairs,
             execution_timeout=args.execution_timeout,
+            node_generation=node_generation,
         )
+        return GraphBuild(graph, node_generation)
     raise ValueError(f"Unknown pipeline: {args.pipeline}")
 
 
@@ -647,6 +666,9 @@ def _run_benchmark(
         dataset = dataset.select(range(min(args.limit, len(dataset))))
     items = [dict(item) for item in dataset]
 
+    # Собираем граф до manifest чтобы сохранить параметры его активных LLM-нод
+    graph_build = create_graph(args, prompt_path)
+
     # Создаём новый manifest или проверяем совместимость параметров при resume
     manifest_path = get_manifest_path(run_id)
     manifest_config = create_manifest_config(
@@ -654,6 +676,7 @@ def _run_benchmark(
         args,
         prompt_path,
         prompt_version,
+        graph_build.node_generation,
     )
     manifest = ensure_manifest(
         manifest_path,
@@ -692,10 +715,9 @@ def _run_benchmark(
     for task_id in existing_records:
         logger.info("resume_skipped benchmark=%s task_id=%s", config.name, task_id)
 
-    # Собираем solver-граф и передаём задачи диспетчеру параллельных запросов
-    graph = create_graph(args, prompt_path)
+    # Передаём скомпилированный граф диспетчеру параллельных запросов
     status, records, wall_time = run_concurrent_tasks(
-        graph=graph,
+        graph=graph_build.graph,
         config=config,
         items=items,
         args=args,
