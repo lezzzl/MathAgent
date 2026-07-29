@@ -11,6 +11,10 @@ from typing import Mapping
 
 from dashboard.artifacts import PROJECT_ROOT, RunArtifact, load_task_records
 
+KEDRO_PYTHON_VERSION_WARNING_FILTER = (
+    "default:Kedro is not yet fully compatible"
+)
+
 
 @dataclass(frozen=True)
 class ScoringFailure:
@@ -75,6 +79,8 @@ def score_runs(
             result = subprocess.run(
                 [
                     sys.executable,
+                    "-W",
+                    KEDRO_PYTHON_VERSION_WARNING_FILTER,
                     str(script),
                     "--run-id",
                     run_id,

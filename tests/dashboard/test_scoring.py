@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from dashboard.artifacts import PROJECT_ROOT, RunArtifact, load_run
-from dashboard.scoring import score_runs
+from dashboard.scoring import KEDRO_PYTHON_VERSION_WARNING_FILTER, score_runs
 
 
 def _write_run(
@@ -68,6 +68,8 @@ def test_score_runs_evaluates_only_runs_with_missing_scores(
         (
             [
                 sys.executable,
+                "-W",
+                KEDRO_PYTHON_VERSION_WARNING_FILTER,
                 str(PROJECT_ROOT / "scripts" / "evaluate_experiment.py"),
                 "--run-id",
                 "run-b",
