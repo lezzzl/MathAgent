@@ -199,12 +199,65 @@ CHAT_RETRIES = int(os.getenv("CHAT_RETRIES", "1"))
 CHAT_RETRY_BACKOFF = float(os.getenv("CHAT_RETRY_BACKOFF", "5"))
 
 
+# ---------------------------------------------------------------------------
+# Инструмент python_exec поверх «сырого» OpenAI-API
+# ---------------------------------------------------------------------------
+# Модуль намеренно не тянет langchain (в отличие от 9B-пайплайна), поэтому цикл
+# вызова инструментов реализован напрямую на /chat/completions: описываем
+# функцию в поле tools, читаем tool_calls из ответа, исполняем и возвращаем
+# результат сообщением роли "tool".
+#
+# ВАЖНО: сервер должен быть поднят с --enable-auto-tool-choice
+# --tool-call-parser hermes, иначе модель напишет вызов текстом и он не
+# распознается. На такой случай ниже есть спасательный разбор из текста.
+TOOL_SCHEMA = [{
+    "type": "function",
+    "function": {
+        "name": "python_exec",
+        "description": (
+            "Execute Python for exact mathematics and print the result. Preloaded: "
+            "sympy (solve, Eq, Rational, symbols, factorint, isprime, divisors, "
+            "binomial, simplify, expand, factor, Matrix, primerange), numpy as np, "
+            "itertools, math, Fraction. Sympy names shadow math, so sqrt(8) stays "
+            "exact. Write multi-line code and print() what you need. Prefer exact "
+            "types (Rational, sqrt) over floats. Execution is capped at 10 seconds, "
+            "so derive a formula or narrow the range instead of brute-forcing."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Python code to execute."}
+            },
+            "required": ["code"],
+        },
+    },
+}]
+
+# Потолки на один вызов роли: сколько раз возвращаемся к модели после
+# инструмента и сколько исполнений разрешено суммарно. Без них модель на
+# трудной задаче уходит в бесконечный перебор вслепую.
+MAX_TOOL_HOPS = int(os.getenv("MAX_TOOL_HOPS", "5"))
+MAX_TOOL_CALLS = int(os.getenv("MAX_TOOL_CALLS", "8"))
+
+
+def _run_tool(name: str, args: Dict[str, Any]) -> str:
+    """Исполняет инструмент и возвращает текст результата для модели."""
+    if name != "python_exec":
+        return f"ERROR: unknown tool {name!r}."
+    from tools import python_exec  # ленивый импорт: песочница поднимается не всегда
+    try:
+        return python_exec.func(args.get("code", ""))
+    except Exception as exc:  # noqa: BLE001 — ошибка инструмента не валит шаг
+        return f"ERROR: tool raised {type(exc).__name__}: {exc}"
+
+
 class ChatResult(NamedTuple):
     content: str
     reasoning: str
     tokens: int
     finish_reason: Optional[str]
     error: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
 
     @property
     def text(self) -> str:
@@ -219,7 +272,7 @@ class ChatResult(NamedTuple):
 
 def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=False,
           enable_thinking=None, *, stage="chat", depth=None, branch=None,
-          record_extra=None) -> ChatResult:
+          record_extra=None, tools=None, tool_choice=None) -> ChatResult:
     """Один вызов модели. Всё, что здесь происходит, попадает в траекторию:
     промпт, сырой ответ, размышления, finish_reason, токены и время."""
     url = f"{BASE_URL}/chat/completions"
@@ -240,6 +293,10 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
         payload["response_format"] = {"type": "json_object"}
     if enable_thinking is not None:
         payload["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+    if tools:
+        payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
 
     system_text = next((m["content"] for m in messages if m.get("role") == "system"), "")
     user_text = next((m["content"] for m in messages if m.get("role") == "user"), "")
@@ -281,7 +338,9 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
             message = choice.get("message") or {}
             content = message.get("content", "") or ""
             reasoning = message.get("reasoning_content", "") or message.get("reasoning", "") or ""
-            if not content and not reasoning:
+            # Ход, состоящий только из tool_calls, законно приходит с пустым
+            # content — это не сбой, и предупреждать о нём не нужно.
+            if not content and not reasoning and not message.get("tool_calls"):
                 print(f"[WARN] Empty content and reasoning in response: {data}")
 
             usage = data.get("usage", {}) or {}
@@ -292,7 +351,9 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
             if finish_reason == "length":
                 print(f"      ⚠️  [TRUNCATED] {stage}: finish_reason=length при лимите "
                       f"{num_predict} — ответ оборван{' (и пуст)' if not content.strip() else ''}.")
-            return _emit(ChatResult(content, reasoning, tokens_used, finish_reason),
+            calls = message.get("tool_calls") or None
+            return _emit(ChatResult(content, reasoning, tokens_used, finish_reason,
+                                    None, calls),
                          time.perf_counter() - started, usage)
 
         except requests.exceptions.RequestException as e:
@@ -307,6 +368,86 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
                 print(f"Response content: {response.text}")
 
     return _emit(ChatResult("", "", 0, None, last_error), time.perf_counter() - started)
+
+
+_TEXT_TOOL_CALL_RE = re.compile(r"<tool_call>|<\|tool_call\|>|python_exec\s*\(", re.IGNORECASE)
+
+
+def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_thinking,
+                     stage, depth=None, branch=None,
+                     max_hops=None, max_calls=None) -> Tuple[ChatResult, int, int]:
+    """Диалог с моделью, в котором она может вызывать python_exec.
+
+    Возвращает (последний ответ, суммарные токены, число исполнений инструмента).
+    На последнем витке инструменты отключаются (tool_choice="none"), иначе модель
+    может закончить ход вызовом и не выдать сам шаг.
+    """
+    max_hops = MAX_TOOL_HOPS if max_hops is None else max_hops
+    max_calls = MAX_TOOL_CALLS if max_calls is None else max_calls
+    convo = list(messages)
+    total_tokens = 0
+    n_calls = 0
+    result = None
+
+    for hop in range(max_hops):
+        last_hop = hop == max_hops - 1 or n_calls >= max_calls
+        result = _chat(
+            convo, temperature=temperature, num_predict=num_predict,
+            enable_thinking=enable_thinking, stage=stage, depth=depth, branch=branch,
+            tools=TOOL_SCHEMA, tool_choice="none" if last_hop else None,
+            record_extra={"hop": hop, "tool_calls_so_far": n_calls},
+        )
+        total_tokens += result.tokens
+        if result.error:
+            break
+
+        calls = result.tool_calls
+        if not calls:
+            # Сервер мог не распознать вызов и отдать его текстом — тогда модель
+            # «зависает» в ожидании результата, которого никто не даст.
+            if not last_hop and _TEXT_TOOL_CALL_RE.search(result.content or ""):
+                print("      ⚠️  [TOOL PARSING BROKEN] Модель написала вызов инструмента "
+                      "текстом, сервер его не распознал. Проверьте, что vLLM запущен с "
+                      "--enable-auto-tool-choice --tool-call-parser hermes.")
+            break
+
+        # Ответ ассистента с вызовами обязан попасть в историю до результатов.
+        convo.append({
+            "role": "assistant",
+            "content": result.content or "",
+            "tool_calls": calls,
+        })
+        for call in calls:
+            if n_calls >= max_calls:
+                convo.append({
+                    "role": "tool", "tool_call_id": call.get("id", ""),
+                    "content": "ERROR: tool call budget for this step is exhausted. "
+                               "Answer with what you already have.",
+                })
+                continue
+            fn = call.get("function") or {}
+            name = fn.get("name", "")
+            raw_args = fn.get("arguments") or "{}"
+            try:
+                args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+            except Exception:
+                args = {"code": str(raw_args)}
+            out = _run_tool(name, args)
+            n_calls += 1
+            code_preview = " ".join(str(args.get("code", "")).split())[:120]
+            print(f"      [tool_call #{n_calls}] {name}: {code_preview}")
+            print(f"      [tool_result] {' '.join(out.split())[:160]}")
+            RECORDER.record(
+                stage="tool", depth=depth, branch=branch,
+                user=str(args.get("code", "")), content=out, tool_name=name, hop=hop,
+            )
+            convo.append({
+                "role": "tool", "tool_call_id": call.get("id", ""), "content": out,
+            })
+
+    if result is None:
+        result = ChatResult("", "", 0, None, "no response")
+    return result, total_tokens, n_calls
 
 
 # ---------------------------------------------------------------------------
@@ -738,6 +879,11 @@ class AgentState(TypedDict):
     # часть шагов и оценок потеряна по вине инфраструктуры, а не модели.
     api_errors: Annotated[int, operator.add]
 
+    # Разрешено ли генератору звать python_exec (флаг --no-tools выключает).
+    use_tools: bool
+    # Сколько раз инструмент реально исполнялся за задачу.
+    tool_calls: Annotated[int, operator.add]
+
     # Минимум уже принятых шагов, прежде чем финальный ответ будет засчитан.
     # 1 = запрещаем ответ на глубине 0 (ровно то, что декларируют промпты).
     # 0 = прежнее поведение: ответ принимается сразу, пайплайн вырождается в CoT.
@@ -761,8 +907,9 @@ class AgentState(TypedDict):
 # 6. Узлы графа
 # ---------------------------------------------------------------------------
 def _generate_one(role: Role, context: str, temp: float,
-                  depth: Optional[int] = None, branch: Optional[int] = None
-                  ) -> Tuple[str, bool, int, bool]:
+                  depth: Optional[int] = None, branch: Optional[int] = None,
+                  use_tools: bool = False
+                  ) -> Tuple[str, bool, int, bool, int]:
     """Один вызов генератора с откатом при обрыве размышлений.
 
     У thinking-моделей размышления идут в тот же num_predict, что и ответ. Если
@@ -770,12 +917,19 @@ def _generate_one(role: Role, context: str, temp: float,
     шаг теряется целиком. Повторяем один раз с выключенными размышлениями:
     лучше шаг без ризонинга, чем пустой шаг.
 
-    Возвращает (raw_content, overran, total_tokens, api_failed).
+    Возвращает (raw_content, overran, total_tokens, api_failed, tool_calls).
     """
     messages = [
         {"role": "system", "content": role.system_prompt},
         {"role": "user", "content": role.user_template.format(context=context)},
     ]
+
+    if use_tools:
+        result, tokens, n_calls = _chat_with_tools(
+            messages, temperature=temp, num_predict=role.num_predict,
+            enable_thinking=role.enable_thinking, stage="generate",
+            depth=depth, branch=branch)
+        return result.text, False, tokens, bool(result.error), n_calls
 
     result = _chat(messages, temperature=temp, num_predict=role.num_predict,
                    json_format=role.json_format, enable_thinking=role.enable_thinking,
@@ -790,8 +944,8 @@ def _generate_one(role: Role, context: str, temp: float,
                       stage="generate", depth=depth, branch=branch,
                       record_extra={"thinking_retry": True})
         # Учитываем и токены оборванной первой попытки, и токены повтора.
-        return retry.text, True, result.tokens + retry.tokens, bool(retry.error)
-    return result.text, False, result.tokens, bool(result.error)
+        return retry.text, True, result.tokens + retry.tokens, bool(retry.error), 0
+    return result.text, False, result.tokens, bool(result.error), 0
 
 
 def generate_step(state: AgentState):
@@ -806,7 +960,9 @@ def generate_step(state: AgentState):
     total_tokens = 0
     overruns = 0
     api_errors = 0
+    tool_calls = 0
     context = _build_context(state['problem'], state.get('steps', []))
+    use_tools = bool(state.get("use_tools"))
 
     base_temp = state.get('base_temperature')
     if base_temp is None:
@@ -815,19 +971,22 @@ def generate_step(state: AgentState):
     for i in range(k):
         attempt = state.get('step_recovery_attempts', 0)
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        raw_text, overran, tks, api_failed = _generate_one(
-            role, context, temp, depth=current_depth, branch=i + 1)
+        raw_text, overran, tks, api_failed, n_calls = _generate_one(
+            role, context, temp, depth=current_depth, branch=i + 1, use_tools=use_tools)
         overruns += overran
         api_errors += api_failed
+        tool_calls += n_calls
         total_tokens += tks
         raw_candidates.append(raw_text)
         preview = re.sub(r"\s+", " ", raw_text).strip()[:200]
         fail_note = " ⚠️ [СЕТЕВОЙ СБОЙ, ветка потеряна]" if api_failed else ""
-        print(f"    - Branch {i+1} raw generated (temp: {temp:.2f}, tokens: {tks}){fail_note}")
+        tool_note = f", tool-вызовов: {n_calls}" if n_calls else ""
+        print(f"    - Branch {i+1} raw generated (temp: {temp:.2f}, tokens: {tks}{tool_note}){fail_note}")
         print(f"      Raw preview: {preview}{'...' if len(raw_text) > 200 else ''}")
 
     return {"candidate_raw": raw_candidates, "tokens_used": total_tokens,
-            "thinking_overruns": overruns, "api_errors": api_errors}
+            "thinking_overruns": overruns, "api_errors": api_errors,
+            "tool_calls": tool_calls}
 
 
 def segment_step(state: AgentState):
@@ -1251,6 +1410,8 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "segmenter_calls": 0,
         "segmenter_unreliable": 0,
         "api_errors": 0,
+        "use_tools": False,
+        "tool_calls": 0,
         "min_steps_before_answer": 1,
         "premature_answers": 0,
         "answer_depth": None,
@@ -1273,6 +1434,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
             "max_stuck_steps": args.max_stuck_steps,
             "max_unreliable_evals": args.max_unreliable_evals,
             "min_steps_before_answer": getattr(args, "min_steps_before_answer", 1),
+            "use_tools": not getattr(args, "no_tools", False),
         })
     state.update(overrides)
     return state
