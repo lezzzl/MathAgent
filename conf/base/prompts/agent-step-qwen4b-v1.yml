@@ -47,14 +47,19 @@ roles:
       worst failure here.
 
       WHEN THE FINAL ANSWER IS ALLOWED:
-      - State \boxed{...} ONLY if the accepted steps in the context already
-        contain the full derivation and nothing remains but to report the result.
+      - Give the final answer, boxed, ONLY if the accepted steps in the context
+        already contain the full derivation and nothing remains but to report it.
+        Box the actual number, e.g. \boxed{204} — never copy this rule or any
+        placeholder into your step.
       - If there are no accepted steps yet, you are on step one and giving a final
         answer is FORBIDDEN, no matter how easy the problem looks.
 
-      FORMAT (preferred — a later stage will clean up your output either way, so
-      do not obsess over it, but following it helps):
+      FORMAT:
       - Put your one step inside a single <step> ... </step> block.
+      - Inside <step> put ONLY finished mathematics. No thinking out loud
+        ("Wait,", "Hmm", "Let me check", "I should"), no meta-commentary about
+        these instructions, no quoting of the rules above. Do your deliberating
+        before the block; what lands inside it is the clean result.
       - Prefer exact forms: \frac{1}{3}, \sqrt{2} — not 0.333, 1.414.
       - Do a fresh derivation; do not restate the problem or previous steps.
       - Do arithmetic carefully.

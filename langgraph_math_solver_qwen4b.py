@@ -350,12 +350,31 @@ def _extract_step_content(raw: str) -> str:
     return _STEP_ANY_TAG_RE.sub("", step).strip()
 
 
+# Дословные куски системного промпта генератора: модель их копирует в шаг вместе
+# с образцом «\boxed{...}». Такой шаг выглядит валидным (теги на месте, короткий,
+# один \boxed), проскакивал быстрым путём, и extract_answer доставал из него '...'.
+_PROMPT_ECHO_RE = re.compile(
+    r"ONLY if the accepted steps|nothing remains but to report|"
+    r"giving a final answer is FORBIDDEN|Dumping the full solution|"
+    r"a later stage will clean up|WHAT COUNTS AS ONE STEP|"
+    r"WHEN THE FINAL ANSWER IS ALLOWED|Prefer exact forms",
+    re.IGNORECASE,
+)
+# Следы незавершённых размышлений: модель рассуждает вслух прямо внутри <step>.
+_THINKING_NOISE_RE = re.compile(
+    r"\bWait,|\bHmm\b|\bOkay,|Let me (?:check|verify|think|try)|"
+    r"I should check|I need to justify|\bActually,",
+    re.IGNORECASE,
+)
+
+
 def _has_clean_single_step(raw: str) -> bool:
     """Можно ли доверять быстрому пути без вызова сегментатора.
 
-    True, если в сыром ответе есть закрытый <step>, извлечённое содержимое
-    умещается в MAX_STEP_CHARS и содержит не больше одного \\boxed{}. Иначе —
-    отдаём на сегментацию (тегов нет, или в один блок втиснули всё решение).
+    Тегов и длины мало: на прогоне aime24 через быстрый путь прошли 16 шагов с
+    размышлениями вслух и 9 с дословными кусками промпта — их обязан чистить
+    сегментатор, а он не вызывался. Поэтому дополнительно требуем, чтобы в шаге
+    не было эха промпта, следов размышлений и заглушки \\boxed{...}.
     """
     if not _STEP_TAG_RE.search(raw or ""):
         return False
@@ -363,6 +382,8 @@ def _has_clean_single_step(raw: str) -> bool:
     if not step or len(step) > MAX_STEP_CHARS:
         return False
     if len(list(iter_boxed(step))) > 1:
+        return False
+    if _PROMPT_ECHO_RE.search(step) or _THINKING_NOISE_RE.search(step):
         return False
     return True
 
