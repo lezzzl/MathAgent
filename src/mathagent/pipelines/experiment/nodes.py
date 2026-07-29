@@ -353,7 +353,7 @@ def update_comparison_table(
     config: Mapping[str, Any],
     evaluated_run: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Incrementally add newly scored runs to the comparison table."""
+    """Add missing comparisons between all discovered pre-scored runs."""
 
     # The chained input provides ordering; filesystem discovery is authoritative.
     del evaluated_run
@@ -369,7 +369,7 @@ def update_comparison_table(
         seed=int(comparison_config.get("seed", 42)),
     )
     LOGGER.info(
-        "Comparison table updated: %s (new runs=%d, added rows=%d)",
+        "Comparison table updated: %s (newly represented runs=%d, added rows=%d)",
         output,
         len(update.added_runs),
         update.comparison_rows_added,

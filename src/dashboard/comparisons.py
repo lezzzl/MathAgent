@@ -46,7 +46,7 @@ _WRITE_LOCK = threading.RLock()
 
 @dataclass(frozen=True)
 class IncrementalUpdate:
-    """Result of adding runs not yet represented in the comparison table."""
+    """Result of adding comparisons not yet represented in the table."""
 
     table: pd.DataFrame
     added_runs: tuple[str, ...]
@@ -222,6 +222,7 @@ def _comparison_rows_for_pair(
         dict[str, dict[tuple[str, str], float | None]], dict[str, str]
     ],
     *,
+    benchmark_names: set[str] | None = None,
     n_resamples: int | None,
     seed: int,
 ) -> list[dict[str, Any]]:
@@ -230,7 +231,10 @@ def _comparison_rows_for_pair(
     left_scores, left_fingerprints = left_data
     right_scores, right_fingerprints = right_data
     rows: list[dict[str, Any]] = []
-    for benchmark_name in sorted(set(left_scores) & set(right_scores)):
+    shared_benchmarks = set(left_scores) & set(right_scores)
+    if benchmark_names is not None:
+        shared_benchmarks &= benchmark_names
+    for benchmark_name in sorted(shared_benchmarks):
         row = _comparison_row(
             left_run,
             right_run,
@@ -344,14 +348,16 @@ def add_new_runs_to_comparison_table(
     n_resamples: int | None = None,
     seed: int = 42,
 ) -> IncrementalUpdate:
-    """Compare only pairs involving runs not yet present in the table.
+    """Add every missing comparison between discovered pre-scored runs.
 
-    Existing pair statistics are preserved. New runs are compared with existing
-    represented runs and with one another, which fills every newly introduced
-    pair without recalculating old pairs. Holm-adjusted p-values are refreshed
-    because the per-benchmark multiple-testing family grows.
+    Existing pair statistics are preserved. Every eligible run pair is checked
+    for missing shared-benchmark rows, including pairs whose runs are already
+    represented elsewhere in the table. Holm-adjusted p-values are refreshed
+    when rows are added because the per-benchmark multiple-testing family grows.
+    A missing output path is persisted even when there are no compatible pairs.
     """
 
+    table_existed = path.is_file()
     current = load_comparison_table(path)
     represented = (
         set(current["left_run"].astype(str))
@@ -360,28 +366,39 @@ def add_new_runs_to_comparison_table(
         else set()
     )
     new_run_ids = sorted(set(runs) - represented)
-    if not new_run_ids:
-        return IncrementalUpdate(current, (), (), 0)
 
-    relevant_run_ids = sorted((represented & set(runs)) | set(new_run_ids))
     score_cache: dict[
         str,
         tuple[dict[str, dict[tuple[str, str], float | None]], dict[str, str]],
     ] = {}
     skipped: list[str] = []
-    for run_id in relevant_run_ids:
+    for run_id in sorted(runs):
         run_data = load_run_scores(runs[run_id])
         if not _has_resolved_score(run_data[0]):
-            if run_id in new_run_ids:
-                skipped.append(run_id)
+            skipped.append(run_id)
             continue
         score_cache[run_id] = run_data
 
     added_run_ids = sorted(set(new_run_ids) & set(score_cache))
-    added_run_id_set = set(added_run_ids)
+    existing_keys = set(
+        zip(
+            current["benchmark_name"].astype(str),
+            current["left_run"].astype(str),
+            current["right_run"].astype(str),
+            strict=True,
+        )
+    )
     new_rows: list[dict[str, Any]] = []
     for left_run, right_run in combinations(sorted(score_cache), 2):
-        if not ({left_run, right_run} & added_run_id_set):
+        shared_benchmarks = (
+            set(score_cache[left_run][0]) & set(score_cache[right_run][0])
+        )
+        missing_benchmarks = {
+            benchmark_name
+            for benchmark_name in shared_benchmarks
+            if (benchmark_name, left_run, right_run) not in existing_keys
+        }
+        if not missing_benchmarks:
             continue
         new_rows.extend(
             _comparison_rows_for_pair(
@@ -389,12 +406,16 @@ def add_new_runs_to_comparison_table(
                 right_run,
                 score_cache[left_run],
                 score_cache[right_run],
+                benchmark_names=missing_benchmarks,
                 n_resamples=n_resamples,
                 seed=seed,
             )
         )
 
     if not new_rows:
+        if not table_existed:
+            write_comparison_table(path, current)
+            current = load_comparison_table(path)
         return IncrementalUpdate(
             current,
             tuple(added_run_ids),

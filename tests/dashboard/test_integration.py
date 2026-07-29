@@ -57,3 +57,39 @@ def test_dashboard_has_one_incremental_update_button() -> None:
     assert not app.exception
     assert [button.label for button in app.button] == ["Update comparison table"]
     assert all(selectbox.label != "Pre-scored run" for selectbox in app.selectbox)
+
+
+def test_dashboard_uses_storage_path_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("MATHAGENT_RESULTS_DIR", raising=False)
+    monkeypatch.delenv("MATHAGENT_COMPARISONS_PATH", raising=False)
+
+    app = AppTest.from_file(str(PROJECT_ROOT / "src" / "dashboard" / "app.py")).run(
+        timeout=20
+    )
+
+    assert not app.exception
+    fields = {field.label: field.value for field in app.text_input}
+    assert fields == {
+        "Runs directory": "/mnt/storage-1/MathAgent/results/runs",
+        "Comparison table": (
+            "/mnt/storage-1/MathAgent/results/comparison/table.parquet"
+        ),
+    }
+
+
+def test_dashboard_path_environment_overrides(monkeypatch) -> None:
+    runs_path = "/custom/results/runs"
+    comparisons_path = "/custom/results/comparisons.parquet"
+    monkeypatch.setenv("MATHAGENT_RESULTS_DIR", runs_path)
+    monkeypatch.setenv("MATHAGENT_COMPARISONS_PATH", comparisons_path)
+
+    app = AppTest.from_file(str(PROJECT_ROOT / "src" / "dashboard" / "app.py")).run(
+        timeout=20
+    )
+
+    assert not app.exception
+    fields = {field.label: field.value for field in app.text_input}
+    assert fields == {
+        "Runs directory": runs_path,
+        "Comparison table": comparisons_path,
+    }

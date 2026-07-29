@@ -149,16 +149,19 @@ uv run streamlit run src/dashboard/app.py
 ```
 
 The comparison command writes `results/comparisons.parquet`. On later runs it
-detects run IDs already represented in that table and computes only pairs that
-involve newly discovered scored runs. This includes new-versus-existing and
-new-versus-new pairs; existing pair statistics are not recomputed.
+checks every discovered pre-scored run pair and adds any missing shared-benchmark
+rows. Existing pair statistics are not recomputed; Holm-adjusted p-values are
+refreshed when the multiple-testing family grows.
 
-Use the sidebar's **Update comparison table** button to discover newly added
-pre-scored runs. This incrementally updates `results/comparisons.parquet` with
-average scores and paired p-values without recomputing existing run pairs. The
-two dashboard views compare one run with another or several runs against a
-selected baseline. The app polls the comparison table, so updates made by
-another process appear automatically.
+Use the sidebar's **Update comparison table** button to create the table when
+needed and complete all missing pairwise comparisons between discovered
+pre-scored runs. The Streamlit fields default to
+`/mnt/storage-1/MathAgent/results/runs` and
+`/mnt/storage-1/MathAgent/results/comparison/table.parquet`; the existing
+environment variables still override those UI defaults. The two dashboard views
+compare one run with another or several runs against a selected baseline. The
+app polls the comparison table, so updates made by another process appear
+automatically.
 
 The app uses PyArrow's system allocator and serializes dataframe conversion so
 multiple browser tabs can safely share one Streamlit server on macOS.

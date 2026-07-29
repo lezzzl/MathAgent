@@ -15,9 +15,9 @@ import streamlit as st
 
 from dashboard.artifacts import (
     ArtifactError,
+    COMPARISONS_PATH_ENV,
+    RUNS_DIR_ENV,
     discover_runs,
-    resolve_comparisons_path,
-    resolve_runs_dir,
 )
 from dashboard.comparisons import (
     add_new_runs_to_comparison_table,
@@ -37,6 +37,17 @@ from dashboard.runtime import (
 
 use_system_arrow_memory_pool()
 st.set_page_config(page_title="MathAgent run comparison", layout="wide")
+
+STREAMLIT_DEFAULT_RUNS_DIR = Path("/mnt/storage-1/MathAgent/results/runs")
+STREAMLIT_DEFAULT_COMPARISONS_PATH = Path(
+    "/mnt/storage-1/MathAgent/results/comparison/table.parquet"
+)
+
+
+def _streamlit_path_default(environment_variable: str, fallback: Path) -> str:
+    """Return an environment override or the Streamlit-specific path default."""
+
+    return os.getenv(environment_variable, str(fallback))
 
 
 def _directory_signature(path: Path, patterns: tuple[str, ...]) -> tuple[Any, ...]:
@@ -193,14 +204,23 @@ def main() -> None:
     with st.sidebar:
         st.header("Comparison data")
         runs_path = Path(
-            st.text_input("Runs directory", value=str(resolve_runs_dir()))
+            st.text_input(
+                "Runs directory",
+                value=_streamlit_path_default(
+                    RUNS_DIR_ENV, STREAMLIT_DEFAULT_RUNS_DIR
+                ),
+            )
         ).expanduser().resolve()
         update_comparisons = st.button(
             "Update comparison table", type="primary"
         )
         comparisons_path = Path(
             st.text_input(
-                "Comparison table", value=str(resolve_comparisons_path())
+                "Comparison table",
+                value=_streamlit_path_default(
+                    COMPARISONS_PATH_ENV,
+                    STREAMLIT_DEFAULT_COMPARISONS_PATH,
+                ),
             )
         ).expanduser().resolve()
 
@@ -217,24 +237,29 @@ def main() -> None:
         st.stop()
 
     if update_comparisons:
+        table_existed = comparisons_path.is_file()
         try:
-            with st.spinner("Comparing newly discovered scored runs..."):
+            with st.spinner("Completing pairwise comparisons..."):
                 update = add_new_runs_to_comparison_table(runs, comparisons_path)
         except ArtifactError as exc:
             st.sidebar.error(str(exc))
         else:
             if update.comparison_rows_added:
+                action = "Updated" if table_existed else "Created"
                 st.sidebar.success(
-                    f"Added {update.comparison_rows_added} comparison rows for "
-                    f"{len(update.added_runs)} new runs."
+                    f"{action} comparison table with "
+                    f"{update.comparison_rows_added} missing comparison rows."
                 )
-            elif update.added_runs:
+            elif not table_existed:
                 st.sidebar.info(
-                    "New scored runs were found, but they have no compatible "
-                    "run pairs."
+                    "Created an empty comparison table; no compatible scored "
+                    "run pairs were found."
                 )
             else:
-                st.sidebar.info("No new scored runs found.")
+                st.sidebar.info(
+                    "The comparison table already contains all compatible "
+                    "scored run pairs."
+                )
             if update.skipped_runs:
                 st.sidebar.warning(
                     "Skipped unscored runs: " + ", ".join(update.skipped_runs)

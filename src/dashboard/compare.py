@@ -1,4 +1,4 @@
-"""Incrementally add pre-scored runs to the dashboard comparison table."""
+"""Complete missing pre-scored run pairs in the dashboard comparison table."""
 
 from __future__ import annotations
 

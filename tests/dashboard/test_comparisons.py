@@ -12,7 +12,9 @@ from dashboard.comparisons import (
     add_new_runs_to_comparison_table,
     add_run_to_comparison_table,
     load_comparison_table,
+    write_comparison_table,
 )
+from dashboard.statistics import holm_adjust
 
 
 def _write_run(
@@ -42,6 +44,38 @@ def _write_run(
                 "benchmarks": {"Bench": {"output": str(output)}},
             }
         ),
+        encoding="utf-8",
+    )
+    return load_run(directory)
+
+
+def _write_multi_benchmark_run(
+    root: Path,
+    run_id: str,
+    scores_by_benchmark: dict[str, list[object]],
+) -> RunArtifact:
+    directory = root / run_id
+    directory.mkdir(parents=True)
+    benchmarks: dict[str, dict[str, str]] = {}
+    for benchmark_name, scores in scores_by_benchmark.items():
+        output = directory / f"{benchmark_name.lower()}.jsonl"
+        with output.open("w", encoding="utf-8") as stream:
+            for index, score in enumerate(scores):
+                stream.write(
+                    json.dumps(
+                        {
+                            "run_id": run_id,
+                            "benchmark_name": benchmark_name,
+                            "task_id": str(index),
+                            "solution": "already graded",
+                            "score": score,
+                        }
+                    )
+                    + "\n"
+                )
+        benchmarks[benchmark_name] = {"output": str(output)}
+    (directory / "manifest.json").write_text(
+        json.dumps({"run_id": run_id, "benchmarks": benchmarks}),
         encoding="utf-8",
     )
     return load_run(directory)
@@ -131,7 +165,7 @@ def test_invalid_precomputed_score_is_rejected(tmp_path: Path) -> None:
         )
 
 
-def test_incremental_update_only_computes_pairs_involving_new_runs(
+def test_update_preserves_existing_pairs_when_adding_new_run(
     tmp_path: Path,
 ) -> None:
     runs_root = tmp_path / "runs"
@@ -178,6 +212,115 @@ def test_incremental_update_only_computes_pairs_involving_new_runs(
     unchanged = add_new_runs_to_comparison_table(runs, output)
     assert unchanged.added_runs == ()
     assert unchanged.comparison_rows_added == 0
+
+
+def test_update_creates_all_pairs_when_table_is_missing(tmp_path: Path) -> None:
+    runs_root = tmp_path / "runs"
+    runs = {
+        run.run_id: run
+        for run in (
+            _write_run(runs_root, "run-a", [True, False]),
+            _write_run(runs_root, "run-b", [False, False]),
+            _write_run(runs_root, "run-c", [True, True]),
+        )
+    }
+    output = tmp_path / "comparisons.parquet"
+
+    update = add_new_runs_to_comparison_table(runs, output, n_resamples=10)
+
+    assert output.is_file()
+    assert update.added_runs == ("run-a", "run-b", "run-c")
+    assert update.comparison_rows_added == 3
+    assert {
+        (row.left_run, row.right_run)
+        for row in update.table.itertuples(index=False)
+    } == {("run-a", "run-b"), ("run-a", "run-c"), ("run-b", "run-c")}
+
+
+def test_update_creates_empty_table_and_reports_unscored_runs(
+    tmp_path: Path,
+) -> None:
+    unscored = _write_run(tmp_path / "runs", "run-a", [None, None])
+    output = tmp_path / "comparisons.parquet"
+
+    update = add_new_runs_to_comparison_table(
+        {unscored.run_id: unscored}, output
+    )
+
+    assert output.is_file()
+    assert update.table.empty
+    assert update.added_runs == ()
+    assert update.skipped_runs == ("run-a",)
+    pd.testing.assert_frame_equal(update.table, load_comparison_table(output))
+
+
+def test_update_fills_missing_pair_when_every_run_is_represented(
+    tmp_path: Path,
+) -> None:
+    runs_root = tmp_path / "runs"
+    left = _write_run(runs_root, "run-a", [True, True, False])
+    middle = _write_run(runs_root, "run-b", [False, False, False])
+    right = _write_run(runs_root, "run-c", [True, False, True])
+    runs = {run.run_id: run for run in (left, middle, right)}
+    output = tmp_path / "comparisons.parquet"
+    partial = add_run_to_comparison_table(
+        middle, runs, output, n_resamples=10
+    )
+    partial["adjusted_p_value"] = 0.123
+    write_comparison_table(output, partial)
+    preserved_columns = [
+        column
+        for column in partial.columns
+        if column != "adjusted_p_value"
+    ]
+
+    update = add_new_runs_to_comparison_table(runs, output, n_resamples=10)
+
+    assert update.added_runs == ()
+    assert update.comparison_rows_added == 1
+    assert len(update.table) == 3
+    old_pairs = update.table[
+        (update.table["left_run"] == "run-b")
+        | (update.table["right_run"] == "run-b")
+    ].reset_index(drop=True)
+    pd.testing.assert_frame_equal(
+        old_pairs[preserved_columns],
+        partial[preserved_columns].reset_index(drop=True),
+        check_dtype=False,
+    )
+    assert update.table["adjusted_p_value"].tolist() == pytest.approx(
+        holm_adjust(update.table["p_value"].astype(float).tolist())
+    )
+
+
+def test_update_adds_missing_benchmark_row_for_existing_pair(
+    tmp_path: Path,
+) -> None:
+    runs_root = tmp_path / "runs"
+    left = _write_multi_benchmark_run(
+        runs_root,
+        "run-a",
+        {"BenchA": [True, False], "BenchB": [True, True]},
+    )
+    right = _write_multi_benchmark_run(
+        runs_root,
+        "run-b",
+        {"BenchA": [False, False], "BenchB": [True, False]},
+    )
+    runs = {left.run_id: left, right.run_id: right}
+    output = tmp_path / "comparisons.parquet"
+    complete = add_new_runs_to_comparison_table(runs, output, n_resamples=10)
+    partial = complete.table[
+        complete.table["benchmark_name"] == "BenchA"
+    ].copy()
+    write_comparison_table(output, partial)
+
+    update = add_new_runs_to_comparison_table(runs, output, n_resamples=10)
+
+    assert update.added_runs == ()
+    assert update.comparison_rows_added == 1
+    assert update.table["benchmark_name"].tolist() == ["BenchA", "BenchB"]
+    assert update.table.iloc[0]["updated_at"] == partial.iloc[0]["updated_at"]
 
 
 def test_compare_cli_creates_incremental_table(
