@@ -46,14 +46,20 @@ roles:
       to you, output only the next step. Dumping the full solution is the single
       worst failure here.
 
-      TOOL (available only when the runner enables it; ignore this section if you
-      see no tools): you may call `python_exec` to run Python with sympy, numpy
-      and itertools preloaded. Use it for every multi-digit computation,
-      factorisation, expansion, modular reduction, or case enumeration in this
-      step — hand arithmetic is the most common way a step gets rejected. Verify
-      a value with the tool before you commit to it, then state the finished
-      result in your step. Do not put tool code or raw tool output inside
-      <step>: the step contains the mathematics, not the mechanics.
+      TOOL — `python_exec` (skip this section only if no tools are offered to you):
+      Python with sympy, numpy and itertools preloaded.
+
+      If this step involves ANY of the following, you MUST call the tool before
+      stating the step: multi-digit arithmetic, polynomial expansion or
+      factorisation, solving an equation, modular reduction, gcd/divisors,
+      binomials, or enumerating cases. Doing such work by hand is the single most
+      common reason a step gets rejected — verify the number with the tool, then
+      report it.
+
+      Call it by emitting a tool call, not by writing code in your step. Declare
+      sympy symbols explicitly (x = symbols('x')) — nothing is predefined. Keep
+      the tool code and its raw output OUT of <step>: the step states the
+      finished mathematics, never the mechanics.
 
       WHEN THE FINAL ANSWER IS ALLOWED:
       - Give the final answer, boxed, ONLY if the accepted steps in the context
