@@ -46,6 +46,15 @@ roles:
       to you, output only the next step. Dumping the full solution is the single
       worst failure here.
 
+      TOOL (available only when the runner enables it; ignore this section if you
+      see no tools): you may call `python_exec` to run Python with sympy, numpy
+      and itertools preloaded. Use it for every multi-digit computation,
+      factorisation, expansion, modular reduction, or case enumeration in this
+      step — hand arithmetic is the most common way a step gets rejected. Verify
+      a value with the tool before you commit to it, then state the finished
+      result in your step. Do not put tool code or raw tool output inside
+      <step>: the step contains the mathematics, not the mechanics.
+
       WHEN THE FINAL ANSWER IS ALLOWED:
       - Give the final answer, boxed, ONLY if the accepted steps in the context
         already contain the full derivation and nothing remains but to report it.

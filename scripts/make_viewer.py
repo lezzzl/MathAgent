@@ -107,6 +107,7 @@ input[type=search]{font:inherit;color:inherit;background:var(--panel);
 .tag.segment_result{background:var(--seg)}.tag.evaluate{background:var(--eval)}
 .tag.evaluate_result{background:var(--eval)}.tag.commit{background:var(--commit)}
 .tag.verify{background:var(--verify)}.tag.verify_result{background:var(--verify)}
+.tag.tool{background:var(--muted)}
 .pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .pill.ok{color:var(--ok);border-color:var(--ok)}
 .pill.bad{color:var(--bad);border-color:var(--bad)}
@@ -391,7 +392,7 @@ function renderBranch(b,recs){
 
 const STAGE_RU={generate:"Генератор",segment:"Сегментатор",segment_result:"Шаг после сегментации",
   evaluate:"Оценщик",evaluate_result:"Вердикт оценщика",commit:"Принятый шаг",
-  verify:"Верификатор",verify_result:"Вердикт верификатора"};
+  verify:"Верификатор",verify_result:"Вердикт верификатора",tool:"python_exec"};
 
 function renderRec(r){
   const pills=[];
@@ -419,6 +420,14 @@ function renderRec(r){
     secs.push(`<div class="sec"><div class="lbl" onclick="this.nextElementSibling.classList.toggle('collapsed')">
       ${lbl}${note} ▾</div><pre class="${collapsed?"collapsed":""} ${texOn?"tex":""}">${body}</pre></div>`);
   };
+  if(r.stage==="tool"){
+    add("Код", r.user, false);
+    add("Результат", r.content, false);
+    return `<div class="rec" data-stage="tool">
+      <div class="rec-hd" onclick="this.parentNode.classList.toggle('open')">
+        <span class="tag tool">python_exec</span>${pills.join("")}
+      </div><div class="rec-body">${secs.join("")}</div></div>`;
+  }
   add("system-промпт", r.system, true);
   add("user-промпт", r.user, true);
   add("Размышления (reasoning)", r.reasoning, true);
@@ -522,7 +531,7 @@ def build_html(data: dict, verdict_source: str = "") -> str:
     calls = sum(1 for r in recs if (r.get("tokens") or {}).get("total"))
     wall = sum(t.get("elapsed") or 0 for t in tasks)
 
-    stages = ["generate", "segment", "segment_result", "evaluate",
+    stages = ["generate", "tool", "segment", "segment_result", "evaluate",
               "evaluate_result", "commit", "verify", "verify_result"]
     present = [s for s in stages if any(r.get("stage") == s for r in recs)]
     chips = "".join(f'<span class="chip" data-stage="{s}">{s}</span>' for s in present)
