@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -45,6 +46,10 @@ def _failure_detail(result: subprocess.CompletedProcess[str]) -> str:
     """Extract a concise evaluator error for the Streamlit sidebar."""
 
     output = (result.stderr or result.stdout or "").strip()
+    for line in reversed(output.splitlines()):
+        marker = "MATHAGENT_EVALUATION_ERROR:"
+        if marker in line:
+            return line.split(marker, 1)[1].strip()
     return output.splitlines()[-1] if output else f"exit code {result.returncode}"
 
 
@@ -58,6 +63,9 @@ def score_runs(
     skipped: list[str] = []
     failed: list[ScoringFailure] = []
     script = PROJECT_ROOT / "scripts" / "evaluate_experiment.py"
+    environment = os.environ.copy()
+    environment.setdefault("KEDRO_DISABLE_TELEMETRY", "1")
+    environment.setdefault("NO_COLOR", "1")
 
     for run_id in sorted(runs):
         if not _run_needs_scoring(runs[run_id]):
@@ -78,6 +86,7 @@ def score_runs(
                 capture_output=True,
                 text=True,
                 check=False,
+                env=environment,
             )
         except OSError as exc:
             failed.append(

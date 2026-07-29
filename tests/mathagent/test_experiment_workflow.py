@@ -248,6 +248,22 @@ def test_evaluate_script_supports_score_only_external_runs(
     }
 
 
+def test_evaluate_script_emits_stable_error_marker(
+    monkeypatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        "scripts.evaluate_experiment.bootstrap_project",
+        lambda root: (_ for _ in ()).throw(ValueError("broken config")),
+    )
+
+    result = evaluate_main(["--run-id", "existing-run", "--score-only"])
+
+    assert result == 2
+    assert capsys.readouterr().err.strip() == (
+        "MATHAGENT_EVALUATION_ERROR: ValueError: broken config"
+    )
+
+
 def test_experiment_environments_soft_merge_partial_parameters() -> None:
     loader = OmegaConfigLoader(
         conf_source=str(PROJECT_ROOT / "conf"),

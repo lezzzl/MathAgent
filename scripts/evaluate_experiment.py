@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from kedro.framework.session import KedroSession
@@ -34,18 +35,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    bootstrap_project(ROOT)
-    experiment_parameters: dict[str, object] = {"run_id": args.run_id}
-    if args.runs_dir is not None:
-        experiment_parameters["runs_dir"] = str(args.runs_dir)
-    runtime_parameters = {"experiment": experiment_parameters}
-    with KedroSession.create(
-        project_path=ROOT,
-        extra_params=runtime_parameters,
-    ) as session:
-        session.run(
-            pipeline_name="evaluate" if args.score_only else "evaluate_compare"
+    try:
+        bootstrap_project(ROOT)
+        experiment_parameters: dict[str, object] = {"run_id": args.run_id}
+        if args.runs_dir is not None:
+            experiment_parameters["runs_dir"] = str(args.runs_dir)
+        runtime_parameters = {"experiment": experiment_parameters}
+        with KedroSession.create(
+            project_path=ROOT,
+            extra_params=runtime_parameters,
+        ) as session:
+            session.run(
+                pipeline_name=(
+                    "evaluate" if args.score_only else "evaluate_compare"
+                )
+            )
+    except Exception as exc:
+        print(
+            f"MATHAGENT_EVALUATION_ERROR: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
         )
+        return 2
     return 0
 
 

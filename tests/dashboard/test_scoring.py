@@ -85,7 +85,16 @@ def test_score_runs_reports_evaluator_failure(tmp_path: Path, monkeypatch) -> No
     run = _write_run(runs_dir, "run-a", [None])
 
     def fake_run(command, **kwargs):
-        return subprocess.CompletedProcess(command, 2, "", "details\nlast error")
+        return subprocess.CompletedProcess(
+            command,
+            2,
+            "",
+            (
+                "warning tail\n"
+                "MATHAGENT_EVALUATION_ERROR: ValueError: actual failure\n"
+                "or set the PYTHONWARNINGS environment variable accordingly."
+            ),
+        )
 
     monkeypatch.setattr("dashboard.scoring.subprocess.run", fake_run)
 
@@ -95,7 +104,7 @@ def test_score_runs_reports_evaluator_failure(tmp_path: Path, monkeypatch) -> No
     assert update.skipped_runs == ()
     assert len(update.failed_runs) == 1
     assert update.failed_runs[0].run_id == "run-a"
-    assert update.failed_runs[0].detail == "last error"
+    assert update.failed_runs[0].detail == "ValueError: actual failure"
 
 
 def test_score_runs_reports_process_start_failure(
