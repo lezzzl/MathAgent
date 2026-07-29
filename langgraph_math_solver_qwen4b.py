@@ -370,7 +370,66 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
     return _emit(ChatResult("", "", 0, None, last_error), time.perf_counter() - started)
 
 
-_TEXT_TOOL_CALL_RE = re.compile(r"<tool_call>|<\|tool_call\|>|python_exec\s*\(", re.IGNORECASE)
+_TEXT_TOOL_CALL_RE = re.compile(r"<tool_call>|<\|tool_call\|>|<function=", re.IGNORECASE)
+
+# Нативный формат Qwen3.x: <function=name><parameter=code>...</parameter></function>.
+# Именно его модель пишет вместо JSON, и парсер hermes на сервере его НЕ понимает
+# (это уже задокументировано в langgraph_math_solver._diagnose_non_json). На
+# прогоне hmmt с тулами из-за этого не исполнилось ни одного вызова.
+_QWEN_FN_RE = re.compile(r"<function=([\w.]+)\s*>(.*?)(?:</function>|$)", re.DOTALL | re.IGNORECASE)
+_QWEN_PARAM_RE = re.compile(r"<parameter=([\w.]+)\s*>(.*?)(?:</parameter>|$)", re.DOTALL | re.IGNORECASE)
+_JSON_BLOCK_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*(?:</tool_call>|$)", re.DOTALL | re.IGNORECASE)
+
+
+def _salvage_tool_calls(text: str) -> List[Dict[str, Any]]:
+    """Достаёт вызовы инструмента из текста, который сервер не распарсил.
+
+    Поддерживает два формата: нативный Qwen3.x (<function=…><parameter=…>) и
+    JSON внутри <tool_call>. Клиентский разбор снимает зависимость от того,
+    какой --tool-call-parser поднят на сервере: hermes для Qwen3.x не работает.
+    """
+    if not text:
+        return []
+    calls: List[Dict[str, Any]] = []
+
+    for i, m in enumerate(_QWEN_FN_RE.finditer(text)):
+        name, body = m.group(1), m.group(2)
+        args = {k: v.strip() for k, v in _QWEN_PARAM_RE.findall(body)}
+        if args.get("code"):
+            calls.append({
+                "id": f"salvaged_{i}", "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args)},
+            })
+    if calls:
+        return calls
+
+    for i, m in enumerate(_JSON_BLOCK_RE.finditer(text)):
+        try:
+            parsed = json.loads(m.group(1), strict=False)
+        except Exception:
+            continue
+        args = parsed.get("arguments") or parsed.get("args") or {}
+        if isinstance(args, str):
+            try:
+                args = json.loads(args, strict=False)
+            except Exception:
+                args = {"code": args}
+        if isinstance(args, dict) and args.get("code"):
+            calls.append({
+                "id": f"salvaged_json_{i}", "type": "function",
+                "function": {"name": parsed.get("name", "python_exec"),
+                             "arguments": json.dumps(args)},
+            })
+    return calls
+
+
+def _strip_tool_call_text(text: str) -> str:
+    """Убирает разобранный вручную блок вызова из текста ответа."""
+    cleaned = re.sub(r"<tool_call>.*?(?:</tool_call>|$)", "", text or "",
+                     flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<function=.*?(?:</function>|$)", "", cleaned,
+                     flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_thinking,
@@ -378,7 +437,7 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
                      max_hops=None, max_calls=None) -> Tuple[ChatResult, int, int]:
     """Диалог с моделью, в котором она может вызывать python_exec.
 
-    Возвращает (последний ответ, суммарные токены, число исполнений инструмента).
+    Возвращает (ответ, токены, число исполнений, число спасённых вручную вызовов).
     На последнем витке инструменты отключаются (tool_choice="none"), иначе модель
     может закончить ход вызовом и не выдать сам шаг.
     """
@@ -387,6 +446,7 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
     convo = list(messages)
     total_tokens = 0
     n_calls = 0
+    n_salvaged = 0
     result = None
 
     for hop in range(max_hops):
@@ -402,19 +462,25 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
             break
 
         calls = result.tool_calls
+        assistant_content = result.content or ""
+        if not calls and not last_hop:
+            # Сервер не распознал вызов и отдал его текстом — разбираем сами,
+            # иначе модель ждёт результата, которого никто не даст, а шаг
+            # получает сырой <tool_call> вместо математики.
+            calls = _salvage_tool_calls(assistant_content)
+            if calls:
+                n_salvaged += len(calls)
+                assistant_content = _strip_tool_call_text(assistant_content)
+                print(f"      [TOOL SALVAGE] Сервер не распознал вызов "
+                      f"(формат Qwen3.x вместо JSON) — разобрано клиентом: {len(calls)}. "
+                      f"Для нативного разбора нужен подходящий --tool-call-parser.")
         if not calls:
-            # Сервер мог не распознать вызов и отдать его текстом — тогда модель
-            # «зависает» в ожидании результата, которого никто не даст.
-            if not last_hop and _TEXT_TOOL_CALL_RE.search(result.content or ""):
-                print("      ⚠️  [TOOL PARSING BROKEN] Модель написала вызов инструмента "
-                      "текстом, сервер его не распознал. Проверьте, что vLLM запущен с "
-                      "--enable-auto-tool-choice --tool-call-parser hermes.")
             break
 
         # Ответ ассистента с вызовами обязан попасть в историю до результатов.
         convo.append({
             "role": "assistant",
-            "content": result.content or "",
+            "content": assistant_content,
             "tool_calls": calls,
         })
         for call in calls:
@@ -447,7 +513,11 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
 
     if result is None:
         result = ChatResult("", "", 0, None, "no response")
-    return result, total_tokens, n_calls
+    # Текст мог остаться с сырым блоком вызова (последний виток, разбор не
+    # применялся) — вычищаем, иначе он утечёт в шаг.
+    if _TEXT_TOOL_CALL_RE.search(result.text or ""):
+        result = result._replace(content=_strip_tool_call_text(result.text), reasoning="")
+    return result, total_tokens, n_calls, n_salvaged
 
 
 # ---------------------------------------------------------------------------
@@ -883,6 +953,9 @@ class AgentState(TypedDict):
     use_tools: bool
     # Сколько раз инструмент реально исполнялся за задачу.
     tool_calls: Annotated[int, operator.add]
+    # Сколько вызовов пришлось разбирать клиентом (сервер не распознал формат).
+    # Ненулевое значение = на сервере неподходящий --tool-call-parser.
+    tool_salvaged: Annotated[int, operator.add]
 
     # Минимум уже принятых шагов, прежде чем финальный ответ будет засчитан.
     # 1 = запрещаем ответ на глубине 0 (ровно то, что декларируют промпты).
@@ -909,7 +982,7 @@ class AgentState(TypedDict):
 def _generate_one(role: Role, context: str, temp: float,
                   depth: Optional[int] = None, branch: Optional[int] = None,
                   use_tools: bool = False
-                  ) -> Tuple[str, bool, int, bool, int]:
+                  ) -> Tuple[str, bool, int, bool, int, int]:
     """Один вызов генератора с откатом при обрыве размышлений.
 
     У thinking-моделей размышления идут в тот же num_predict, что и ответ. Если
@@ -917,7 +990,7 @@ def _generate_one(role: Role, context: str, temp: float,
     шаг теряется целиком. Повторяем один раз с выключенными размышлениями:
     лучше шаг без ризонинга, чем пустой шаг.
 
-    Возвращает (raw_content, overran, total_tokens, api_failed, tool_calls).
+    Возвращает (raw_content, overran, total_tokens, api_failed, tool_calls, salvaged).
     """
     messages = [
         {"role": "system", "content": role.system_prompt},
@@ -925,11 +998,11 @@ def _generate_one(role: Role, context: str, temp: float,
     ]
 
     if use_tools:
-        result, tokens, n_calls = _chat_with_tools(
+        result, tokens, n_calls, n_salv = _chat_with_tools(
             messages, temperature=temp, num_predict=role.num_predict,
             enable_thinking=role.enable_thinking, stage="generate",
             depth=depth, branch=branch)
-        return result.text, False, tokens, bool(result.error), n_calls
+        return result.text, False, tokens, bool(result.error), n_calls, n_salv
 
     result = _chat(messages, temperature=temp, num_predict=role.num_predict,
                    json_format=role.json_format, enable_thinking=role.enable_thinking,
@@ -944,8 +1017,8 @@ def _generate_one(role: Role, context: str, temp: float,
                       stage="generate", depth=depth, branch=branch,
                       record_extra={"thinking_retry": True})
         # Учитываем и токены оборванной первой попытки, и токены повтора.
-        return retry.text, True, result.tokens + retry.tokens, bool(retry.error), 0
-    return result.text, False, result.tokens, bool(result.error), 0
+        return retry.text, True, result.tokens + retry.tokens, bool(retry.error), 0, 0
+    return result.text, False, result.tokens, bool(result.error), 0, 0
 
 
 def generate_step(state: AgentState):
@@ -961,6 +1034,7 @@ def generate_step(state: AgentState):
     overruns = 0
     api_errors = 0
     tool_calls = 0
+    tool_salvaged = 0
     context = _build_context(state['problem'], state.get('steps', []))
     use_tools = bool(state.get("use_tools"))
 
@@ -971,11 +1045,12 @@ def generate_step(state: AgentState):
     for i in range(k):
         attempt = state.get('step_recovery_attempts', 0)
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        raw_text, overran, tks, api_failed, n_calls = _generate_one(
+        raw_text, overran, tks, api_failed, n_calls, n_salv = _generate_one(
             role, context, temp, depth=current_depth, branch=i + 1, use_tools=use_tools)
         overruns += overran
         api_errors += api_failed
         tool_calls += n_calls
+        tool_salvaged += n_salv
         total_tokens += tks
         raw_candidates.append(raw_text)
         preview = re.sub(r"\s+", " ", raw_text).strip()[:200]
@@ -986,7 +1061,7 @@ def generate_step(state: AgentState):
 
     return {"candidate_raw": raw_candidates, "tokens_used": total_tokens,
             "thinking_overruns": overruns, "api_errors": api_errors,
-            "tool_calls": tool_calls}
+            "tool_calls": tool_calls, "tool_salvaged": tool_salvaged}
 
 
 def segment_step(state: AgentState):
@@ -1412,6 +1487,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "api_errors": 0,
         "use_tools": False,
         "tool_calls": 0,
+        "tool_salvaged": 0,
         "min_steps_before_answer": 1,
         "premature_answers": 0,
         "answer_depth": None,
