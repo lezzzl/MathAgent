@@ -13,7 +13,10 @@ from mathagent.pipelines.experiment.nodes import (
     update_comparison_table,
 )
 from mathagent.settings import CONFIG_LOADER_ARGS
-from scripts.evaluate_experiment import build_parser as build_evaluate_parser
+from scripts.evaluate_experiment import (
+    build_parser as build_evaluate_parser,
+    main as evaluate_main,
+)
 from scripts.run_experiment import (
     build_parser as build_run_parser,
     load_experiment_config,
@@ -179,11 +182,70 @@ def test_load_experiment_config_requires_root_run_id(tmp_path: Path) -> None:
 
 
 def test_evaluate_script_requires_run_id() -> None:
-    args = build_evaluate_parser().parse_args(["--run-id", "existing-run"])
+    args = build_evaluate_parser().parse_args(
+        [
+            "--run-id",
+            "existing-run",
+            "--runs-dir",
+            "/mnt/results/runs",
+            "--score-only",
+        ]
+    )
 
     assert args.run_id == "existing-run"
+    assert args.runs_dir == Path("/mnt/results/runs")
+    assert args.score_only is True
     with pytest.raises(SystemExit):
         build_evaluate_parser().parse_args([])
+
+
+def test_evaluate_script_supports_score_only_external_runs(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: dict[str, object] = {}
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def run(self, *, pipeline_name):
+            calls["pipeline_name"] = pipeline_name
+
+    def fake_create(**kwargs):
+        calls["create"] = kwargs
+        return FakeSession()
+
+    monkeypatch.setattr(
+        "scripts.evaluate_experiment.bootstrap_project", lambda root: None
+    )
+    monkeypatch.setattr(
+        "scripts.evaluate_experiment.KedroSession.create", fake_create
+    )
+
+    result = evaluate_main(
+        [
+            "--run-id",
+            "existing-run",
+            "--runs-dir",
+            str(tmp_path),
+            "--score-only",
+        ]
+    )
+
+    assert result == 0
+    assert calls["pipeline_name"] == "evaluate"
+    assert calls["create"] == {
+        "project_path": PROJECT_ROOT,
+        "extra_params": {
+            "experiment": {
+                "run_id": "existing-run",
+                "runs_dir": str(tmp_path),
+            }
+        },
+    }
 
 
 def test_experiment_environments_soft_merge_partial_parameters() -> None:

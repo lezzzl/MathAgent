@@ -15,7 +15,6 @@ import streamlit as st
 
 from dashboard.artifacts import (
     ArtifactError,
-    COMPARISONS_PATH_ENV,
     RUNS_DIR_ENV,
     discover_runs,
 )
@@ -33,13 +32,14 @@ from dashboard.runtime import (
     DATAFRAME_SERIALIZATION_LOCK,
     use_system_arrow_memory_pool,
 )
+from dashboard.scoring import score_runs
 
 
 use_system_arrow_memory_pool()
 st.set_page_config(page_title="MathAgent run comparison", layout="wide")
 
 STREAMLIT_DEFAULT_RUNS_DIR = Path("/mnt/storage-1/MathAgent/results/runs")
-STREAMLIT_DEFAULT_COMPARISONS_PATH = Path(
+STREAMLIT_COMPARISONS_PATH = Path(
     "/mnt/storage-1/MathAgent/results/comparison/table.parquet"
 )
 
@@ -185,8 +185,8 @@ def _render_comparison_views(comparisons_path: str) -> None:
     run_ids = comparison_run_ids(comparisons)
     if len(run_ids) < 2:
         st.info(
-            "The comparison table does not contain a run pair yet. Add a "
-            "pre-scored run from the sidebar."
+            "The comparison table does not contain a run pair yet. Score runs "
+            "and update the comparison table from the sidebar."
         )
         return
 
@@ -211,18 +211,12 @@ def main() -> None:
                 ),
             )
         ).expanduser().resolve()
+        score_runs_requested = st.button("Score runs")
         update_comparisons = st.button(
             "Update comparison table", type="primary"
         )
-        comparisons_path = Path(
-            st.text_input(
-                "Comparison table",
-                value=_streamlit_path_default(
-                    COMPARISONS_PATH_ENV,
-                    STREAMLIT_DEFAULT_COMPARISONS_PATH,
-                ),
-            )
-        ).expanduser().resolve()
+        comparisons_path = STREAMLIT_COMPARISONS_PATH
+        st.caption(f"Comparison table: `{comparisons_path}`")
 
     source_signature = _directory_signature(
         runs_path, ("*/manifest.json", "*/*.jsonl")
@@ -235,6 +229,32 @@ def main() -> None:
     if not runs:
         st.warning(f"No run manifests found under {runs_path}")
         st.stop()
+
+    if score_runs_requested:
+        with st.spinner("Scoring unscored runs..."):
+            scoring = score_runs(runs, runs_path)
+        if scoring.scored_runs:
+            noun = "run" if len(scoring.scored_runs) == 1 else "runs"
+            st.sidebar.success(
+                f"Scored {len(scoring.scored_runs)} {noun}: "
+                + ", ".join(scoring.scored_runs)
+            )
+        elif not scoring.failed_runs:
+            st.sidebar.info("All discovered runs are already scored.")
+        if scoring.skipped_runs and (
+            scoring.scored_runs or scoring.failed_runs
+        ):
+            st.sidebar.info(
+                f"Already scored: {len(scoring.skipped_runs)} runs."
+            )
+        if scoring.failed_runs:
+            st.sidebar.error(
+                "Failed to score: "
+                + "; ".join(
+                    f"{failure.run_id} ({failure.detail})"
+                    for failure in scoring.failed_runs
+                )
+            )
 
     if update_comparisons:
         table_existed = comparisons_path.is_file()
@@ -267,8 +287,8 @@ def main() -> None:
 
     with st.sidebar:
         st.caption(
-            "Run records must already contain `score` or `is_correct`. "
-            "The dashboard never grades solutions."
+            "Score runs uses the configured benchmark evaluators. Comparison "
+            "rows use the resulting `score` or `is_correct` values."
         )
 
     _render_comparison_views(str(comparisons_path))

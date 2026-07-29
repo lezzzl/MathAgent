@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate an existing run and update the comparison table."""
+"""Evaluate an existing run, optionally without updating comparisons."""
 
 from __future__ import annotations
 
@@ -19,18 +19,33 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Existing run directory name under results/runs.",
     )
+    parser.add_argument(
+        "--runs-dir",
+        type=Path,
+        help="Override the directory containing run artifacts.",
+    )
+    parser.add_argument(
+        "--score-only",
+        action="store_true",
+        help="Evaluate the run without updating the comparison table.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     bootstrap_project(ROOT)
-    runtime_parameters = {"experiment": {"run_id": args.run_id}}
+    experiment_parameters: dict[str, object] = {"run_id": args.run_id}
+    if args.runs_dir is not None:
+        experiment_parameters["runs_dir"] = str(args.runs_dir)
+    runtime_parameters = {"experiment": experiment_parameters}
     with KedroSession.create(
         project_path=ROOT,
         extra_params=runtime_parameters,
     ) as session:
-        session.run(pipeline_name="evaluate_compare")
+        session.run(
+            pipeline_name="evaluate" if args.score_only else "evaluate_compare"
+        )
     return 0
 
 

@@ -90,6 +90,12 @@ uv run python scripts/run_experiment.py --config experiment.yml
 # Только 2) evaluate -> 3) compare для уже готового запуска
 uv run python scripts/evaluate_experiment.py \
   --run-id my-agent-run
+
+# Только evaluate для запуска из другого каталога результатов
+uv run python scripts/evaluate_experiment.py \
+  --run-id my-agent-run \
+  --runs-dir /mnt/storage-1/MathAgent/results/runs \
+  --score-only
 ```
 
 `run_experiment.py` всегда выполняет все три этапа. `--config` указывает на YAML
@@ -141,7 +147,9 @@ python scripts/run_all_benchmarks.py --limit 2
 The local Streamlit dashboard discovers run manifests under `results/runs` and
 compares pre-scored benchmark runs. Each task record must contain a numeric
 `score` from 0 to 1 or the Boolean `is_correct` field written by the standalone
-verification scripts. The dashboard does not grade solutions.
+verification scripts. The comparison step never grades solutions; the
+dashboard's **Score runs** action invokes the configured verification scripts
+before comparison.
 
 ```bash
 uv run python -m dashboard.compare
@@ -153,23 +161,23 @@ checks every discovered pre-scored run pair and adds any missing shared-benchmar
 rows. Existing pair statistics are not recomputed; Holm-adjusted p-values are
 refreshed when the multiple-testing family grows.
 
-Use the sidebar's **Update comparison table** button to create the table when
-needed and complete all missing pairwise comparisons between discovered
-pre-scored runs. The Streamlit fields default to
-`/mnt/storage-1/MathAgent/results/runs` and
-`/mnt/storage-1/MathAgent/results/comparison/table.parquet`; the existing
-environment variables still override those UI defaults. The two dashboard views
-compare one run with another or several runs against a selected baseline. The
-app polls the comparison table, so updates made by another process appear
-automatically.
+Use **Score runs** to run the configured evaluators for every discovered run
+that still has unscored records. Then use **Update comparison table** to create
+the table when needed and complete all missing pairwise comparisons. The runs
+field defaults to `/mnt/storage-1/MathAgent/results/runs` and still honors
+`MATHAGENT_RESULTS_DIR`. Streamlit always stores comparisons at
+`/mnt/storage-1/MathAgent/results/comparison/table.parquet`; that path is no
+longer editable in the dashboard. The two dashboard views compare one run with
+another or several runs against a selected baseline. The app polls the
+comparison table, so updates made by another process appear automatically.
 
 The app uses PyArrow's system allocator and serializes dataframe conversion so
 multiple browser tabs can safely share one Streamlit server on macOS.
 
-Set `MATHAGENT_RESULTS_DIR` to read runs from another directory and
-`MATHAGENT_COMPARISONS_PATH` to store the comparison table elsewhere. Dashboard
-code is isolated under `src/dashboard` and does not import the agent or
-benchmark runner.
+Set `MATHAGENT_RESULTS_DIR` to read dashboard runs from another directory.
+`MATHAGENT_COMPARISONS_PATH` still controls the standalone comparison command,
+but Streamlit always uses its fixed comparison path. Dashboard code is isolated
+under `src/dashboard` and does not import the agent or benchmark runner.
 
 Explicit paths can also be passed to the comparison command:
 
