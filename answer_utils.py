@@ -70,10 +70,31 @@ def iter_boxed(text: str) -> Iterable[str]:
                 start = after + 1
 
 
+# Заглушки, которые модель копирует из своего же промпта: инструкция генератора
+# показывает образец «\boxed{...}», и он регулярно попадает в шаг дословно.
+# Без этой проверки extract_answer возвращал '...' как финальный ответ — на
+# прогоне aime24 так были потеряны 6 задач из 30 с осмысленным выводом.
+# Намеренно консервативно: только то, что не может быть настоящим ответом.
+# Одиночные буквы вроде 'x' сюда НЕ входят — на символьных бенчмарках
+# (IMO-AnswerBench, HMMT) это может быть легитимным ответом.
+_PLACEHOLDER_BOXED = re.compile(
+    r"^(?:\.{2,}|…|<[^>]*>|answer|ANSWER|your answer|result|\?+)$",
+    re.IGNORECASE,
+)
+
+
+def _is_placeholder(content: str) -> bool:
+    return bool(_PLACEHOLDER_BOXED.match(content.strip()))
+
+
 def extract_boxed(text: str) -> Optional[str]:
-    """Последний \\boxed{...} в тексте, либо None."""
+    """Последний осмысленный \\boxed{...} в тексте, либо None.
+
+    Заглушки вроде \\boxed{...} пропускаются: это эхо промпта, а не ответ.
+    """
     found = [c.strip() for c in iter_boxed(text or "") if c.strip()]
-    return found[-1] if found else None
+    real = [c for c in found if not _is_placeholder(c)]
+    return real[-1] if real else None
 
 
 def extract_answer(text: str) -> Optional[str]:
