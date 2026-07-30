@@ -622,6 +622,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
         RECORDER.run_meta = {
             "benchmark": config.name,
             "dataset": config.dataset_name,
+            "split": config.split,
             "model": args.model,
             "pipeline": getattr(args, "pipeline", "default"),
             "prompt": str(args.prompt),
@@ -631,6 +632,13 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             "k_branches": args.k_branches,
             "score_threshold": args.score_threshold,
             "token_budget": args.token_budget,
+            # Нужны для manifest.json при выгрузке в общий формат сравнения.
+            "temperature": (args.temperature
+                            if args.temperature is not None
+                            else solver_mod.ROLES["generator"].temperature),
+            "workers": args.workers,
+            "timeout": args.timeout,
+            "max_tokens": args.max_tokens,
             "started_utc": datetime.now(timezone.utc).isoformat(),
         }
         print(f"[trajectory] запись траекторий включена -> {trajectory_path}")

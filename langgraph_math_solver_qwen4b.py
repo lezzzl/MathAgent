@@ -1,41 +1,3 @@
-"""Пошаговый солвер под малые модели Qwen (Qwen3-4B, Qwen3.5-4B) — вариант
-langgraph_math_solver БЕЗ инструментов и с дополнительной стадией сегментации.
-
-Зачем отдельный файл
---------------------
-Основной пайплайн (langgraph_math_solver.py) писался под Qwen 7B/9B, которые
-дисциплинированно заворачивают шаг в <step>...</step>, а ответ в \\boxed{}. У
-малых моделей с этим бывает хуже, и прежний экстрактор _extract_step_content в
-таком случае откатывался к «весь сырой текст как шаг», отдавая оценщику мусор.
-
-Стадия `segment_step` это чинит: берёт сырой ответ генератора и вырезает из него
-ровно один шаг отдельной дешёвой ролью `segmenter` (без размышлений), не
-полагаясь на дисциплину форматирования самой модели.
-
-Насколько сегментация реально нужна — сильно зависит от модели (мерить по
-метрике segmenter_calls / eval_candidates):
-  * Qwen3-4B ставит теги в ~95% случаев, сегментатор нужен редко. ВАЖНО:
-    исходный симптом «не слушается инструкций» оказался не непослушанием, а
-    HTTP 400 — num_predict генератора (40–50k в 9B-конфиге) превышал
-    max_model_len сервера (32k). Держите num_predict генератора НИЖЕ контекста
-    сервера, иначе каждый вызов возвращает пустоту, похожую на мусор модели.
-  * Qwen3.5-4B ставит теги лишь в ~25%, и сегментатор реально несёт нагрузку
-    (~75% кандидатов) — вот где стадия оправдывает себя.
-
-Прочее
-------
-* Инструментов нет намеренно (исследовательское условие no-tools); все роли
-  ходят в модель простым HTTP-хелпером _chat.
-* Сетевые сбои _chat повторяет CHAT_RETRIES раз, считает в api_errors и не
-  выдаёт за «модель выдала мусор» (иначе таймаут неотличим от плохого ответа).
-* Гард min_steps_before_answer не даёт засчитать \\boxed на глубине 0 — иначе
-  малая модель решает задачу первым же шагом и пайплайн вырождается в CoT.
-* Публичный интерфейс (ROLES, load_prompts_from_yaml, build_solver_graph,
-  make_initial_state, MODEL_NAME/BASE_URL/... и форма AgentState) совместим с
-  langgraph_math_solver.py — agent_benchmark_runner подключает модуль как
-  drop-in через --pipeline qwen4b.
-"""
-
 import json
 import operator
 import os
@@ -189,7 +151,6 @@ REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
 # несколько шагов, и всё равно прогоняем через сегментатор.
 MAX_STEP_CHARS = int(os.getenv("MAX_STEP_CHARS", "1500"))
 
-
 # Сетевые сбои (таймаут/обрыв) — не то же самое, что «модель ничего не ответила».
 # Раньше они молча превращались в пустой ответ с tokens=0, и это выглядело как
 # плохое качество модели: пустой шаг -> score 0 -> recovery, а у оценщика ещё и
@@ -238,6 +199,14 @@ TOOL_SCHEMA = [{
 # трудной задаче уходит в бесконечный перебор вслепую.
 MAX_TOOL_HOPS = int(os.getenv("MAX_TOOL_HOPS", "5"))
 MAX_TOOL_CALLS = int(os.getenv("MAX_TOOL_CALLS", "8"))
+
+# Потолок расхода на ОДИН вызов роли, считая все витки с инструментом.
+# Замер на aime24/25/26: медиана вызова генератора 21.8k токенов, p90 82k, а
+# максимум — 220k при бюджете задачи 600k. Из-за этого 8 задач из 90 (все
+# «нет ответа») перебрали бюджет на 4k–229k: раунд стартовал, когда бюджет был
+# почти исчерпан, и один цикл тулов уводил далеко за лимит. Кратность к
+# num_predict, а не константа, чтобы правило не зависело от лимита роли.
+TOOL_LOOP_TOKEN_FACTOR = float(os.getenv("TOOL_LOOP_TOKEN_FACTOR", "2.5"))
 
 
 def _run_tool(name: str, args: Dict[str, Any]) -> str:
@@ -374,8 +343,6 @@ _TEXT_TOOL_CALL_RE = re.compile(r"<tool_call>|<\|tool_call\|>|<function=", re.IG
 
 # Нативный формат Qwen3.x: <function=name><parameter=code>...</parameter></function>.
 # Именно его модель пишет вместо JSON, и парсер hermes на сервере его НЕ понимает
-# (это уже задокументировано в langgraph_math_solver._diagnose_non_json). На
-# прогоне hmmt с тулами из-за этого не исполнилось ни одного вызова.
 _QWEN_FN_RE = re.compile(r"<function=([\w.]+)\s*>(.*?)(?:</function>|$)", re.DOTALL | re.IGNORECASE)
 _QWEN_PARAM_RE = re.compile(r"<parameter=([\w.]+)\s*>(.*?)(?:</parameter>|$)", re.DOTALL | re.IGNORECASE)
 _JSON_BLOCK_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*(?:</tool_call>|$)", re.DOTALL | re.IGNORECASE)
@@ -449,8 +416,16 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
     n_salvaged = 0
     result = None
 
+    token_cap = int((num_predict or DEFAULT_MAX_TOKENS) * TOOL_LOOP_TOKEN_FACTOR)
     for hop in range(max_hops):
-        last_hop = hop == max_hops - 1 or n_calls >= max_calls
+        # Последний виток отключает инструменты, чтобы модель обязательно выдала
+        # сам шаг. Помимо счётчиков витков и вызовов, ограничиваем и токены:
+        # иначе один вызов роли способен съесть треть бюджета всей задачи.
+        over_budget = total_tokens >= token_cap
+        if over_budget and hop:
+            print(f"      [TOOL BUDGET] Вызов роли израсходовал {total_tokens} токенов "
+                  f"(потолок {token_cap}) — завершаю без новых обращений к инструменту.")
+        last_hop = hop == max_hops - 1 or n_calls >= max_calls or over_budget
         result = _chat(
             convo, temperature=temperature, num_predict=num_predict,
             enable_thinking=enable_thinking, stage=stage, depth=depth, branch=branch,
@@ -1026,6 +1001,20 @@ def generate_step(state: AgentState):
     print(f"\n[Node: Generate] Depth: {current_depth} | Tokens used: {state.get('tokens_used', 0)}")
     multi = state.get('branch_mode') == 'multi' or state.get('in_recovery')
     k = state.get('k_branches', 3) if multi else 1
+
+    # Бюджет проверяется роутерами МЕЖДУ раундами, но один раунд с k ветками и
+    # циклом инструментов стоит десятки тысяч токенов, поэтому раунд, начатый
+    # у самой границы, уводил далеко за лимит (замер: перебор до 229k при
+    # бюджете 600k). Если остатка не хватает на k веток — сокращаем k.
+    remaining = state.get('token_budget', 10**9) - state.get('tokens_used', 0)
+    role_cost = int((ROLES["generator"].num_predict or DEFAULT_MAX_TOKENS)
+                    * (TOOL_LOOP_TOKEN_FACTOR if state.get("use_tools") else 1.0))
+    if role_cost > 0 and remaining < role_cost * k:
+        affordable = max(1, remaining // role_cost)
+        if affordable < k:
+            print(f"  ⚠️  [BUDGET] Осталось {remaining} токенов, одна ветка стоит до "
+                  f"{role_cost} — сокращаю {k} -> {affordable} ветк(и).")
+            k = affordable
     print(f"  -> Generating {k} candidate(s).")
 
     role = ROLES["generator"]
@@ -1286,13 +1275,7 @@ def commit_step(state: AgentState):
 
     answer = extract_answer(best_step)
 
-    # Страховка от вырождения в CoT. qwen4b решает задачу целиком, и ответ
-    # регулярно появляется уже на глубине 0 — тогда commit сразу уходит на
-    # верификацию, и «пошаговый» пайплайн превращается в обычный CoT с одним
-    # шагом (на прогоне aime26 так закончилась ровно половина задач). Промпты
-    # это запрещают, но 4B их не слушается, поэтому правило форсим кодом.
-    # Отвергаем только ЗАЧЁТ ответа; сам шаг принимаем как есть, не портя математику.
-    min_before = state.get('min_steps_before_answer', 1)
+    min_before = state.get('min_steps_before_answer', 0)
     premature = 0
     if answer and len(prior_steps) < min_before:
         print(f"  ⚠️  [PREMATURE ANSWER] Ответ {answer!r} получен на глубине "
