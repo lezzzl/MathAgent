@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "run_id": "nikita-qwen35-4b-all-v1",
+  "model": "Qwen/Qwen3.5-4B",
+  "pipeline": "qwen4b",
+  "prompt": "/home/n.evdokimov/MathAgent/conf/base/prompts/agent-step-qwen4b-v1.yml",
+  "prompt_version": "agent-step-qwen4b-v1",
+  "role": "solver",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": null,
+    "top_k": null,
+    "min_p": null,
+    "presence_penalty": null,
+    "repetition_penalty": null,
+    "seed": null,
+    "max_tokens": 600000
+  },
+  "runtime": {
+    "concurrency": null,
+    "timeout": null,
+    "max_retries": 1
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3"
+  },
+  "agent": {
+    "branch_mode": "single",
+    "k_branches": 3,
+    "score_threshold": 0.5,
+    "use_tools": true,
+    "token_budget": 600000
+  },
+  "status": "partial",
+  "created_at": "2026-07-30T18:24:27.062022+00:00",
+  "updated_at": "2026-07-30T22:00:03.169524+00:00",
+  "benchmarks": {
+    "AIME24": {
+      "dataset": "HuggingFaceH4/aime_2024",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "C:/Users/Nikita Yevdokimov/Practice/MathAgent/results/runs/nikita-qwen35-4b-all-v1/aime24.jsonl",
+      "status": "completed",
+      "updated_at": "2026-07-30T22:00:02.743367+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 29,
+        "failed_tasks": 1,
+        "remaining_tasks": 0,
+        "input_tokens": 2198899,
+        "output_tokens": 3634031,
+        "total_tokens": 5832930,
+        "wall_time_seconds": 45471.472,
+        "tasks_per_second": 0.0007
+      }
+    },
+    "AIME25": {
+      "dataset": "Sunny8781/AIME2025_w_solution",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "C:/Users/Nikita Yevdokimov/Practice/MathAgent/results/runs/nikita-qwen35-4b-all-v1/aime25.jsonl",
+      "status": "completed",
+      "updated_at": "2026-07-30T22:00:02.965351+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 26,
+        "failed_tasks": 4,
+        "remaining_tasks": 0,
+        "input_tokens": 3860494,
+        "output_tokens": 5841896,
+        "total_tokens": 9702390,
+        "wall_time_seconds": 78976.658,
+        "tasks_per_second": 0.0004
+      }
+    },
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "C:/Users/Nikita Yevdokimov/Practice/MathAgent/results/runs/nikita-qwen35-4b-all-v1/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-07-30T22:00:03.163954+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 27,
+        "failed_tasks": 3,
+        "remaining_tasks": 0,
+        "input_tokens": 2952108,
+        "output_tokens": 4646713,
+        "total_tokens": 7598821,
+        "wall_time_seconds": 59331.836,
+        "tasks_per_second": 0.0005
+      }
+    }
+  },
+  "summary": {
+    "total_tasks": 90,
+    "successful_tasks": 82,
+    "failed_tasks": 8,
+    "remaining_tasks": 0,
+    "input_tokens": 9011501,
+    "output_tokens": 14122640,
+    "total_tokens": 23134141,
+    "wall_time_seconds": 183779.966,
+    "tasks_per_second": 0.0005
+  }
+}
