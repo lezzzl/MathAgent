@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MathAgent benchmark comparison</title>
+  <style>
+    :root{color-scheme:light dark;font:14px/1.4 system-ui,sans-serif}body{margin:0;padding:12px;background:transparent}
+    table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #9ca3af55;padding:9px 10px;text-align:right}
+    th:first-child,td:first-child{text-align:left}th{font-weight:700;white-space:nowrap}
+    .strong-positive{background:#b7e4c7;color:#14532d;font-weight:650}.light-positive{background:#d8f3dc;color:#14532d;font-weight:650}
+    .strong-negative{background:#f4b6b6;color:#7f1d1d;font-weight:650}.light-negative{background:#fde2e2;color:#7f1d1d;font-weight:650}
+    .empty{text-align:center;color:#6b7280}caption{caption-side:top;text-align:left;font-weight:650;padding-bottom:10px}
+  </style>
+</head>
+<body>
+<div id="root" class="empty">Waiting for LangSmith report data…</div>
+<script>
+"use strict";
+const defaults=["https://smith.langchain.com","https://eu.smith.langchain.com","https://ap.smith.langchain.com"];
+const configured=new URLSearchParams(location.search).get("origins");
+const allowedOrigins=new Set(configured?configured.split(","):defaults);
+const root=document.getElementById("root");
+const text=(value)=>document.createTextNode(String(value));
+const percent=(value,signed=false)=>typeof value!=="number"||!Number.isFinite(value)?"—":`${signed&&value>0?"+":""}${(value*100).toFixed(2)}${signed?" pp":"%"}`;
+const probability=(value)=>typeof value!=="number"||!Number.isFinite(value)?"—":value<.0001?value.toExponential(2):value.toFixed(4);
+const significanceClass=(row)=>{
+  const p=row.holm_p_value,diff=row.diff;
+  if(typeof p!=="number"||typeof diff!=="number"||p>=.05||diff===0)return "";
+  return `${p<.01?"strong":"light"}-${diff>0?"positive":"negative"}`;
+};
+const addCell=(tr,value,className="")=>{const td=document.createElement("td");if(className)td.className=className;td.appendChild(text(value));tr.appendChild(td)};
+function render(report){
+  if(!report||report.kind!=="mathagent-comparison-report"||!Array.isArray(report.benchmarks)){
+    root.className="empty";root.replaceChildren(text("Unsupported comparison report."));return;
+  }
+  const table=document.createElement("table"),caption=document.createElement("caption");
+  caption.appendChild(text(`${report.run_1.local_run_id||report.run_1.experiment_name} → ${report.run_2.local_run_id||report.run_2.experiment_name}`));
+  table.appendChild(caption);
+  const thead=document.createElement("thead"),header=document.createElement("tr");
+  ["Benchmark","Run-1","Run-2","diff (Run-2 − Run-1)","p-value (raw / Holm)"].forEach((label)=>{const th=document.createElement("th");th.appendChild(text(label));header.appendChild(th)});
+  thead.appendChild(header);table.appendChild(thead);
+  const tbody=document.createElement("tbody");
+  report.benchmarks.forEach((row)=>{const tr=document.createElement("tr");addCell(tr,row.benchmark);addCell(tr,percent(row.run_1_accuracy));addCell(tr,percent(row.run_2_accuracy));addCell(tr,percent(row.diff,true));addCell(tr,`${probability(row.p_value)} / ${probability(row.holm_p_value)}`,significanceClass(row));tbody.appendChild(tr)});
+  table.appendChild(tbody);root.className="";root.replaceChildren(table);
+}
+window.addEventListener("message",(event)=>{if(!allowedOrigins.has(event.origin))return;const message=event.data;if(!message||message.type!=="output"||typeof message.data!=="object")return;render(message.data)});
+</script>
+</body>
+</html>

@@ -1,18 +1,17 @@
 import json
 import logging
 import re
-import verifier
+import verifier_step as verifier
 from pathlib import Path
 from math_verify import parse, verify
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-def check_text_cutoff(model_answer: str):
-    cutoff_pattern = r"\b(и|то|тогда|следовательно|получим|равно|если|так|как),\s*$"
-    return bool(re.search(cutoff_pattern, model_answer.strip(), re.IGNORECASE))
-
 def parse_and_verify_math(model_answer: str, ground_truth):
+    """
+    Сверка итогового ответа студента с ground_truth средствами math_verify.
+    """
     result = {"answer_matched": False, "parsed_model_answer": None, "parsed_ground_truth": None}
 
     if not model_answer:
@@ -66,32 +65,30 @@ def run_verification(input_file: str = "agent_output.json", output_file: str = "
         gt_val = task.get("ground_truth", "")
         question_text = task.get("question", "Условие задачи отсутствует")
 
-        #   небольшая эвристика для проверки обрыва решения; пока что работает не очень хорошо
-        if not list(re.finditer(r'\\boxed{', model_ans)) and check_text_cutoff(model_ans):
-            task["is_correct"] = False
-            task["is_correct_solution"] = False
-            task["is_cutoff"] = True
-            cutoff_fr = model_ans[-30:].strip()
-            task["feedback_for_solver"] = f"Решение прервалось на полуслове: '... {cutoff_fr}'. Продолжи мысль и выдай ответ."
-            continue
-                
+        # Сверка с ground_truth (только для метрик, LLM её не видит).
         math_res = parse_and_verify_math(model_ans, gt_val)
-
-        task["is_correct"] = math_res["answer_matched"]
+        task["is_correct_answer"] = math_res["answer_matched"]
         task["parsed_model_answer"] = math_res["parsed_model_answer"]
         task["parsed_ground_truth"] = math_res["parsed_ground_truth"]
-        task["is_cutoff"] = False
-        
-        logger.info(f"Вызываем {verifier.MODEL_NAME} для анализа логики шагов задачи {task_id}...")
-        model_analysis = verifier.call_llm_verifier(question_text, str(gt_val), str(model_ans), logger, math_res)
 
-        final_verdict = math_res["answer_matched"] and model_analysis["is_correct_solution"]
+        logger.info(f"Вызываем {verifier.MODEL_NAME} для независимой проверки решения задачи {task_id} (без ground_truth)...")
+        model_analysis = verifier.call_llm_verifier(question_text, str(model_ans), logger)
+        logger.info(
+            f"VERDICT (LLM, без ground_truth): {model_analysis['is_correct_solution']} | "
+            f"Сверка с ground_truth (только для метрик): {task['is_correct_answer']} | "
+            f"is_truncated: {model_analysis.get('is_truncated', False)}"
+        )
 
-        logger.info(f"VERDICT: {final_verdict}")
-
-        task["is_correct_solution"] = final_verdict
+        task["is_correct_solution"] = model_analysis["is_correct_solution"]
         task["analysis_thoughts"] = model_analysis["analysis_thoughts"]
         task["feedback_for_solver"] = model_analysis["feedback_for_solver"]
+        # True, если на любом из шагов верификации не хватило
+        # num_predict (а не просто сработала стоп-последовательность)
+        # (такие записи стоит отделять от честного is_correct_solution=False
+        # при подсчёте метрик, а не считать за подтверждённый вердикт).
+        task["is_truncated"] = model_analysis.get("is_truncated", False)
+        if "steps" in model_analysis:
+            task["verification_steps"] = model_analysis["steps"]
             
     try:
         with open(output_path, "w", encoding="utf-8") as f:

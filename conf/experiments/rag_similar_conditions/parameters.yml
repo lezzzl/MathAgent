@@ -1,0 +1,8 @@
+# Эксперимент: RAG по похожим условиям, подсказки достаём ДО решения.
+# Запуск: uv run kedro run --env experiments/rag_similar_conditions
+
+rag:
+  enabled: true
+  mode: similar_conditions
+  top_k: 5
+  trigger: always
