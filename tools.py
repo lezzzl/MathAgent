@@ -132,6 +132,16 @@ def _build_globals() -> Dict[str, Any]:
         "sin": sin, "solve": solve, "sqrt": sqrt, "symbols": symbols,
         "tan": tan, "totient": totient, "I": I, "E": E,
     }
+    # Комбинаторику модель зовёт по короткому имени (permutations(...)), а не
+    # через itertools.  На прогоне hmmt это давало NameError и сжигало вызов
+    # инструмента впустую — самая частая ошибка исполнения.
+    namespace.update({
+        name: getattr(itertools, name)
+        for name in ("permutations", "combinations", "combinations_with_replacement",
+                     "product", "accumulate", "chain", "groupby", "count", "cycle",
+                     "islice", "repeat", "starmap", "compress", "pairwise")
+        if hasattr(itertools, name)
+    })
     return namespace
 
 
