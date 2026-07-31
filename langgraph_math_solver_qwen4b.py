@@ -151,6 +151,13 @@ REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
 # несколько шагов, и всё равно прогоняем через сегментатор.
 MAX_STEP_CHARS = int(os.getenv("MAX_STEP_CHARS", "1500"))
 
+# Сколько символов черновика отдавать сегментатору. Замер на aime24/25/26:
+# стадия segment съедала 18.8% всего бюджета при 23k токенов на вызов, и это
+# почти целиком ВХОД — ему подавалась вся генерация вместе с размышлениями.
+# Сам шаг практически всегда лежит в хвосте (после </think> или последнего
+# <step>), поэтому передавать начало черновика бессмысленно.
+SEGMENTER_INPUT_CHARS = int(os.getenv("SEGMENTER_INPUT_CHARS", "8000"))
+
 # Сетевые сбои (таймаут/обрыв) — не то же самое, что «модель ничего не ответила».
 # Раньше они молча превращались в пустой ответ с tokens=0, и это выглядело как
 # плохое качество модели: пустой шаг -> score 0 -> recovery, а у оценщика ещё и
@@ -574,6 +581,39 @@ def _has_clean_single_step(raw: str) -> bool:
     return True
 
 
+_THINK_CLOSE_RE = re.compile(r"</think\s*>", re.IGNORECASE)
+_TRIM_NOTE = "[... ранние размышления опущены ...]\n"
+
+
+def _trim_for_segmenter(raw: str) -> str:
+    """Оставляет от черновика тот хвост, в котором действительно лежит шаг.
+
+    Порядок стратегий — от самой надёжной к запасной:
+      1. после последнего </think> — там ровно «чистовик» модели;
+      2. от последнего <step> — если теги есть, но не прошли быстрый путь;
+      3. просто хвост нужной длины.
+    Начало черновика (перебор гипотез, самокритика) сегментатору не нужно и
+    стоило пятой части бюджета прогона.
+    """
+    raw = raw or ""
+    if len(raw) <= SEGMENTER_INPUT_CHARS:
+        return raw
+
+    closes = list(_THINK_CLOSE_RE.finditer(raw))
+    if closes:
+        tail = raw[closes[-1].end():].strip()
+        if tail:
+            return (_TRIM_NOTE + tail[-SEGMENTER_INPUT_CHARS:]) if len(tail) > SEGMENTER_INPUT_CHARS else _TRIM_NOTE + tail
+
+    opens = list(_STEP_OPEN_TAG_RE.finditer(raw))
+    if opens:
+        tail = raw[opens[-1].start():]
+        if len(tail) <= SEGMENTER_INPUT_CHARS:
+            return _TRIM_NOTE + tail
+
+    return _TRIM_NOTE + raw[-SEGMENTER_INPUT_CHARS:]
+
+
 def _build_context(problem: str, steps: List[str]) -> str:
     """Собирает контекст, отбрасывая самые ранние шаги при переполнении."""
     if not steps:
@@ -730,8 +770,16 @@ def _extract_json_dict(content: str, expected_keys: Tuple[str, ...]) -> Optional
     return None
 
 
-_SEG_SCORE_RE = re.compile(r"###SCORE###\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
-_SEG_VALID_RE = re.compile(r"###VALID###\s*(true|false|yes|no)", re.IGNORECASE)
+# Между маркером и значением допускаем «обёртку»: модель копирует угловые
+# скобки из плейсхолдера промпта и пишет «###VALID###\n<true>» вместо «true».
+# Именно на этом терялся вердикт верификатора (aime26 task 30): регулярка
+# натыкалась на «<» и вердикт уходил в «не распарсилось».
+_WRAP = r"""[\s<\[\("'*`]*"""
+_SEG_SCORE_RE = re.compile(rf"###SCORE###{_WRAP}([0-9]*\.?[0-9]+)", re.IGNORECASE)
+_SEG_VALID_RE = re.compile(rf"###VALID###{_WRAP}(true|false|yes|no)", re.IGNORECASE)
+# Хвостовой псевдотег вида </true> после обоснования — тот же скопированный
+# плейсхолдер, в текст вердикта он попадать не должен.
+_TRAILING_PSEUDOTAG_RE = re.compile(r"\s*</[^>\n]{1,40}>\s*$")
 _SEG_RATIONALE_MARK_RE = re.compile(r"###RATIONALE###", re.IGNORECASE)
 _SEG_END_RE = re.compile(r"###END###", re.IGNORECASE)
 
@@ -766,6 +814,7 @@ def _parse_delimited(content: str) -> Optional[Tuple[Optional[float], Optional[b
         tail = text[rat_marks[-1].end():]
         end = _SEG_END_RE.search(tail)
         rationale = (tail[: end.start()] if end else tail).strip()
+        rationale = _TRAILING_PSEUDOTAG_RE.sub("", rationale)
     else:
         rationale = "No rationale provided"
     score = None
@@ -1088,9 +1137,13 @@ def segment_step(state: AgentState):
             print(f"    - Candidate {i+1}: чистый <step> найден — быстрый путь без сегментатора.")
         else:
             seg_calls += 1
+            trimmed = _trim_for_segmenter(raw)
+            if len(trimmed) < len(raw):
+                print(f"      [SEGMENT TRIM] Черновик {len(raw)} -> {len(trimmed)} симв.")
             messages = [
                 {"role": "system", "content": role.system_prompt},
-                {"role": "user", "content": role.user_template.format(context=context, raw=raw)},
+                {"role": "user", "content": role.user_template.format(context=context,
+                                                                      raw=trimmed)},
             ]
             res = _chat(messages, temperature=role.temperature, num_predict=role.num_predict,
                         json_format=role.json_format, enable_thinking=role.enable_thinking,
@@ -1127,6 +1180,9 @@ def evaluate_steps(state: AgentState):
     total_tokens = 0
     any_reliable = False
     api_errors = 0
+    tool_calls = 0
+    tool_salvaged = 0
+    use_tools = bool(state.get("use_tools"))
     context = _build_context(state['problem'], state.get('steps', []))
 
     for i, step in enumerate(candidates):
@@ -1151,10 +1207,23 @@ def evaluate_steps(state: AgentState):
             {"role": "user", "content": role.user_template.format(context=context, step=step)},
         ]
         depth_now = len(state.get('steps', []))
-        res = _chat(messages, temperature=role.temperature, num_predict=role.num_predict,
-                    json_format=role.json_format, enable_thinking=role.enable_thinking,
-                    stage="evaluate", depth=depth_now, branch=i + 1)
-        total_tokens += res.tokens
+        if use_tools:
+            # Оценщик проверяет чужие вычисления, и без инструмента он делал это
+            # прозой: 21.5% всего бюджета прогона при ~11k токенов на вердикт
+            # (в трассах видно, как он вручную раскрывает многочлены). Лимиты
+            # ниже, чем у генератора: это проверка, а не решение задачи.
+            res, tks, n_calls, n_salv = _chat_with_tools(
+                messages, temperature=role.temperature, num_predict=role.num_predict,
+                enable_thinking=role.enable_thinking, stage="evaluate",
+                depth=depth_now, branch=i + 1, max_hops=3, max_calls=4)
+            tool_calls += n_calls
+            tool_salvaged += n_salv
+        else:
+            res = _chat(messages, temperature=role.temperature, num_predict=role.num_predict,
+                        json_format=role.json_format, enable_thinking=role.enable_thinking,
+                        stage="evaluate", depth=depth_now, branch=i + 1)
+            tks = res.tokens
+        total_tokens += tks
         api_errors += bool(res.error)
 
         score, rationale, reliable = _parse_eval_response(res.text)
@@ -1183,6 +1252,8 @@ def evaluate_steps(state: AgentState):
         "candidate_scores": scores,
         "tokens_used": total_tokens,
         "api_errors": api_errors,
+        "tool_calls": tool_calls,
+        "tool_salvaged": tool_salvaged,
         "unreliable_eval_streak": unreliable_streak,
         "eval_history": [{
             "depth": len(state.get('steps', [])),

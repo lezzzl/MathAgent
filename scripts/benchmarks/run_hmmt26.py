@@ -1,4 +1,10 @@
-"""Запускает модель на задачах HMMT February 2026 через OpenAI-совместимый API."""
+"""Запускает агента на задачах HMMT February 2026.
+
+Раньше этот скрипт был подключён к benchmark_runner — раннеру для обычного
+CoT-режима, у которого нет ни --pipeline, ни --trajectory, ни --token-budget.
+Переведён на agent_benchmark_runner, как run_hmmt_feb2025 и все AIME-скрипты,
+иначе пошаговый пайплайн из него не запускается.
+"""
 
 import sys
 from pathlib import Path
@@ -6,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from scripts.benchmarks.benchmark_runner import (
+from scripts.benchmarks.agent_benchmark_runner import (
     BenchmarkConfig,
     parse_benchmark_args,
     run_benchmark,

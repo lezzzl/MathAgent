@@ -2,6 +2,7 @@ import argparse
 import glob
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -38,7 +39,13 @@ PIPELINES = {
 # Дефолтный yaml промптов на каждый пайплайн (если --prompt не задан явно).
 DEFAULT_PROMPTS = {
     "default": DEFAULT_PROMPT,
-    "qwen4b": ROOT / "conf/base/prompts/agent-step-qwen4b-v1.yml",
+    # Линейка промптов пошагового пайплайна (каждый следующий = предыдущий плюс
+    # одно изменение, чтобы А/Б был чистым):
+    #   v1 — базовый;
+    #   v2 = v1 + секция TOOL у оценщика;
+    #   v3 = v2 + проверка «ответ отвечает на заданный вопрос» (generator+evaluator).
+    # Прежние версии подключаются явно: --prompt conf/base/prompts/...-v2.yml
+    "qwen4b": ROOT / "conf/base/prompts/agent-step-qwen4b-v3.yml",
 }
 
 # Активный модуль пайплайна. Переустанавливается в run_benchmark по --pipeline;
@@ -67,6 +74,12 @@ class BenchmarkConfig:
     # чтобы Callable не участвовал в hash/eq frozen-датакласса.
     answer_filter: Optional[Callable[[str], bool]] = field(default=None, compare=False)
     answer_filter_name: str = ""
+    # Чем сверять ответы сразу после прогона:
+    #   "math" — verify_answers.py (math-verify), годится для AIME/HMMT/MATH500,
+    #            где эталон числовой;
+    #   "imo"  — verify_imo_answers.py (math-verify + LLM-судья на символьных
+    #            ответах), нужен для IMO-AnswerBench и подобных смешанных наборов.
+    verifier: str = "math"
 
 
 def parse_benchmark_args(
@@ -147,6 +160,16 @@ def parse_benchmark_args(
         help="Дописать существующий JSONL, пропустив уже решённые task_id",
     )
     parser.add_argument(
+        "--no-verify", action="store_true",
+        help="Не сверять ответы после прогона. По умолчанию сразу запускается "
+             "verify_answers.py (для IMO — verify_imo_answers.py), отдельным "
+             "процессом; JSONL прогона сохраняется в любом случае.",
+    )
+    parser.add_argument(
+        "--verify-timeout", type=float, default=3600.0,
+        help="Потолок времени на сверку, секунд (по умолчанию час).",
+    )
+    parser.add_argument(
         "--trajectory", nargs="?", const="auto", default=None, metavar="PATH",
         help="Записать полные траектории решения (промпты, сырые генерации, "
              "оценки, вердикты, токены, время) в JSON для просмотрщика. Без "
@@ -191,6 +214,70 @@ def parse_benchmark_args(
     if include_output:
         parser.add_argument("--output", type=Path)
     return parser.parse_args()
+
+
+def run_verification(config: BenchmarkConfig, output_path: Path,
+                     args: argparse.Namespace) -> Optional[Path]:
+    """Сверяет ответы сразу после прогона, отдельным процессом.
+
+    Подпроцесс, а не импорт: оба скрипта сверки — самостоятельные CLI со своим
+    разбором аргументов, а math_verify умеет зависать и падать на отдельных
+    выражениях. Изоляция гарантирует, что уже записанный JSONL прогона (часы
+    работы) не пострадает, что бы ни случилось со сверкой.
+
+    Возвращает путь к файлу со сверенными ответами либо None.
+    """
+    script = "verify_imo_answers.py" if config.verifier == "imo" else "verify_answers.py"
+    suffix = "_imoverified.jsonl" if config.verifier == "imo" else "_verified.jsonl"
+    verified_path = output_path.with_name(output_path.stem + suffix)
+
+    cmd = [sys.executable, str(ROOT / script), str(output_path), "-o", str(verified_path)]
+    if config.verifier == "imo":
+        # Судьёй берём ту же модель, против которой шёл прогон: её сервер точно
+        # поднят, а дефолты скрипта смотрят на другой порт.
+        cmd += ["--judge-base-url", args.base_url,
+                "--judge-model", args.model,
+                "--judge-api-key", args.api_key]
+    elif sys.platform == "win32":
+        # На Windows таймаут math_verify реализован через сигналы и не работает.
+        cmd.append("--no-timeout")
+
+    print(f"\n[verify] {script} -> {verified_path.name}")
+    try:
+        proc = subprocess.run(cmd, cwd=str(ROOT), timeout=args.verify_timeout)
+    except subprocess.TimeoutExpired:
+        print(f"[verify] ОШИБКА: сверка не уложилась в {args.verify_timeout:.0f} с. "
+              f"Прогон сохранён: {output_path}\n"
+              f"          Запустите вручную: python {script} {output_path}")
+        return None
+    except Exception as exc:  # noqa: BLE001 — сверка не должна ронять прогон
+        print(f"[verify] ОШИБКА: {type(exc).__name__}: {exc}\n"
+              f"          Прогон сохранён: {output_path}\n"
+              f"          Запустите вручную: python {script} {output_path}")
+        return None
+
+    if proc.returncode != 0 or not verified_path.exists():
+        print(f"[verify] Сверка завершилась с кодом {proc.returncode}. "
+              f"Прогон сохранён: {output_path}\n"
+              f"          Запустите вручную: python {script} {output_path}")
+        return None
+
+    # Короткая сводка, чтобы не лезть в файл.
+    try:
+        total = correct = 0
+        with verified_path.open(encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                total += 1
+                correct += bool(rec.get("is_correct"))
+        if total:
+            print(f"[verify] ИТОГ {config.name}: {correct}/{total} = {correct/total:.1%}")
+    except Exception:  # noqa: BLE001 — сводка не критична
+        pass
+    return verified_path
 
 
 def build_record(
@@ -790,4 +877,15 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     print(f"Saved {counters['done']} records to {output_path}")
     if counters["errors"]:
         print(f"Задач с ошибками: {counters['errors']}")
+
+    # Сверка идёт ПОСЛЕ записи JSONL и не влияет на код возврата прогона:
+    # результат многочасовой работы не должен зависеть от того, отработал ли
+    # math_verify.
+    if not args.no_verify and counters["done"]:
+        run_verification(config, output_path, args)
+    elif args.no_verify:
+        print(f"[verify] пропущено (--no-verify). Вручную: "
+              f"python {'verify_imo_answers.py' if config.verifier == 'imo' else 'verify_answers.py'} "
+              f"{output_path}")
+
     return 1 if counters["errors"] else 0
