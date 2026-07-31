@@ -1,7 +1,39 @@
-# ВЕРСИЯ v1 — оценщик проверяет шаг БЕЗ упоминания инструмента в промпте.
-# Оставлена как базовая точка сравнения; актуальная версия — v2, где оценщику
-# явно предписано пользоваться python_exec. Различие между файлами ровно одно —
-# секция TOOL в системном промпте роли `evaluator`.
+# ВЕРСИЯ v3 = v2 + проверка «отвечает ли ответ на заданный вопрос».
+#
+# Отличий от agent-step-qwen4b-v2.yml ровно два:
+#   * generator — секции GOAL CHECK и FINISHING IS NOT "SOLVING IT ALL AT ONCE";
+#   * evaluator — обязательная проверка TARGET MATCH для шагов с \boxed{}.
+# Роли segmenter и verifier побайтово совпадают с v2.
+#
+# Зачем. На прогонах aime24/25/26 верный ответ присутствовал В РАЗМЫШЛЕНИЯХ
+# генератора в 10 провалах из 17 (59%), и в 6 из них модель прямо цитировала
+# инструкцию «DO NOT solve the whole problem in one answer» как причину его не
+# называть. Показательный пример — aime26 task 5: модель вывела $m+n = 65$ пять
+# раз, но забоксила промежуточное $\cos\theta = 29/36$, а оценщик поставил 1.0,
+# безупречно проверив арифметику и не заметив, что спрашивали другое.
+#
+# Поэтому правка ДВУСТОРОННЯЯ: запрет боксить промежуточное плюс явное
+# разрешение довести уже готовый вывод до конца. Односторонний запрет заставил
+# бы модель не боксить вообще ничего и умирать по бюджету.
+#
+# Верификатор НЕ трогаем намеренно: он и так ловит эту ошибку (13 провалов из
+# 17), но его вердикт ни на что не влияет, а на верных задачах он ошибается в
+# 41% случаев — делать его действующим сейчас нельзя.
+#
+# --- унаследовано от v2 ---
+# Оценщику РАЗРЕШЕНО пользоваться python_exec (секция TOOL в его промпте).
+#
+# Зачем: на прогонах aime24/25/26 стадия evaluate съедала 21.5% всего бюджета
+# (~10 900 токенов на вердикт), и в трассах видно, что оценщик проверяет чужую
+# алгебру прозой — вручную раскрывает многочлены. Инструмент делает ту же
+# проверку дешевле и надёжнее.
+#
+# ВАЖНО про чистоту эксперимента: сами инструменты оценщику отдаёт КОД
+# (evaluate_steps вызывает _chat_with_tools при use_tools), независимо от
+# промпта. Поэтому v1 против v2 — это сравнение «инструмент доступен, но про
+# него не сказано» против «доступен и предписан к использованию», а не
+# «инструментов нет» против «есть». Для полного отключения нужен --no-tools,
+# но он выключит их и генератору.
 #
 # Промпты для пошагового солвера под Qwen3-4B (langgraph_math_solver_qwen4b.py).
 #
@@ -73,6 +105,26 @@ roles:
         placeholder into your step.
       - If there are no accepted steps yet, you are on step one and giving a final
         answer is FORBIDDEN, no matter how easy the problem looks.
+
+      GOAL CHECK — do this before writing \boxed{}:
+      Re-read the exact question the problem asks ("Find m+n", "Find the area",
+      "How many ordered pairs"). Compare it with the value you are about to box.
+      - If the value is an INTERMEDIATE quantity that the question was only
+        derived from — a variable like $\cos\theta = 29/36$ when the problem asks
+        for $m+n$ — do NOT box it. State it as an ordinary step and stop; the
+        next call will finish the job.
+      - Judge by the QUESTION, not by the shape of the value: a fraction, a
+        radical or a symbolic expression can be a perfectly correct final answer
+        when that is what was asked for.
+
+      FINISHING IS NOT "SOLVING IT ALL AT ONCE":
+      If the accepted steps already contain everything needed and the only work
+      left is to combine derived values into the quantity actually asked for
+      (add $m+n$, take the remainder, count the cases you have listed), then DO
+      that combination now and box the result. The rule against solving the whole
+      problem in one answer forbids skipping the derivation — it never forbids
+      completing a derivation that is already finished. Withholding an answer you
+      have already computed wastes the whole solution.
 
       FORMAT:
       - Put your one step inside a single <step> ... </step> block.
@@ -183,6 +235,17 @@ roles:
       decide. A verdict that merely asserts ("looks correct") without recomputing
       anything is a failure of this role.
 
+      TOOL — `python_exec` (skip this section if no tools are offered to you):
+      Python with sympy, numpy and itertools preloaded. Use it to CHECK the step
+      instead of redoing the algebra by hand: expand the product the step claims
+      to factor, substitute the derived value back into the equation, recount the
+      cases, re-evaluate the arithmetic. One tool call settles a disputed number
+      far more reliably than a paragraph of manual work. Declare symbols
+      explicitly (x = symbols('x')) — nothing is predefined.
+
+      Judge by the tool's output when it disagrees with the step. Keep the code
+      out of RATIONALE; state what you checked and what came back.
+
       Show that recomputation in RATIONALE, not only in your head: it is the
       audit trail a human reads to see why a step was accepted or rejected.
       Emit the two sections exactly once, at the very end of your reply, and make
@@ -203,11 +266,26 @@ roles:
       FINAL-ANSWER STEPS — THIS RULE OVERRIDES EVERYTHING ABOVE:
       A step whose purpose is to state the final answer in \boxed{} is NOT trivial
       and NOT stagnant, even though it performs no new derivation.
-      - Score 1.0 if the boxed value follows correctly from the steps already in
-        the context, even with no arithmetic at all.
-      - Score 0.0 only if the boxed value contradicts the previous steps, is
-        arithmetically wrong, or answers a different question than the one asked.
-      NEVER fail a final-answer step for "containing no mathematical operations".
+
+      For a step that boxes a value, your RATIONALE must explicitly answer BOTH:
+      1. TARGET MATCH — does the boxed value answer the exact quantity the
+         problem asks for, rather than an intermediate it was derived from? If
+         the problem asks for $m+n$ and the box holds $\cos\theta$, that is a
+         failure even when the arithmetic is flawless. Judge by the QUESTION, not
+         by the shape of the value: a fraction, radical or symbolic expression is
+         a valid final answer whenever that is what was asked for.
+      2. MATH CORRECTNESS — does the boxed value follow correctly from the
+         accepted steps?
+
+      - Score 1.0 only if BOTH checks pass.
+      - Score 0.0 if the value fails TARGET MATCH, contradicts previous steps, or
+        is arithmetically wrong.
+      NEVER fail a final-answer step for "containing no mathematical operations":
+      restating an already-derived result is exactly what a final step looks like.
+
+      These two checks apply ONLY to steps that box a value. An ordinary
+      intermediate step is graded by the rules above and must not be failed for
+      "not answering the question yet" — it is not supposed to.
 
       DO NOT SCORE 0.0 FOR THESE REASONS — they are not errors:
       - The step is terse or states a correct result without re-deriving it.

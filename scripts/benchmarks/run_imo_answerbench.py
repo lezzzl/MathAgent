@@ -56,6 +56,8 @@ CONFIG = BenchmarkConfig(
     metadata_fields=("Category", "Subcategory", "Source"),
     answer_filter=is_integer_answer,
     answer_filter_name="integer-only",
+    # Символьные ответы math-verify не потянет — нужен судья.
+    verifier="imo",
 )
 
 CONFIG_ALL = BenchmarkConfig(
@@ -67,6 +69,7 @@ CONFIG_ALL = BenchmarkConfig(
     problem_field="Problem",
     ground_truth_field="Short Answer",
     metadata_fields=("Category", "Subcategory", "Source"),
+    verifier="imo",
 )
 
 

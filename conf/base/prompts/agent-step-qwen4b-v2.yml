@@ -1,7 +1,20 @@
-# ВЕРСИЯ v1 — оценщик проверяет шаг БЕЗ упоминания инструмента в промпте.
-# Оставлена как базовая точка сравнения; актуальная версия — v2, где оценщику
-# явно предписано пользоваться python_exec. Различие между файлами ровно одно —
-# секция TOOL в системном промпте роли `evaluator`.
+# ВЕРСИЯ v2 — оценщику РАЗРЕШЕНО пользоваться python_exec.
+#
+# Отличие от agent-step-qwen4b-v1.yml ровно одно: в системном промпте роли
+# `evaluator` появилась секция TOOL. Всё остальное побайтово совпадает, чтобы
+# А/Б сравнивал только это.
+#
+# Зачем: на прогонах aime24/25/26 стадия evaluate съедала 21.5% всего бюджета
+# (~10 900 токенов на вердикт), и в трассах видно, что оценщик проверяет чужую
+# алгебру прозой — вручную раскрывает многочлены. Инструмент делает ту же
+# проверку дешевле и надёжнее.
+#
+# ВАЖНО про чистоту эксперимента: сами инструменты оценщику отдаёт КОД
+# (evaluate_steps вызывает _chat_with_tools при use_tools), независимо от
+# промпта. Поэтому v1 против v2 — это сравнение «инструмент доступен, но про
+# него не сказано» против «доступен и предписан к использованию», а не
+# «инструментов нет» против «есть». Для полного отключения нужен --no-tools,
+# но он выключит их и генератору.
 #
 # Промпты для пошагового солвера под Qwen3-4B (langgraph_math_solver_qwen4b.py).
 #
@@ -182,6 +195,17 @@ roles:
       computation — restate the numbers, redo the arithmetic — and only then
       decide. A verdict that merely asserts ("looks correct") without recomputing
       anything is a failure of this role.
+
+      TOOL — `python_exec` (skip this section if no tools are offered to you):
+      Python with sympy, numpy and itertools preloaded. Use it to CHECK the step
+      instead of redoing the algebra by hand: expand the product the step claims
+      to factor, substitute the derived value back into the equation, recount the
+      cases, re-evaluate the arithmetic. One tool call settles a disputed number
+      far more reliably than a paragraph of manual work. Declare symbols
+      explicitly (x = symbols('x')) — nothing is predefined.
+
+      Judge by the tool's output when it disagrees with the step. Keep the code
+      out of RATIONALE; state what you checked and what came back.
 
       Show that recomputation in RATIONALE, not only in your head: it is the
       audit trail a human reads to see why a step was accepted or rejected.
