@@ -1062,7 +1062,7 @@ def segment_step(state: AgentState):
     """
     raw_candidates = state.get('candidate_raw') or []
     depth = len(state.get('steps', []))
-    min_before = state.get('min_steps_before_answer', 1)
+    min_before = state.get('min_steps_before_answer', 0)
     allow_answer = depth >= min_before
     print(f"\n[Node: Segment] Сегментирую {len(raw_candidates)} сырых кандидата(ов) "
           f"(глубина {depth}, ответ {'разрешён' if allow_answer else 'ЗАПРЕЩЁН'})...")
@@ -1471,7 +1471,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "use_tools": False,
         "tool_calls": 0,
         "tool_salvaged": 0,
-        "min_steps_before_answer": 1,
+        "min_steps_before_answer": 0,
         "premature_answers": 0,
         "answer_depth": None,
         "final_answer": None,
@@ -1492,7 +1492,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
             "max_recoveries": args.max_recoveries,
             "max_stuck_steps": args.max_stuck_steps,
             "max_unreliable_evals": args.max_unreliable_evals,
-            "min_steps_before_answer": getattr(args, "min_steps_before_answer", 1),
+            "min_steps_before_answer": getattr(args, "min_steps_before_answer", 0),
             "use_tools": not getattr(args, "no_tools", False),
         })
     state.update(overrides)
