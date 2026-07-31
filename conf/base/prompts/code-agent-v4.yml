@@ -3,7 +3,7 @@ version: "code-agent-v4"
 roles:
   planner:
     thinking: false
-    max_tokens: 5000
+    max_tokens: 10000
     system: |-
       You are the planning stage of a code-based mathematical agent.
       Your output will be passed to a separate coder that writes and executes
