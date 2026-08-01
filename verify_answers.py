@@ -15,6 +15,25 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 
+def _for_parse(s: str) -> str:
+    """Оборачивает голый LaTeX в $...$ для надёжного распознавания.
+
+    math-verify парсит '\\sqrt{6}' как ПУСТОЙ результат, а '$\\sqrt{6}$' —
+    корректно: без разделителей строка не распознаётся как LaTeX. Из-за этого
+    любой символьный ответ (корень, дробь, сумма) получал
+    'no_answer_extracted_from_model_output' и засчитывался неверным, даже когда
+    совпадал с эталоном дословно. На прогоне hmmt так были потеряны 4+ задачи,
+    включая '\\sqrt{6}' против '\\sqrt{6}'.
+
+    Если обёртка ($ или \\boxed) уже есть, не трогаем. Та же логика давно
+    работает в verify_imo_answers.py — здесь её просто не было.
+    """
+    s = (s or "").strip()
+    if not s or "$" in s or "\\boxed" in s:
+        return s
+    return f"${s}$"
+
+
 def extract_and_verify(model_answer: str, ground_truth, timeout_seconds) -> dict:
     """
     Парсит ответ модели (ожидается \\boxed{...} где-то в тексте) и ground truth,
@@ -39,8 +58,8 @@ def extract_and_verify(model_answer: str, ground_truth, timeout_seconds) -> dict
         model_answer = model_answer[last_boxed_idx:]
 
     try:
-        parsed_gt = parse(gt_str, parsing_timeout=timeout_seconds)
-        parsed_answer = parse(model_answer, parsing_timeout=timeout_seconds)
+        parsed_gt = parse(_for_parse(gt_str), parsing_timeout=timeout_seconds)
+        parsed_answer = parse(_for_parse(model_answer), parsing_timeout=timeout_seconds)
 
         result['extracted_text'] = str(parsed_answer) if parsed_answer is not None else None
 
