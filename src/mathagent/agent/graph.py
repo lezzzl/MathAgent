@@ -5,6 +5,7 @@ from typing import Annotated, Any, NotRequired, TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
 
 from mathagent.agent.vllm_chat import ChatVLLM
 from mathagent.pipelines.agent_eval.nodes import (
@@ -20,8 +21,9 @@ from mathagent.pipelines.agent_eval.nodes_code import (
 )
 from mathagent.pipelines.agent_eval.nodes_react import (
     create_python_tool,
-    create_python_tool_node,
     create_react_agent_node,
+    record_python_tool_call,
+    route_after_react_agent,
 )
 from mathagent.pipelines.agent_eval.nodes_step_code import (
     commit_final_step,
@@ -36,6 +38,7 @@ from mathagent.pipelines.agent_eval.nodes_step_code import (
     initialize_step_code_state,
     parse_step_output,
 )
+from mathagent.tools.final_answer import create_final_answer_tool
 
 
 @dataclass(frozen=True)
@@ -136,6 +139,8 @@ class ReactAgentState(TypedDict):
     tool_call_count: NotRequired[int]
     agent_history: NotRequired[list[dict[str, Any]]]
     tool_history: NotRequired[list[dict[str, Any]]]
+    format_retry_count: NotRequired[int]
+    forced_final_reason: NotRequired[str]
     finish_reason: NotRequired[str]
     status: NotRequired[str]
     solution: NotRequired[str]
@@ -456,6 +461,7 @@ def create_react_agent_graph(
     prompt_path: Path,
     max_tool_calls: int = 8,
     execution_timeout: float = 10.0,
+    tool_output_limit_chars: int = 16384,
     node_generation: NodeGeneration | None = None,
 ) -> Any:
     """Создаёт ReAct-граф с нативными вызовами изолированного Python tool."""
@@ -463,6 +469,8 @@ def create_react_agent_graph(
         raise ValueError("max_tool_calls must be positive")
     if execution_timeout <= 0:
         raise ValueError("execution_timeout must be positive")
+    if tool_output_limit_chars < 1:
+        raise ValueError("tool_output_limit_chars must be positive")
 
     generation = node_generation if node_generation is not None else {}
     model = create_node_model(
@@ -471,7 +479,8 @@ def create_react_agent_graph(
         "agent",
         generation,
     )
-    python_tool = create_python_tool(execution_timeout)
+    python_tool = create_python_tool(execution_timeout, tool_output_limit_chars)
+    final_answer_tool = create_final_answer_tool()
 
     graph = StateGraph(ReactAgentState)
     graph.add_node(
@@ -479,24 +488,27 @@ def create_react_agent_graph(
         create_react_agent_node(
             model,
             python_tool,
+            final_answer_tool,
             prompt_path,
             max_tool_calls,
         ),
     )
-    graph.add_node("execute_python", create_python_tool_node(python_tool))
+    graph.add_node(
+        "tools",
+        ToolNode([python_tool], handle_tool_errors=False),
+    )
+    graph.add_node("record_tool", record_python_tool_call)
     graph.add_edge(START, "agent")
     graph.add_conditional_edges(
         "agent",
-        lambda state: (
-            "execute_python"
-            if state["messages"][-1].tool_calls
-            else "finished"
-        ),
+        route_after_react_agent,
         {
-            "execute_python": "execute_python",
+            "tools": "tools",
+            "agent": "agent",
             "finished": END,
         },
     )
-    graph.add_edge("execute_python", "agent")
-    recursion_limit = 2 * max_tool_calls + 4
+    graph.add_edge("tools", "record_tool")
+    graph.add_edge("record_tool", "agent")
+    recursion_limit = 3 * max_tool_calls + 6
     return graph.compile().with_config({"recursion_limit": recursion_limit})
