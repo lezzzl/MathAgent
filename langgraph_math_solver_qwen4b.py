@@ -106,6 +106,26 @@ ROLES: Dict[str, Role] = {
 }
 
 
+def _num_predict_overrides() -> Dict[str, int]:
+    """Разбирает ROLE_NUM_PREDICT="generator=55000,verifier=30000".
+
+    Лимит роли живёт в yml, и поднять его для одного прогона раньше можно было
+    только новой версией промпта — что портит А/Б: версия перестаёт означать
+    «одно изменение». Через окружение лимит становится отдельной осью.
+    """
+    out: Dict[str, int] = {}
+    for chunk in ROLE_NUM_PREDICT_ENV.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        role, _, value = chunk.partition("=")
+        try:
+            out[role.strip()] = int(value)
+        except ValueError:
+            print(f"[Prompts] ROLE_NUM_PREDICT: не разобрал '{chunk}', пропускаю.")
+    return out
+
+
 def load_prompts_from_yaml(yaml_path: "Path | str") -> None:
     try:
         with open(yaml_path, "r", encoding="utf-8") as f:
@@ -121,13 +141,19 @@ def load_prompts_from_yaml(yaml_path: "Path | str") -> None:
                 print(f"[Prompts] Warning: unknown role '{role_name}' in {yaml_path}, ignoring.")
                 continue
             defaults = _DEFAULT_ROLE_DEFS[role_name]
+            num_predict = role_cfg.get("num_predict", defaults["num_predict"])
+            override = _num_predict_overrides().get(role_name)
+            if override:
+                print(f"[Prompts] {role_name}: num_predict {num_predict} -> {override} "
+                      f"(ROLE_NUM_PREDICT)")
+                num_predict = override
             ROLES[role_name] = Role(
                 name=role_name,
                 system_prompt=role_cfg.get("system", defaults["system"]),
                 user_template=role_cfg.get("user_template", defaults["user_template"]),
                 temperature=float(role_cfg.get("temperature", defaults["temperature"])),
                 json_format=bool(role_cfg.get("json_format", defaults["json_format"])),
-                num_predict=role_cfg.get("num_predict", defaults["num_predict"]),
+                num_predict=num_predict,
                 enable_thinking=role_cfg.get("enable_thinking", defaults.get("enable_thinking")),
             )
 
@@ -165,6 +191,20 @@ SEGMENTER_INPUT_CHARS = int(os.getenv("SEGMENTER_INPUT_CHARS", "8000"))
 # из-за них сдалась с диагнозом «формат JSON», израсходовав 0 токенов.
 CHAT_RETRIES = int(os.getenv("CHAT_RETRIES", "1"))
 CHAT_RETRY_BACKOFF = float(os.getenv("CHAT_RETRY_BACKOFF", "5"))
+
+# Переспрос оценщика, когда вердикт не разобрался. Держим коротким: нужен ровно
+# балл, вся проверка уже сделана в предыдущем ответе.
+EVAL_REASK = (
+    "Your previous reply did not contain a parseable verdict. Reply now with "
+    "ONLY the two sections, nothing before or after:\n"
+    "###SCORE###\n0.0 or 1.0\n###RATIONALE###\none sentence."
+)
+EVAL_REASK_NUM_PREDICT = int(os.getenv("EVAL_REASK_NUM_PREDICT", "1000"))
+
+# Потолок генерации у ролей можно поднять, не заводя новую версию промпта:
+# ROLE_NUM_PREDICT="generator=55000,verifier=30000". Нужен для А/Б лимита
+# генератора — на прогонах 0802 половина задач упиралась в 40000 (см. память).
+ROLE_NUM_PREDICT_ENV = os.getenv("ROLE_NUM_PREDICT", "")
 
 
 # ---------------------------------------------------------------------------
@@ -1246,6 +1286,33 @@ def evaluate_steps(state: AgentState):
         api_errors += bool(res.error)
 
         score, rationale, reliable = _parse_eval_response(res.text)
+
+        # Неразобранный вердикт молча превращался в 0.0, то есть в ОТКЛОНЕНИЕ
+        # шага. На прогонах 0802 так терялось 17% вердиктов на aime24 и 26% на
+        # aime26: верные шаги отбрасывались, задача уходила в recovery и
+        # доедала бюджет. Почти всегда причина — цикл инструментов закончился
+        # текстом без маркера, а не содержательное несогласие.
+        #
+        # Поэтому один переспрос без инструментов и без размышлений: он стоит
+        # ~200 токенов против ~11k на лишний круг генерации, и отклонение
+        # остаётся только тогда, когда оценщик действительно его вынес.
+        if not reliable and not res.error:
+            print(f"    - Candidate {i+1}: вердикт не разобран — переспрашиваю "
+                  f"без инструментов.")
+            retry = _chat(
+                messages + [{"role": "user", "content": EVAL_REASK}],
+                temperature=role.temperature, num_predict=EVAL_REASK_NUM_PREDICT,
+                json_format=False, enable_thinking=False,
+                stage="evaluate", depth=depth_now, branch=i + 1,
+                record_extra={"reask": True},
+            )
+            total_tokens += retry.tokens
+            api_errors += bool(retry.error)
+            r_score, r_rationale, r_reliable = _parse_eval_response(retry.text)
+            if r_reliable:
+                score, rationale, reliable = r_score, r_rationale, r_reliable
+                print(f"    - Candidate {i+1}: переспрос дал {score:.1f}.")
+
         if res.error:
             # Иначе сетевой сбой выглядит как «оценщик выдал мусор».
             rationale = f"СЕТЕВОЙ СБОЙ ({res.error}) — оценка не получена, не вина модели."
