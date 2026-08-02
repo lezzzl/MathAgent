@@ -1,4 +1,23 @@
-# ВЕРСИЯ v4 = v3 БЕЗ УТЕЧКИ ЗАДАЧ БЕНЧМАРКА В ПРИМЕРЫ.
+# ВЕРСИЯ v5 = v4 С ДВУМЯ ИСПРАВЛЕНИЯМИ В ПРИМЕРАХ.
+#
+# Обе правки — в примерах, инструкции не менялись.
+#
+# 1. СЕГМЕНТАТОР: в v4 обеззаразили генератора и оценщика, а пример сегментатора
+#    пропустили — в нём остался черновик «Let D be distance, v the speed. Then
+#    D/v = D/(v+2)+1», то есть постановка AIME26 task 1. Скрипт проверки её не
+#    ловит: числа однозначные, а значимых слов в цепочке меньше пяти. Заменено
+#    на искусственный черновик с тем же уравнением-пустышкой, что и у оценщика.
+#
+# 2. ОЦЕНЩИК, Example 3: контекст говорил «total is 101 + 108 = 209», шаг боксил
+#    $\boxed{137}$, а рационале утверждало «209, matching the boxed value» —
+#    пример сам себе противоречил и показывал оценку 1.0 за ответ, НЕ следующий
+#    из вывода. Это ровно та ошибка, против которой писался v3 (TARGET MATCH) и
+#    которая на hmmt воспроизводится в задаче 13 (вывели 105, ответили 266).
+#    Теперь Example 3 боксит 209, а несовпадение вынесено в новый Example 4 с
+#    оценкой 0.0.
+#
+# --- унаследовано от v4 ---
+# v4 = v3 БЕЗ УТЕЧКИ ЗАДАЧ БЕНЧМАРКА В ПРИМЕРЫ.
 #
 # ВНИМАНИЕ: v1, v2 и v3 СОДЕРЖАТ DATA LEAKAGE и непригодны для честного замера.
 # Их примеры взяты из реальных задач бенчмарков:
@@ -211,15 +230,17 @@ roles:
       (here: the final answer, boxed — e.g. \boxed{209} — if the step states one;
       otherwise the bare word NONE. Never copy a placeholder or this description.)
 
-      Example.
+      Example (a deliberately artificial toy draft, not a real task).
       Accepted steps: (none)
       Raw draft:
-      "Okay let me set this up. Let D be distance, v the speed. Then D/v = D/(v+2)+1.
-      Solving, D = ... so the answer is 42. Wait, let me double check. Yes, 42."
+      "Okay let me set this up. Call the two unknown integers $u$ and $v$. The
+      problem says their sum is 51 and both are multiples of 4. Hmm, so
+      $4u' + 4v' = 51$. Solving, u = ... so the answer is 42. Wait, let me double
+      check. Yes, 42."
       Your reply:
       ###STEP###
-      Let $D$ be the distance and $v$ the speed. Since all arrive together,
-      $\frac{D}{v} = \frac{D}{v+2} + 1$.
+      Let $u$ and $v$ be the two integers. The stated conditions give
+      $4u' + 4v' = 51$.
       ###ANSWER###
       NONE
     user_template: |
@@ -353,13 +374,24 @@ roles:
 
       Example 3 (Final Answer With No New Arithmetic -> 1.0):
       Problem context: A toy example — ... Step 2: the total is $101 + 108 = 209$.
-      Proposed step: Therefore the answer is $\boxed{137}$.
+      Proposed step: Therefore the answer is $\boxed{209}$.
       Your output:
       ###SCORE###
       1.0
       ###RATIONALE###
       Recheck: $101 + 108 = 209$, matching the boxed value and the prior steps.
       Final-answer step; absence of new arithmetic is expected here, not a defect.
+
+      Example 4 (Boxed Value Contradicts The Derivation -> 0.0):
+      Problem context: A toy example — ... Step 2: the total is $101 + 108 = 209$.
+      Proposed step: Therefore the answer is $\boxed{137}$.
+      Your output:
+      ###SCORE###
+      0.0
+      ###RATIONALE###
+      Recheck: the accepted steps give $101 + 108 = 209$, but the step boxes 137.
+      A final-answer step must report the value the derivation actually produced;
+      a mismatch is an error even when every earlier step is correct.
     user_template: |
       Problem context:
       {context}
