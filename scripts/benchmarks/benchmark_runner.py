@@ -125,6 +125,7 @@ def parse_benchmark_args(
     parser.add_argument("--max-repairs", type=int, default=2)
     parser.add_argument("--max-coder-format-retries", type=int, default=1)
     parser.add_argument("--max-tool-calls", type=int, default=8)
+    parser.add_argument("--tool-output-limit-chars", type=int, default=16384)
     parser.add_argument("--execution-timeout", type=float, default=10.0)
     parser.add_argument("--limit", type=int) # ограничивает число задач из датасета, чтобы быстро проверить работу runner
 
@@ -216,6 +217,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-coder-format-retries must be non-negative")
     if args.max_tool_calls < 1:
         raise ValueError("--max-tool-calls must be positive")
+    if args.tool_output_limit_chars < 1:
+        raise ValueError("--tool-output-limit-chars must be positive")
     if args.execution_timeout <= 0:
         raise ValueError("--execution-timeout must be positive")
     if args.vllm_max_num_seqs < 1:
@@ -282,7 +285,12 @@ def create_manifest_config(
                         else {}
                     ),
                     **(
-                        {"max_tool_calls": args.max_tool_calls}
+                        {
+                            "max_tool_calls": args.max_tool_calls,
+                            "tool_output_limit_chars": (
+                                args.tool_output_limit_chars
+                            ),
+                        }
                         if args.pipeline == "react_agent"
                         else {"max_repairs": args.max_repairs}
                     ),
@@ -350,6 +358,7 @@ def create_graph(
             prompt_path,
             max_tool_calls=args.max_tool_calls,
             execution_timeout=args.execution_timeout,
+            tool_output_limit_chars=args.tool_output_limit_chars,
             node_generation=node_generation,
         )
         return GraphBuild(graph, node_generation)
