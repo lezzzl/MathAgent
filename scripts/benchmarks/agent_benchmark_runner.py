@@ -27,7 +27,11 @@ from trajectory import RECORDER
 from dotenv import load_dotenv
 load_dotenv()
 
-DEFAULT_PROMPT = ROOT / "conf/base/prompts/agent-step-v1.yml"
+# v2 = v1 с обеззараженными примерами. v1 содержит DATA LEAKAGE (постановка
+# AIME26 task 1 у генератора, палиндромы AIME26 task 2 и «180+24=204» из
+# AIME24 task 60 у оценщика) и оставлен только для воспроизведения старых
+# прогонов: --prompt conf/base/prompts/agent-step-v1.yml
+DEFAULT_PROMPT = ROOT / "conf/base/prompts/agent-step-v2.yml"
 
 # Пошаговые пайплайны, переключаемые флагом --pipeline.
 #   default — оригинал под Qwen 7B/9B (langgraph_math_solver);
@@ -43,9 +47,22 @@ DEFAULT_PROMPTS = {
     # одно изменение, чтобы А/Б был чистым):
     #   v1 — базовый;
     #   v2 = v1 + секция TOOL у оценщика;
-    #   v3 = v2 + проверка «ответ отвечает на заданный вопрос» (generator+evaluator).
-    # Прежние версии подключаются явно: --prompt conf/base/prompts/...-v2.yml
-    "qwen4b": ROOT / "conf/base/prompts/agent-step-qwen4b-v3.yml",
+    #   v3 = v2 + проверка «ответ отвечает на заданный вопрос» (generator+evaluator);
+    #   v4 = v3 с обеззараженными примерами генератора и оценщика;
+    #   v5 = v4 + обеззараженный пример сегментатора (в v4 его пропустили: там
+    #        оставалась постановка AIME26 task 1) и исправленный Example 3
+    #        оценщика (боксил 137 при выводе 209 — пример показывал оценку 1.0
+    #        за ответ, не следующий из вывода).
+    #
+    # Дефолт — v5. Версии v1–v3 содержат DATA LEAKAGE: их примеры взяты из
+    # реальных задач бенчмарков (постановка AIME26 task 1, палиндромы AIME26
+    # task 2, «180+24=204» из AIME24 task 60, а v3 добавил cos(theta)=29/36 и
+    # цель m+n из AIME26 task 5). Замер на них завышен, поэтому по умолчанию их
+    # брать нельзя. v4 чист для aime24/25, но не для aime26 (см. выше).
+    # Подключать старые версии только осознанно и только для воспроизведения
+    # прошлых прогонов: --prompt conf/base/prompts/agent-step-qwen4b-v4.yml
+    # Проверка: python scripts/check_prompt_leakage.py
+    "qwen4b": ROOT / "conf/base/prompts/agent-step-qwen4b-v5.yml",
 }
 
 # Активный модуль пайплайна. Переустанавливается в run_benchmark по --pipeline;
@@ -193,10 +210,12 @@ def parse_benchmark_args(
     )
     group.add_argument("--branch-mode", default="multi", choices=["single", "multi"])
     group.add_argument(
-        "--token-budget", type=int, default=250000,
-        help="Лимит токенов на задачу. С reasoning-моделью один шаг стоит до "
-             "num_predict генератора + оценщика (сейчас 10k + 10k), поэтому прежние "
-             "50k исчерпывались на втором шаге и убивали многошаговый режим",
+        "--token-budget", type=int, default=800000,
+        help="Лимит токенов на задачу. Дефолт поднят с 250k: с включёнными "
+             "инструментами один вызов генератора стоит до ~220k токенов (цикл "
+             "тулов умножает num_predict=40000 на число витков), и на 600k "
+             "по-прежнему умирали задачи, которые были в шаге от ответа. "
+             "Снижайте, если нужен более дешёвый и быстрый прогон.",
     )
     group.add_argument("--max-stuck-steps", type=int, default=2)
     group.add_argument("--max-unreliable-evals", type=int, default=3)

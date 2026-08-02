@@ -28,7 +28,6 @@ import glob
 import json
 import re
 import sys
-from collections import Counter
 from pathlib import Path
 
 import yaml
@@ -104,10 +103,22 @@ def ngrams(text: str, n: int = NGRAM) -> set[tuple[str, ...]]:
     return {tuple(seq[i:i + n]) for i in range(max(0, len(seq) - n + 1))}
 
 
+# Версии, заражённость которых установлена и намеренно сохранена: они нужны,
+# чтобы воспроизвести прошлые прогоны. Их находки печатаются, но не влияют на
+# код возврата — иначе проверка всегда падала бы и была бы бесполезна.
+LEGACY = {
+    "agent-step-qwen4b-v1.yml",
+    "agent-step-qwen4b-v2.yml",
+    "agent-step-qwen4b-v3.yml",
+    "agent-step-v1.yml",
+}
+
+
 def check(path: Path, truths: set[str], problems) -> int:
     cfg = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("roles", {})
     findings = 0
-    print(f"\n=== {path.name} ===")
+    legacy = path.name in LEGACY
+    print(f"\n=== {path.name} ==={'  [архивная версия, находки ожидаемы]' if legacy else ''}")
 
     for role, spec in cfg.items():
         text = "\n".join(str(spec.get(k, "")) for k in ("system", "user_template"))
@@ -132,18 +143,20 @@ def check(path: Path, truths: set[str], problems) -> int:
                       f"...{frag}...")
     if not findings:
         print("  утечки не найдено")
-    return findings
+    return 0 if legacy else findings
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("prompts", nargs="*", type=Path,
-                    help="yml с промптами (по умолчанию — все qwen4b-версии)")
+                    help="yml с промптами (по умолчанию — все в conf/base/prompts)")
     args = ap.parse_args()
 
-    paths = args.prompts or sorted(
-        (ROOT / "conf" / "base" / "prompts").glob("agent-step-qwen4b-v*.yml"))
+    # По умолчанию проверяются ВСЕ промпты каталога, а не только qwen4b-линейка:
+    # заражённые примеры нашлись и в agent-step-v1.yml (промпт 9B), а прогоны
+    # коллег идут по нему же.
+    paths = args.prompts or sorted((ROOT / "conf" / "base" / "prompts").glob("*.yml"))
     truths, problems = load_benchmark_data()
     print(f"Эталонов собрано: {len(truths)}, условий задач: {len(problems)}")
 
