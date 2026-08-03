@@ -11,6 +11,7 @@ from mathagent.agent.vllm_chat import ChatVLLM
 from mathagent.pipelines.agent_eval.nodes import (
     create_solver_node,
     load_prompt_role,
+    prompt_has_role,
 )
 from mathagent.pipelines.agent_eval.nodes_code import (
     create_code_executor_node,
@@ -20,9 +21,8 @@ from mathagent.pipelines.agent_eval.nodes_code import (
     create_repair_node,
 )
 from mathagent.pipelines.agent_eval.nodes_react import (
-    create_python_tool,
     create_react_agent_node,
-    record_python_tool_call,
+    record_react_tool_call,
     route_after_react_agent,
 )
 from mathagent.pipelines.agent_eval.nodes_step_code import (
@@ -39,6 +39,12 @@ from mathagent.pipelines.agent_eval.nodes_step_code import (
     parse_step_output,
 )
 from mathagent.tools.final_answer import create_final_answer_tool
+from mathagent.tools.cot import create_cot_tool
+from mathagent.tools.python_tools import (
+    REACT_V2_PYTHON_DESCRIPTION,
+    create_python_tool,
+    create_repair_tool,
+)
 
 
 @dataclass(frozen=True)
@@ -140,7 +146,7 @@ class ReactAgentState(TypedDict):
     agent_history: NotRequired[list[dict[str, Any]]]
     tool_history: NotRequired[list[dict[str, Any]]]
     format_retry_count: NotRequired[int]
-    forced_final_reason: NotRequired[str]
+    had_format_recovery: NotRequired[bool]
     finish_reason: NotRequired[str]
     status: NotRequired[str]
     solution: NotRequired[str]
@@ -461,43 +467,61 @@ def create_react_agent_graph(
     prompt_path: Path,
     max_tool_calls: int = 8,
     execution_timeout: float = 10.0,
-    tool_output_limit_chars: int = 16384,
     node_generation: NodeGeneration | None = None,
 ) -> Any:
-    """Создаёт ReAct-граф с нативными вызовами изолированного Python tool."""
+    """Создаёт ReAct-граф с набором tools из выбранной версии промпта."""
     if max_tool_calls < 1:
         raise ValueError("max_tool_calls must be positive")
     if execution_timeout <= 0:
         raise ValueError("execution_timeout must be positive")
-    if tool_output_limit_chars < 1:
-        raise ValueError("tool_output_limit_chars must be positive")
 
     generation = node_generation if node_generation is not None else {}
-    model = create_node_model(
+    agent_model = create_node_model(
         model_config,
         prompt_path,
         "agent",
         generation,
     )
-    python_tool = create_python_tool(execution_timeout, tool_output_limit_chars)
+    cot_enabled = prompt_has_role(prompt_path, "cot")
+    cot_tool = None
+    repair_tool = None
+    if cot_enabled:
+        cot_model = create_node_model(
+            model_config,
+            prompt_path,
+            "cot",
+            generation,
+        )
+        cot_tool = create_cot_tool(cot_model, prompt_path)
+        python_tool = create_python_tool(
+            execution_timeout,
+            description=REACT_V2_PYTHON_DESCRIPTION,
+        )
+        executable_tools = [cot_tool, python_tool]
+    else:
+        python_tool = create_python_tool(execution_timeout)
+        repair_tool = create_repair_tool(execution_timeout)
+        executable_tools = [python_tool, repair_tool]
     final_answer_tool = create_final_answer_tool()
 
     graph = StateGraph(ReactAgentState)
     graph.add_node(
         "agent",
         create_react_agent_node(
-            model,
+            agent_model,
             python_tool,
             final_answer_tool,
             prompt_path,
             max_tool_calls,
+            repair_tool=repair_tool,
+            cot_tool=cot_tool,
         ),
     )
     graph.add_node(
         "tools",
-        ToolNode([python_tool], handle_tool_errors=False),
+        ToolNode(executable_tools, handle_tool_errors=False),
     )
-    graph.add_node("record_tool", record_python_tool_call)
+    graph.add_node("record_tool", record_react_tool_call)
     graph.add_edge(START, "agent")
     graph.add_conditional_edges(
         "agent",
