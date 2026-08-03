@@ -1,10 +1,9 @@
-import json
 import time
 from pathlib import Path
 from typing import Any, Callable
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import BaseTool
 
 from mathagent.pipelines.agent_eval.nodes import (
     add_reasoning,
@@ -12,48 +11,6 @@ from mathagent.pipelines.agent_eval.nodes import (
     get_message_usage,
     load_prompt_role,
 )
-from mathagent.tools.python_executor import PythonExecutor
-
-
-def truncate_tool_output(value: str, limit: int) -> str:
-    """Оставляет начало и конец длинного вывода для контекста модели."""
-    if len(value) <= limit:
-        return value
-
-    omitted = len(value) - limit
-    marker = ""
-    for _ in range(3):
-        marker = f"\n... [truncated {omitted} characters] ...\n"
-        omitted = len(value) - (limit - len(marker))
-    marker = f"\n... [truncated {omitted} characters] ...\n"
-    if len(marker) >= limit:
-        return value[:limit]
-
-    available = limit - len(marker)
-    head_length = available // 2
-    tail_length = available - head_length
-    return f"{value[:head_length]}{marker}{value[-tail_length:]}"
-
-
-def create_python_tool(timeout: float, output_limit_chars: int) -> BaseTool:
-    """Создаёт Python tool с полным artifact и сокращённым ответом для LLM."""
-    executor = PythonExecutor(timeout=timeout)
-
-    @tool("python", response_format="content_and_artifact")
-    def python_tool(code: str, purpose: str) -> tuple[str, dict[str, Any]]:
-        """Execute self-contained Python/SymPy code for a mathematical purpose."""
-        del purpose
-        started = time.perf_counter()
-        execution = executor.run(code).to_dict()
-        execution["latency_seconds"] = round(time.perf_counter() - started, 3)
-        model_execution = {
-            **execution,
-            "stdout": truncate_tool_output(execution["stdout"], output_limit_chars),
-            "stderr": truncate_tool_output(execution["stderr"], output_limit_chars),
-        }
-        return json.dumps(model_execution, ensure_ascii=False), execution
-
-    return python_tool
 
 
 def clean_agent_message(message: AIMessage, message_id: str) -> AIMessage:
@@ -83,21 +40,24 @@ def build_react_trace(
 def format_retry_messages(
     message: AIMessage,
     clean_message: AIMessage,
+    tool_calls_remaining: int,
+    available_tool_names: list[str],
 ) -> list[Any]:
-    """Закрывает невалидные tool calls и требует терминальный final_answer."""
+    """Закрывает невалидные tool calls и запрашивает одно корректное действие."""
     retry_message = clean_message
     if message.invalid_tool_calls:
         retry_message = AIMessage(
             content=message.content,
             id=clean_message.id,
         )
+
     retry_messages: list[Any] = [retry_message]
     for tool_call in message.tool_calls:
         retry_messages.append(
             ToolMessage(
                 content=(
                     "This tool call is invalid and was not executed. "
-                    "Submit the best supported answer with final_answer."
+                    "Return exactly one valid tool call."
                 ),
                 tool_call_id=tool_call["id"],
                 name=tool_call.get("name"),
@@ -105,17 +65,30 @@ def format_retry_messages(
                 id=f"react:format_error:{tool_call['id']}",
             )
         )
+
+    if tool_calls_remaining > 0:
+        choices = ", ".join(available_tool_names)
+        allowed_tools = f"Use exactly one of these tools: {choices}."
+    else:
+        allowed_tools = "The tool budget is exhausted, so use final_answer."
     retry_messages.append(
         HumanMessage(
             content=(
                 "Your previous response did not follow the required tool protocol. "
-                "Do not call Python. Submit the best answer supported by the "
-                "available reasoning and tool results using final_answer."
+                f"Return exactly one valid tool call. {allowed_tools}"
             ),
             id="react:format_retry",
         )
     )
     return retry_messages
+
+
+def execution_failed(tool_history: list[dict[str, Any]]) -> bool:
+    """Проверяет, что последняя исполненная попытка завершилась ошибкой."""
+    if not tool_history:
+        return False
+    execution = tool_history[-1]["execution"]
+    return execution["returncode"] != 0 or execution["timeout"] is True
 
 
 def create_react_agent_node(
@@ -124,13 +97,25 @@ def create_react_agent_node(
     final_answer_tool: BaseTool,
     prompt_path: Path,
     max_tool_calls: int,
+    repair_tool: BaseTool | None = None,
+    cot_tool: BaseTool | None = None,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
-    """Вызывает ReAct-модель и обрабатывает Python либо final_answer action."""
+    """Вызывает ReAct-модель и обрабатывает tools выбранной версии промпта."""
+    if repair_tool is not None and cot_tool is not None:
+        raise ValueError("ReAct graph cannot enable cot and repair together")
+
     prompt_version, role = load_prompt_role(prompt_path, "agent")
+    budgeted_tools = [python_tool]
+    if cot_tool is not None:
+        budgeted_tools.insert(0, cot_tool)
+    if repair_tool is not None:
+        budgeted_tools.append(repair_tool)
+    available_tools = [*budgeted_tools, final_answer_tool]
+    available_tool_names = [tool.name for tool in available_tools]
     model_with_tools = model.bind_tools(
-        [python_tool, final_answer_tool],
+        available_tools,
         tool_choice="auto",
-        strict=True,
+        strict=False,
         parallel_tool_calls=False,
     )
     model_with_final_answer = model.bind_tools(
@@ -153,22 +138,29 @@ def create_react_agent_node(
             ]
 
         tool_call_count = state.get("tool_call_count", 0)
-        forced_final_reason = state.get("forced_final_reason")
-        if tool_call_count >= max_tool_calls and forced_final_reason is None:
-            forced_final_reason = "tool_limit_reached"
+        tool_calls_remaining = max(max_tool_calls - tool_call_count, 0)
+        forced_final = tool_calls_remaining == 0
+        if forced_final:
             new_messages.append(
                 HumanMessage(
                     content=(
-                        "The Python tool-call limit has been reached. Do not call "
-                        "Python. Submit the best answer supported by the available "
-                        "reasoning and tool results using final_answer."
+                        "The tool-call limit has been reached. Do not call any "
+                        "reasoning or execution tool. Submit the best supported "
+                        "answer using final_answer."
                     ),
                     id="react:tool_limit",
                 )
             )
 
-        forced_final = forced_final_reason is not None
-        invocation_messages = [*messages, *new_messages]
+        budget_message = HumanMessage(
+            content=(
+                f"Tool calls remaining: {tool_calls_remaining}. "
+                f"Each call to {', '.join(tool.name for tool in budgeted_tools)} "
+                "consumes one call."
+            ),
+            id=f"react:budget:{tool_call_count}",
+        )
+        invocation_messages = [*messages, *new_messages, budget_message]
         iteration = len(state.get("agent_history", []))
         started = time.perf_counter()
         message = (
@@ -204,29 +196,78 @@ def create_react_agent_node(
             tool_name = tool_call.get("name")
             arguments = tool_call.get("args") or {}
             history_entry["tool_call_id"] = tool_call.get("id")
+
             if tool_name == python_tool.name:
                 code = arguments.get("code")
                 purpose = arguments.get("purpose")
                 if forced_final:
-                    format_error = "Python cannot be called during forced finalization"
+                    format_error = "Python cannot be called after the execution limit"
                 elif not isinstance(code, str) or not code.strip():
                     format_error = "Python tool call must contain non-empty code"
-                elif not isinstance(purpose, str) or not purpose.strip():
-                    format_error = "Python tool call must contain non-empty purpose"
+                elif purpose is not None and not isinstance(purpose, str):
+                    format_error = "Python purpose must be text when provided"
                 else:
                     history_entry["action"] = "python"
                     return {
                         **base_update,
                         "messages": [*new_messages, clean_message],
                         "agent_history": [*agent_history, history_entry],
+                        "format_retry_count": 0,
                         "status": "tool_requested",
                     }
+
+            elif cot_tool is not None and tool_name == cot_tool.name:
+                goal = arguments.get("goal")
+                if forced_final:
+                    format_error = "CoT cannot be called after the tool limit"
+                elif not isinstance(goal, str) or not goal.strip():
+                    format_error = "CoT tool call must contain a non-empty goal"
+                else:
+                    history_entry["action"] = "cot"
+                    return {
+                        **base_update,
+                        "messages": [*new_messages, clean_message],
+                        "agent_history": [*agent_history, history_entry],
+                        "format_retry_count": 0,
+                        "status": "tool_requested",
+                    }
+
+            elif repair_tool is not None and tool_name == repair_tool.name:
+                corrected_code = arguments.get("corrected_code")
+                tool_history = list(state.get("tool_history", []))
+                if forced_final:
+                    format_error = "Repair cannot be called after the execution limit"
+                elif not execution_failed(tool_history):
+                    format_error = "Repair requires a previous failed execution"
+                elif not isinstance(corrected_code, str) or not corrected_code.strip():
+                    format_error = "Repair must contain non-empty corrected_code"
+                else:
+                    history_entry["action"] = "repair"
+                    history_entry["repair_of_tool_call_id"] = tool_history[-1][
+                        "tool_call_id"
+                    ]
+                    return {
+                        **base_update,
+                        "messages": [*new_messages, clean_message],
+                        "agent_history": [*agent_history, history_entry],
+                        "format_retry_count": 0,
+                        "status": "tool_requested",
+                    }
+
             elif tool_name == final_answer_tool.name:
                 answer = arguments.get("answer")
                 if not isinstance(answer, str) or not answer.strip():
                     format_error = "final_answer must contain a non-empty answer"
                 else:
-                    finish_reason = forced_final_reason or "final_answer"
+                    finish_reason = (
+                        "tool_limit_reached"
+                        if forced_final
+                        else (
+                            "format_recovery"
+                            if state.get("had_format_recovery")
+                            else "final_answer"
+                        )
+                    )
                     history_entry["action"] = "final_answer"
                     completed_history = [*agent_history, history_entry]
                     return {
@@ -253,11 +294,16 @@ def create_react_agent_node(
             **base_update,
             "messages": [
                 *new_messages,
-                *format_retry_messages(message, clean_message),
+                *format_retry_messages(
+                    message,
+                    clean_message,
+                    tool_calls_remaining,
+                    available_tool_names,
+                ),
             ],
             "agent_history": [*agent_history, history_entry],
             "format_retry_count": 1,
-            "forced_final_reason": "format_recovery",
+            "had_format_recovery": True,
             "status": "format_retry",
         }
 
@@ -265,7 +311,7 @@ def create_react_agent_node(
 
 
 def route_after_react_agent(state: dict[str, Any]) -> str:
-    """Направляет Python в ToolNode, format retry обратно в agent, ответ в END."""
+    """Направляет execution в ToolNode, format retry обратно в agent, ответ в END."""
     status = state["status"]
     if status == "tool_requested":
         return "tools"
@@ -276,38 +322,80 @@ def route_after_react_agent(state: dict[str, Any]) -> str:
     raise ValueError(f"Unknown ReAct agent status: {status}")
 
 
-def record_python_tool_call(state: dict[str, Any]) -> dict[str, Any]:
-    """Сохраняет полный artifact Python после выполнения стандартной ToolNode."""
+def record_react_tool_call(state: dict[str, Any]) -> dict[str, Any]:
+    """Сохраняет artifact выполненного Python, repair или CoT tool."""
     messages = state["messages"]
     if len(messages) < 2:
-        raise ValueError("Python tool result has no matching agent message")
+        raise ValueError("Tool result has no matching agent message")
 
     agent_message = messages[-2]
     tool_message = messages[-1]
     if not isinstance(agent_message, AIMessage) or len(agent_message.tool_calls) != 1:
-        raise ValueError("Python tool result requires exactly one AI tool call")
+        raise ValueError("Tool result requires exactly one AI tool call")
     if not isinstance(tool_message, ToolMessage):
-        raise ValueError("Python tool execution did not return a ToolMessage")
+        raise ValueError("Tool execution did not return a ToolMessage")
 
     tool_call = agent_message.tool_calls[0]
     if tool_message.tool_call_id != tool_call["id"]:
-        raise ValueError("Python ToolMessage does not match the requested tool call")
+        raise ValueError("ToolMessage does not match the requested tool call")
     if not isinstance(tool_message.artifact, dict):
-        raise ValueError("Python ToolMessage has no full execution artifact")
+        raise ValueError("ToolMessage has no artifact")
 
     arguments = tool_call["args"]
+    tool_name = tool_call["name"]
     tool_index = state.get("tool_call_count", 0)
     tool_history = list(state.get("tool_history", []))
-    tool_history.append(
-        {
+    state_update: dict[str, Any] = {}
+
+    if tool_name == "python":
+        purpose = arguments.get("purpose")
+        purpose = purpose.strip() if isinstance(purpose, str) else None
+        history_entry = {
             "index": tool_index,
+            "tool_name": tool_name,
             "tool_call_id": tool_call["id"],
-            "purpose": arguments["purpose"].strip(),
+            "purpose": purpose,
             "code": arguments["code"].strip(),
             "execution": tool_message.artifact,
         }
-    )
+    elif tool_name == "repair":
+        history_entry = {
+            "index": tool_index,
+            "tool_name": tool_name,
+            "tool_call_id": tool_call["id"],
+            "purpose": None,
+            "code": arguments["corrected_code"].strip(),
+            "execution": tool_message.artifact,
+            "repair_of_tool_call_id": state["tool_history"][-1]["tool_call_id"],
+        }
+    elif tool_name == "cot":
+        artifact = tool_message.artifact
+        cot_index = sum(item["tool_name"] == "cot" for item in tool_history)
+        call_key = f"cot_{cot_index}"
+        history_entry = {
+            "index": tool_index,
+            "tool_name": tool_name,
+            "tool_call_id": tool_call["id"],
+            "goal": arguments["goal"].strip(),
+            "result": artifact.get("result", ""),
+            "success": bool(artifact.get("success")),
+            "latency_seconds": artifact.get("latency_seconds", 0.0),
+            "usage": artifact.get("usage") or {},
+        }
+        usage = dict(state.get("usage", {}))
+        usage[call_key] = artifact.get("usage") or {}
+        state_update["usage"] = usage
+        cot_reasoning = artifact.get("reasoning")
+        if isinstance(cot_reasoning, str) and cot_reasoning:
+            reasoning = dict(state.get("reasoning", {}))
+            reasoning[call_key] = cot_reasoning
+            state_update["reasoning"] = reasoning
+    else:
+        raise ValueError(f"Unsupported ReAct tool: {tool_name}")
+
+    tool_history.append(history_entry)
     return {
+        **state_update,
         "tool_call_count": tool_index + 1,
         "tool_history": tool_history,
         "status": "tool_executed",
