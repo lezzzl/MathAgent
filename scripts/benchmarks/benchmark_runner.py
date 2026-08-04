@@ -282,7 +282,18 @@ def create_manifest_config(
                         else {}
                     ),
                     **(
-                        {"max_tool_calls": args.max_tool_calls}
+                        {
+                            "max_tool_calls": args.max_tool_calls,
+                            **(
+                                {
+                                    "python_mode": "notebook",
+                                    "cot_parser": "tolerant-v1",
+                                }
+                                if prompt_version
+                                in {"react-agent-v2", "react-agent-v3"}
+                                else {}
+                            ),
+                        }
                         if args.pipeline == "react_agent"
                         else {"max_repairs": args.max_repairs}
                     ),

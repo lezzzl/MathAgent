@@ -1,6 +1,7 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Any, NotRequired, TypedDict
+from uuid import uuid4
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import END, START, StateGraph
@@ -41,10 +42,11 @@ from mathagent.pipelines.agent_eval.nodes_step_code import (
 from mathagent.tools.final_answer import create_final_answer_tool
 from mathagent.tools.cot import create_cot_tool
 from mathagent.tools.python_tools import (
-    REACT_V2_PYTHON_DESCRIPTION,
+    create_notebook_python_tool,
     create_python_tool,
     create_repair_tool,
 )
+from mathagent.tools.python_executor import NotebookSessionManager
 
 
 @dataclass(frozen=True)
@@ -142,6 +144,7 @@ class ReactAgentState(TypedDict):
 
     problem: str
     messages: Annotated[list[AnyMessage], add_messages]
+    python_session_id: NotRequired[str]
     tool_call_count: NotRequired[int]
     agent_history: NotRequired[list[dict[str, Any]]]
     tool_history: NotRequired[list[dict[str, Any]]]
@@ -154,6 +157,35 @@ class ReactAgentState(TypedDict):
     usage: NotRequired[dict[str, Any]]
     prompt_version: NotRequired[str]
     trace: NotRequired[dict[str, Any]]
+
+
+class ManagedNotebookGraph:
+    """Добавляет отдельную Python-сессию каждому синхронному graph invocation."""
+
+    def __init__(self, graph: Any, manager: NotebookSessionManager) -> None:
+        self.graph = graph
+        self.manager = manager
+
+    def invoke(
+        self,
+        input_state: dict[str, Any],
+        config: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Создаёт сессию задачи и гарантированно закрывает её после графа."""
+        session_id = uuid4().hex
+        try:
+            return self.graph.invoke(
+                {**input_state, "python_session_id": session_id},
+                config=config,
+                **kwargs,
+            )
+        finally:
+            self.manager.close(session_id)
+
+    def __getattr__(self, name: str) -> Any:
+        """Делегирует диагностические методы исходному compiled graph."""
+        return getattr(self.graph, name)
 
 
 def create_model(model_config: ModelConfig) -> ChatVLLM:
@@ -485,6 +517,7 @@ def create_react_agent_graph(
     cot_enabled = prompt_has_role(prompt_path, "cot")
     cot_tool = None
     repair_tool = None
+    notebook_manager = None
     if cot_enabled:
         cot_model = create_node_model(
             model_config,
@@ -493,10 +526,8 @@ def create_react_agent_graph(
             generation,
         )
         cot_tool = create_cot_tool(cot_model, prompt_path)
-        python_tool = create_python_tool(
-            execution_timeout,
-            description=REACT_V2_PYTHON_DESCRIPTION,
-        )
+        notebook_manager = NotebookSessionManager(timeout=execution_timeout)
+        python_tool = create_notebook_python_tool(notebook_manager)
         executable_tools = [cot_tool, python_tool]
     else:
         python_tool = create_python_tool(execution_timeout)
@@ -535,4 +566,7 @@ def create_react_agent_graph(
     graph.add_edge("tools", "record_tool")
     graph.add_edge("record_tool", "agent")
     recursion_limit = 3 * max_tool_calls + 6
-    return graph.compile().with_config({"recursion_limit": recursion_limit})
+    compiled_graph = graph.compile().with_config({"recursion_limit": recursion_limit})
+    if notebook_manager is not None:
+        return ManagedNotebookGraph(compiled_graph, notebook_manager)
+    return compiled_graph

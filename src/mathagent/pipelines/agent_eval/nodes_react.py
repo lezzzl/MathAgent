@@ -200,10 +200,15 @@ def create_react_agent_node(
             if tool_name == python_tool.name:
                 code = arguments.get("code")
                 purpose = arguments.get("purpose")
+                context = arguments.get("context")
                 if forced_final:
                     format_error = "Python cannot be called after the execution limit"
                 elif not isinstance(code, str) or not code.strip():
                     format_error = "Python tool call must contain non-empty code"
+                elif cot_tool is not None and (
+                    not isinstance(context, str) or not context.strip()
+                ):
+                    format_error = "Python tool call must contain non-empty context"
                 elif purpose is not None and not isinstance(purpose, str):
                     format_error = "Python purpose must be text when provided"
                 else:
@@ -218,10 +223,13 @@ def create_react_agent_node(
 
             elif cot_tool is not None and tool_name == cot_tool.name:
                 goal = arguments.get("goal")
+                context = arguments.get("context")
                 if forced_final:
                     format_error = "CoT cannot be called after the tool limit"
                 elif not isinstance(goal, str) or not goal.strip():
                     format_error = "CoT tool call must contain a non-empty goal"
+                elif not isinstance(context, str) or not context.strip():
+                    format_error = "CoT tool call must contain non-empty context"
                 else:
                     history_entry["action"] = "cot"
                     return {
@@ -350,14 +358,19 @@ def record_react_tool_call(state: dict[str, Any]) -> dict[str, Any]:
     if tool_name == "python":
         purpose = arguments.get("purpose")
         purpose = purpose.strip() if isinstance(purpose, str) else None
+        context = arguments.get("context")
+        context = context.strip() if isinstance(context, str) else None
         history_entry = {
             "index": tool_index,
             "tool_name": tool_name,
             "tool_call_id": tool_call["id"],
-            "purpose": purpose,
             "code": arguments["code"].strip(),
             "execution": tool_message.artifact,
         }
+        if context is not None:
+            history_entry["context"] = context
+        else:
+            history_entry["purpose"] = purpose
     elif tool_name == "repair":
         history_entry = {
             "index": tool_index,
@@ -377,11 +390,19 @@ def record_react_tool_call(state: dict[str, Any]) -> dict[str, Any]:
             "tool_name": tool_name,
             "tool_call_id": tool_call["id"],
             "goal": arguments["goal"].strip(),
+            "context": arguments["context"].strip(),
+            "derivation": artifact.get("derivation", ""),
             "result": artifact.get("result", ""),
             "success": bool(artifact.get("success")),
+            "parse_mode": artifact.get("parse_mode"),
+            "parse_warning": artifact.get("parse_warning"),
             "latency_seconds": artifact.get("latency_seconds", 0.0),
             "usage": artifact.get("usage") or {},
         }
+        if artifact.get("parse_mode") != "json":
+            history_entry["raw_output"] = artifact.get("raw_output", "")
+        if artifact.get("error") is not None:
+            history_entry["error"] = artifact["error"]
         usage = dict(state.get("usage", {}))
         usage[call_key] = artifact.get("usage") or {}
         state_update["usage"] = usage
