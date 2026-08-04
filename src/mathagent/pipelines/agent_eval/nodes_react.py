@@ -1,4 +1,8 @@
+import ast
+import io
+import json
 import time
+import tokenize
 from pathlib import Path
 from typing import Any, Callable
 
@@ -27,14 +31,18 @@ def build_react_trace(
     agent_history: list[dict[str, Any]],
     tool_history: list[dict[str, Any]],
     finish_reason: str,
+    precheck_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Собирает компактную траекторию без messages и hidden reasoning."""
-    return {
+    trace = {
         "status": "completed",
         "finish_reason": finish_reason,
         "agent_calls": agent_history,
         "tool_calls": tool_history,
     }
+    if precheck_history is not None:
+        trace["prechecks"] = precheck_history
+    return trace
 
 
 def format_retry_messages(
@@ -99,6 +107,7 @@ def create_react_agent_node(
     max_tool_calls: int,
     repair_tool: BaseTool | None = None,
     cot_tool: BaseTool | None = None,
+    precheck_enabled: bool = False,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Вызывает ReAct-модель и обрабатывает tools выбранной версии промпта."""
     if repair_tool is not None and cot_tool is not None:
@@ -139,16 +148,22 @@ def create_react_agent_node(
 
         tool_call_count = state.get("tool_call_count", 0)
         tool_calls_remaining = max(max_tool_calls - tool_call_count, 0)
-        forced_final = tool_calls_remaining == 0
+        force_final_reason = state.get("force_final_reason")
+        forced_final = tool_calls_remaining == 0 or force_final_reason is not None
         if forced_final:
+            reason = (
+                "The precheck rejection limit has been reached"
+                if force_final_reason == "precheck_limit_reached"
+                else "The tool-call limit has been reached"
+            )
             new_messages.append(
                 HumanMessage(
                     content=(
-                        "The tool-call limit has been reached. Do not call any "
+                        f"{reason}. Do not call any "
                         "reasoning or execution tool. Submit the best supported "
                         "answer using final_answer."
                     ),
-                    id="react:tool_limit",
+                    id="react:forced_final",
                 )
             )
 
@@ -268,8 +283,10 @@ def create_react_agent_node(
                     format_error = "final_answer must contain a non-empty answer"
                 else:
                     finish_reason = (
-                        "tool_limit_reached"
-                        if forced_final
+                        str(force_final_reason)
+                        if force_final_reason is not None
+                        else "tool_limit_reached"
+                        if tool_calls_remaining == 0
                         else (
                             "format_recovery"
                             if state.get("had_format_recovery")
@@ -289,6 +306,11 @@ def create_react_agent_node(
                             completed_history,
                             list(state.get("tool_history", [])),
                             finish_reason,
+                            (
+                                list(state.get("precheck_history", []))
+                                if precheck_enabled
+                                else None
+                            ),
                         ),
                     }
             else:
@@ -305,7 +327,7 @@ def create_react_agent_node(
                 *format_retry_messages(
                     message,
                     clean_message,
-                    tool_calls_remaining,
+                    0 if forced_final else tool_calls_remaining,
                     available_tool_names,
                 ),
             ],
@@ -316,6 +338,182 @@ def create_react_agent_node(
         }
 
     return agent
+
+
+def python_precheck_error(code: str) -> str | None:
+    """Проверяет синтаксис Python и наличие настоящего комментария."""
+    try:
+        ast.parse(code)
+    except SyntaxError as exc:
+        location = f" at line {exc.lineno}" if exc.lineno is not None else ""
+        return f"Python code has a syntax error{location}: {exc.msg}"
+
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(code).readline)
+        comments = [
+            token.string.removeprefix("#").strip()
+            for token in tokens
+            if token.type == tokenize.COMMENT
+        ]
+    except (IndentationError, tokenize.TokenError) as exc:
+        return f"Python code cannot be tokenized: {exc}"
+    if not any(comments):
+        return (
+            "Python code must include Program-of-Thought comments explaining "
+            "the mathematical reasoning and purpose of the computation"
+        )
+    return None
+
+
+def create_react_precheck_node(
+    model: Any,
+    review_tool: BaseTool,
+    prompt_path: Path,
+    max_precheck_rejections: int,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """Проверяет предложенный CoT/Python-вызов до его исполнения."""
+    _, role = load_prompt_role(prompt_path, "tool_checker")
+    model_with_review = model.bind_tools(
+        [review_tool],
+        tool_choice=review_tool.name,
+        strict=True,
+        parallel_tool_calls=False,
+    )
+
+    def precheck(state: dict[str, Any]) -> dict[str, Any]:
+        message = state["messages"][-1]
+        if not isinstance(message, AIMessage) or len(message.tool_calls) != 1:
+            raise ValueError("Precheck requires exactly one proposed tool call")
+
+        tool_call = message.tool_calls[0]
+        tool_name = tool_call["name"]
+        arguments = tool_call.get("args") or {}
+        if tool_name not in {"python", "cot"}:
+            raise ValueError(f"Precheck does not support tool: {tool_name}")
+
+        precheck_history = list(state.get("precheck_history", []))
+        index = len(precheck_history)
+        call_key = f"precheck_{index}"
+        decision = "reject"
+        feedback: str
+        source = "rules"
+        latency = 0.0
+        usage: dict[str, Any] = {}
+        state_update: dict[str, Any] = {}
+
+        rule_error = None
+        if tool_name == "python":
+            code = arguments.get("code")
+            if not isinstance(code, str):
+                rule_error = "Python code must be text"
+            else:
+                rule_error = python_precheck_error(code)
+
+        if rule_error is not None:
+            feedback = rule_error
+        else:
+            task_prompt = (
+                role["task"]
+                .replace("{problem}", state["problem"])
+                .replace("{tool_name}", tool_name)
+                .replace(
+                    "{tool_arguments}",
+                    json.dumps(arguments, ensure_ascii=False, indent=2),
+                )
+            )
+            started = time.perf_counter()
+            review_message = model_with_review.invoke(
+                [
+                    SystemMessage(content=role["system"]),
+                    HumanMessage(content=task_prompt),
+                ]
+            )
+            latency = time.perf_counter() - started
+            source = "llm"
+            usage = get_message_usage(review_message)
+            state_update = {
+                "reasoning": add_reasoning(state, call_key, review_message),
+                "usage": add_usage(state, call_key, review_message),
+            }
+            if review_message.invalid_tool_calls or len(review_message.tool_calls) != 1:
+                feedback = (
+                    "The tool checker returned an invalid verdict. Regenerate the "
+                    "proposed tool call before execution"
+                )
+            else:
+                verdict = review_message.tool_calls[0]
+                verdict_arguments = verdict.get("args") or {}
+                verdict_decision = verdict_arguments.get("decision")
+                verdict_feedback = verdict_arguments.get("feedback")
+                if (
+                    verdict.get("name") == review_tool.name
+                    and verdict_decision in {"approve", "reject"}
+                    and isinstance(verdict_feedback, str)
+                    and verdict_feedback.strip()
+                ):
+                    decision = verdict_decision
+                    feedback = verdict_feedback.strip()
+                else:
+                    feedback = (
+                        "The tool checker returned a malformed verdict. Regenerate "
+                        "the proposed tool call before execution"
+                    )
+
+        history_entry: dict[str, Any] = {
+            "index": index,
+            "tool_call_id": tool_call["id"],
+            "tool_name": tool_name,
+            "decision": decision,
+            "source": source,
+            "feedback": feedback,
+            "latency_seconds": round(latency, 3),
+            "usage": usage,
+        }
+        if decision == "approve":
+            return {
+                **state_update,
+                "precheck_history": [*precheck_history, history_entry],
+                "status": "tool_approved",
+            }
+
+        history_entry["arguments"] = arguments
+        rejection_count = state.get("precheck_rejection_count", 0) + 1
+        rejection_message = ToolMessage(
+            content=json.dumps(
+                {
+                    "status": "rejected_by_precheck",
+                    "feedback": feedback,
+                },
+                ensure_ascii=False,
+            ),
+            tool_call_id=tool_call["id"],
+            name=tool_name,
+            status="error",
+            id=f"react:precheck_rejected:{tool_call['id']}",
+        )
+        return {
+            **state_update,
+            "messages": [rejection_message],
+            "precheck_history": [*precheck_history, history_entry],
+            "precheck_rejection_count": rejection_count,
+            **(
+                {"force_final_reason": "precheck_limit_reached"}
+                if rejection_count >= max_precheck_rejections
+                else {}
+            ),
+            "status": "tool_rejected",
+        }
+
+    return precheck
+
+
+def route_after_react_precheck(state: dict[str, Any]) -> str:
+    """Исполняет одобренный tool либо возвращает отклонение агенту."""
+    if state["status"] == "tool_approved":
+        return "tools"
+    if state["status"] == "tool_rejected":
+        return "agent"
+    raise ValueError(f"Unknown ReAct precheck status: {state['status']}")
 
 
 def route_after_react_agent(state: dict[str, Any]) -> str:
