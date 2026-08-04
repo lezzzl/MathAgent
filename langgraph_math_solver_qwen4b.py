@@ -3,7 +3,9 @@ import operator
 import os
 import re
 import sys
+import threading
 import time
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, NamedTuple, Optional, Tuple
@@ -206,6 +208,45 @@ EVAL_REASK_NUM_PREDICT = int(os.getenv("EVAL_REASK_NUM_PREDICT", "1000"))
 # генератора — на прогонах 0802 половина задач упиралась в 40000 (см. память).
 ROLE_NUM_PREDICT_ENV = os.getenv("ROLE_NUM_PREDICT", "")
 
+# ---------------------------------------------------------------------------
+# Зерно выборки
+# ---------------------------------------------------------------------------
+# Зачем. Разбор всех чистых прогонов показал: 54 задачи из 90 решаются ВСЕГДА,
+# 7 не решаются НИКОГДА, а 29 (32%) плавают от прогона к прогону. Ядро не
+# сдвинулось ни на задачу за всю линейку промптов v4 -> v9 — то есть одиночный
+# прогон в принципе не может измерить эффект правки промпта, полоса шума шире
+# любого наблюдённого эффекта.
+#
+# Причина — прогоны шли независимыми выборками: параметр seed у _chat был, но
+# его никто не передавал. С зерном две конфигурации идут по одному и тому же
+# пути сэмплирования, и разница между ними перестаёт тонуть в жребии.
+#
+# Зерно у каждого ВЫЗОВА своё: одно и то же зерно на все вызовы сделало бы
+# ветки k>1 побайтово одинаковыми и убило бы ветвление. Поэтому значение
+# выводится детерминированно из (SEED, task_id, номер вызова внутри задачи) —
+# воспроизводимо между прогонами и различно внутри прогона.
+SEED: Optional[int] = None
+_seed_state = threading.local()
+
+
+def begin_task_seed(task_id: Any) -> None:
+    """Начинает новую задачу: сбрасывает счётчик вызовов для зерна."""
+    if SEED is None:
+        _seed_state.base = None
+        return
+    # crc32, а не hash(): встроенный hash строк солится PYTHONHASHSEED и от
+    # запуска к запуску даёт разные значения — воспроизводимости бы не было.
+    _seed_state.base = (SEED * 1_000_003 + zlib.crc32(str(task_id).encode())) % (2 ** 31 - 1)
+    _seed_state.counter = 0
+
+
+def _next_seed() -> Optional[int]:
+    base = getattr(_seed_state, "base", None)
+    if base is None:
+        return None
+    _seed_state.counter = getattr(_seed_state, "counter", 0) + 1
+    return (base + _seed_state.counter * 7919) % (2 ** 31 - 1)
+
 
 # ---------------------------------------------------------------------------
 # Инструмент python_exec поверх «сырого» OpenAI-API
@@ -226,10 +267,14 @@ TOOL_SCHEMA = [{
             "Execute Python for exact mathematics and print the result. Preloaded: "
             "sympy (solve, Eq, Rational, symbols, factorint, isprime, divisors, "
             "binomial, simplify, expand, factor, Matrix, primerange), numpy as np, "
-            "itertools, math, Fraction. Sympy names shadow math, so sqrt(8) stays "
-            "exact. Write multi-line code and print() what you need. Prefer exact "
-            "types (Rational, sqrt) over floats. Execution is capped at 10 seconds, "
-            "so derive a formula or narrow the range instead of brute-forcing."
+            "scipy, itertools, math, Fraction. Sympy names shadow math, so sqrt(8) "
+            "stays exact. Write multi-line code and print() what you need. Prefer "
+            "exact types (Rational, sqrt) over floats — float rounding silently "
+            "breaks point deduplication in geometry enumerations. Execution is "
+            "capped at 30 seconds. Each call starts from a clean namespace: "
+            "nothing from a previous call survives, so declare symbols again in "
+            "every script. If a script prints results and then crashes, the reply "
+            "is marked PARTIAL RESULT — the printed values are still valid."
         ),
         "parameters": {
             "type": "object",
@@ -310,6 +355,7 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
         "temperature": temperature,
         "max_tokens": num_predict if num_predict is not None else DEFAULT_MAX_TOKENS,
     }
+    seed = seed if seed is not None else _next_seed()
     if seed is not None:
         payload["seed"] = seed
     if json_format:
@@ -1004,9 +1050,14 @@ class AgentState(TypedDict):
     in_recovery: bool
     max_recoveries: int
     total_recovery_events: Annotated[int, operator.add]
+    # Попытка собрать ответ из принятых шагов делается ровно один раз за задачу,
+    # иначе роутеры зациклятся на finish -> give_up -> finish.
+    finish_attempted: bool
 
     stuck_streak: int
     max_stuck_steps: int
+    skip_verifier: bool
+    max_step_attempts: int
 
     unreliable_eval_streak: int
     max_unreliable_evals: int
@@ -1362,6 +1413,59 @@ def trigger_recovery(state: AgentState):
     }
 
 
+# Инструкция для узла finish_answer. Намеренно короткая и без размышлений:
+# вывод уже сделан в принятых шагах, нужен только сам ответ.
+FINISH_INSTRUCTION = (
+    "The accepted steps above already contain the derivation. Do NOT start a new "
+    "line of reasoning and do NOT introduce new notation.\n"
+    "Combine what the steps have established and state the single quantity the "
+    "problem asks for, boxed.\n"
+    "Reply with one short sentence followed by \\boxed{...} and nothing else. "
+    "If the steps genuinely do not determine the answer, reply with the bare word "
+    "UNDETERMINED."
+)
+FINISH_NUM_PREDICT = int(os.getenv("FINISH_NUM_PREDICT", "4000"))
+
+
+def finish_answer(state: AgentState):
+    """Последняя попытка собрать ответ из уже принятых шагов.
+
+    Зачем. Замер по прогонам v9: из 8 сдач семь — «recovery budget exhausted», и
+    у этих задач на момент сдачи было от 1 до 5 ПРИНЯТЫХ шагов, а ответ всё
+    равно уходил как null. Классический режим 4B: вывод в шагах есть, финал не
+    забоксили. Один короткий вызов дешевле (~4k токенов), чем ещё круг recovery
+    (~11k) или чем ноль за задачу.
+
+    Узел не выдумывает математику: генератору запрещено начинать новую линию
+    рассуждения, и предусмотрен честный отказ (UNDETERMINED).
+    """
+    steps = state.get('steps', [])
+    depth = len(steps)
+    if not steps:
+        print("\n[Node: Finish] Принятых шагов нет — собирать ответ не из чего.")
+        return {"finish_attempted": True}
+
+    print(f"\n[Node: Finish] Собираю ответ из {depth} принятых шагов "
+          f"(вместо сдачи с пустым ответом).")
+    role = ROLES["generator"]
+    context = _build_context(state['problem'], steps)
+    messages = [
+        {"role": "system", "content": role.system_prompt},
+        {"role": "user", "content": f"{context}\n\n{FINISH_INSTRUCTION}"},
+    ]
+    res = _chat(messages, temperature=0.2, num_predict=FINISH_NUM_PREDICT,
+                enable_thinking=False, stage="finish", depth=depth)
+    answer = extract_answer(res.text)
+    RECORDER.record(stage="finish_result", depth=depth, content=res.text,
+                    answer=answer, tokens={"total": res.tokens})
+    if answer:
+        print(f"  -> Ответ собран: {answer}")
+        return {"final_answer": answer, "tokens_used": res.tokens,
+                "finish_attempted": True}
+    print("  -> Ответ собрать не удалось (UNDETERMINED или пусто).")
+    return {"tokens_used": res.tokens, "finish_attempted": True}
+
+
 def give_up(state: AgentState):
     if state.get('stuck_streak', 0) >= state.get('max_stuck_steps', 2):
         reason = (
@@ -1467,6 +1571,14 @@ def commit_step(state: AgentState):
 
 
 def verify_solution(state: AgentState):
+    # Верификатор наблюдательный: его вердикт не влияет ни на ответ, ни на
+    # маршрут, при этом на верных задачах он ошибается в 41% случаев и стоит
+    # ~4% бюджета прогона (824k токенов на 90 задачах). На замерах его имеет
+    # смысл выключать; диагностику он даёт только когда его читают руками.
+    if state.get('skip_verifier'):
+        print("\n[Node: Verify] Пропущен (--no-verify-step).")
+        return {"is_valid": False,
+                "verifier_rationale": "Верификатор отключён флагом --no-verify-step."}
     print("\n[Node: Verify] Running verifier...")
     role = ROLES["verifier"]
     context = _build_context(state['problem'], state.get('steps', []))
@@ -1521,6 +1633,16 @@ def route_after_eval(state: AgentState):
               f"(limit {max_unreliable}). Giving up.")
         return "give_up"
 
+    # Исчерпание попыток больше не означает пустой ответ: если принятые шаги
+    # есть, сначала пробуем собрать из них ответ (§ finish_answer). Замер v9:
+    # 7 сдач из 8 — «recovery exhausted», и у всех было 1–5 принятых шагов.
+    def _out_of_attempts(why: str) -> str:
+        if state.get('steps') and not state.get('finish_attempted'):
+            print(f"\n[Router] {why} Принятые шаги есть — пробую собрать ответ из них.")
+            return "finish"
+        print(f"\n[Router] {why} Giving up.")
+        return "give_up"
+
     # 1. Первичное срабатывание восстановления (шли в один поток).
     if (best_score < state['score_threshold']
             and not state['in_recovery']
@@ -1528,9 +1650,9 @@ def route_after_eval(state: AgentState):
         if total_recoveries < max_recoveries:
             print(f"\n[Router] Best score {best_score:.4f} < Threshold {state['score_threshold']}. Initiating recovery.")
             return "recover"
-        print(f"\n[Router] Score {best_score:.4f} below threshold {state['score_threshold']}, but recovery "
-              f"budget ({max_recoveries}) exhausted. Giving up.")
-        return "give_up"
+        return _out_of_attempts(
+            f"Score {best_score:.4f} below threshold {state['score_threshold']}, "
+            f"but global recovery budget ({max_recoveries}) exhausted.")
 
     # 2. Повторные попытки (уже в режиме восстановления).
     if best_score < state['score_threshold'] and state['in_recovery']:
@@ -1540,10 +1662,10 @@ def route_after_eval(state: AgentState):
                   f"(Global recoveries used: {total_recoveries}/{max_recoveries}).")
             return "recover"
         if total_recoveries >= max_recoveries:
-            print(f"\n[Router] Global recovery budget ({max_recoveries}) exhausted during retries. Giving up.")
-            return "give_up"
-        print(f"\n[Router] All {max_attempts} recovery attempts for this step failed. Giving up.")
-        return "give_up"
+            return _out_of_attempts(
+                f"Global recovery budget ({max_recoveries}) exhausted during retries.")
+        return _out_of_attempts(
+            f"All {max_attempts} recovery attempts for this step failed.")
 
     # 3. Успех.
     print(f"\n[Router] Score {best_score:.4f} meets threshold. Committing.")
@@ -1553,12 +1675,21 @@ def route_after_eval(state: AgentState):
 def route_after_commit(state: AgentState):
     if state.get("final_answer"):
         return "verify"
+    steps = state.get('steps') or []
+    can_finish = bool(steps) and not state.get('finish_attempted')
     if state.get('tokens_used', 0) >= state.get('token_budget', 10**9):
+        if can_finish:
+            print("\n[Router] Бюджет исчерпан, но шаги есть — собираю ответ из них.")
+            return "finish"
         return "give_up"
     if state.get('stuck_streak', 0) >= state.get('max_stuck_steps', 2):
-        print(f"\n[Router] {state['stuck_streak'] + 1} committed steps in a row added no new content. Giving up.")
-        return "give_up"
+        print(f"\n[Router] {state['stuck_streak'] + 1} committed steps in a row added no new content.")
+        return "finish" if can_finish else "give_up"
     return "generate"
+
+
+def route_after_finish(state: AgentState):
+    return "verify" if state.get("final_answer") else "give_up"
 
 
 # ---------------------------------------------------------------------------
@@ -1573,6 +1704,7 @@ def build_solver_graph():
     workflow.add_node("trigger_recovery", trigger_recovery)
     workflow.add_node("commit_step", commit_step)
     workflow.add_node("verify_solution", verify_solution)
+    workflow.add_node("finish_answer", finish_answer)
     workflow.add_node("give_up", give_up)
 
     workflow.set_entry_point("generate_step")
@@ -1581,12 +1713,20 @@ def build_solver_graph():
     workflow.add_edge("segment_step", "evaluate_steps")      # segment  -> evaluate
     workflow.add_conditional_edges(
         "evaluate_steps", route_after_eval,
-        {"recover": "trigger_recovery", "commit": "commit_step", "give_up": "give_up"},
+        {"recover": "trigger_recovery", "commit": "commit_step",
+         "finish": "finish_answer", "give_up": "give_up"},
     )
     workflow.add_edge("trigger_recovery", "generate_step")
     workflow.add_conditional_edges(
         "commit_step", route_after_commit,
-        {"verify": "verify_solution", "generate": "generate_step", "give_up": "give_up"},
+        {"verify": "verify_solution", "generate": "generate_step",
+         "finish": "finish_answer", "give_up": "give_up"},
+    )
+    # Собрал ответ — идём проверять как обычное решение; не собрал — сдаёмся,
+    # но уже честно: попытка была.
+    workflow.add_conditional_edges(
+        "finish_answer", route_after_finish,
+        {"verify": "verify_solution", "give_up": "give_up"},
     )
     workflow.add_edge("verify_solution", END)
     workflow.add_edge("give_up", END)
@@ -1609,13 +1749,21 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "candidate_scores": [],
         "k_branches": 3,
         "score_threshold": 0.8,
-        "branch_mode": "multi",
+        # Замер §2.5: ветвление не дало ничего (HMMT 19/30 -> 19/30 при +18%
+        # токенов), а все наши прогоны и так шли с --branch-mode single. Дефолт
+        # приведён в соответствие с практикой; multi по-прежнему включается в
+        # recovery, где он и нужен.
+        "branch_mode": "single",
         "base_temperature": None,
         "tokens_used": 0,
         "token_budget": 250000,
         "in_recovery": False,
-        "max_recoveries": 5,
+        # Глобальный потолок теперь мягкий: жёсткий стоп даёт per-depth
+        # max_step_attempts, а исчерпание глобального ведёт в finish_answer, а
+        # не в пустой ответ. При 5 семь задач из восьми умирали именно здесь.
+        "max_recoveries": 15,
         "total_recovery_events": 0,
+        "finish_attempted": False,
         "stuck_streak": 0,
         "max_stuck_steps": 2,
         "unreliable_eval_streak": 0,
@@ -1638,6 +1786,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "gave_up_reason": "",
         "step_recovery_attempts": 0,
         "max_step_attempts": 3,
+        "skip_verifier": False,
     }
     if args is not None:
         state.update({
@@ -1651,6 +1800,8 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
             "max_unreliable_evals": args.max_unreliable_evals,
             "min_steps_before_answer": getattr(args, "min_steps_before_answer", 0),
             "use_tools": not getattr(args, "no_tools", False),
+            "max_step_attempts": getattr(args, "max_step_attempts", 3),
+            "skip_verifier": bool(getattr(args, "no_verify_step", False)),
         })
     state.update(overrides)
     return state

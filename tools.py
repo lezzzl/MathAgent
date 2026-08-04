@@ -23,7 +23,15 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from langchain_core.tools import tool
 
-EXEC_TIMEOUT_SECONDS = 10.0
+# Потолок времени на один вызов. Был 10 с, и это прямо противоречило инструкции
+# генератора (v8+), которая велит «построить пространство решений перебором»:
+# замер по трём прогонам v9 дал 17 обрывов по таймауту из 825 вызовов.
+#
+# ВНИМАНИЕ на взаимодействие с параллелизмом: воркеров песочницы всего
+# MAX_SANDBOX_WORKERS (4), а задач бенчмарка бывает 32. Задача, ждущая таймаута,
+# занимает слот целиком, поэтому поднимать это число дальше стоит только вместе
+# с SANDBOX_WORKERS.
+EXEC_TIMEOUT_SECONDS = float(os.getenv("SANDBOX_TIMEOUT", "30"))
 MAX_OUTPUT_CHARS = 2000
 REPEAT_LIMIT = 3
 
@@ -81,10 +89,13 @@ def _build_globals() -> Dict[str, Any]:
     # предзагружено. Без __import__ такой вызов падал целиком с
     # "ImportError: __import__ not found", и шаг терял вычисление.
     _real_import = __import__
+    # scipy добавлен по замеру: 4 вызова за прогон уходили в ImportError на
+    # scipy.optimize — модель тянется к нему за поиском корней, и это
+    # осмысленный инструмент, а не попытка выйти за песочницу.
     _allowed_modules = {
-        "sympy", "math", "cmath", "numpy", "np", "itertools", "fractions",
-        "decimal", "random", "re", "statistics", "collections", "functools",
-        "operator", "heapq", "bisect", "string",
+        "sympy", "math", "cmath", "numpy", "np", "scipy", "itertools",
+        "fractions", "decimal", "random", "re", "statistics", "collections",
+        "functools", "operator", "heapq", "bisect", "string",
     }
 
     def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -92,7 +103,9 @@ def _build_globals() -> Dict[str, Any]:
         if root not in _allowed_modules:
             raise ImportError(
                 f"module '{name}' is not available in this sandbox. "
-                f"sympy, numpy (as np), itertools, math and fractions are already imported."
+                f"sympy, numpy (as np), scipy, itertools, math, statistics, "
+                f"collections and fractions are available; sympy names and "
+                f"itertools combinatorics are already imported."
             )
         return _real_import(name, globals, locals, fromlist, level)
 
@@ -108,10 +121,22 @@ def _build_globals() -> Dict[str, Any]:
         "reversed": reversed, "round": round, "set": set, "slice": slice,
         "sorted": sorted, "str": str, "sum": sum, "tuple": tuple, "zip": zip,
         "True": True, "False": False, "None": None,
+        # Интроспекция. Без `type` код падал с «NameError: name 'type' is not
+        # defined» — модель зовёт её для отладки типов sympy против float, и это
+        # ровно та путаница, из-за которой у неё 15 AttributeError за прогон.
+        "type": type, "hasattr": hasattr, "getattr": getattr,
+        "callable": callable, "id": id,
+        # Исключения. Раньше их было восемь, и `except AttributeError:` в коде
+        # модели падал сам — с NameError на имени класса исключения.
         "ValueError": ValueError, "TypeError": TypeError,
         "ZeroDivisionError": ZeroDivisionError, "Exception": Exception,
         "StopIteration": StopIteration, "KeyError": KeyError,
         "IndexError": IndexError, "ArithmeticError": ArithmeticError,
+        "AttributeError": AttributeError, "NameError": NameError,
+        "RuntimeError": RuntimeError, "OverflowError": OverflowError,
+        "NotImplementedError": NotImplementedError,
+        "AssertionError": AssertionError, "ImportError": ImportError,
+        "RecursionError": RecursionError, "FloatingPointError": FloatingPointError,
     }
 
     namespace: Dict[str, Any] = {
@@ -145,8 +170,37 @@ def _build_globals() -> Dict[str, Any]:
     return namespace
 
 
+# Подсказки к типовым падениям. Голое имя исключения модель не лечит: замер по
+# трём прогонам v9 показал одни и те же ошибки раз за разом (14 NameError, из
+# них 4 на необъявленный символ; 8 ValueError на неоднозначность массива numpy).
+# Сообщение — единственный канал, по которому песочница может научить модель.
+_ERROR_HINTS: List[Tuple[str, str, str]] = [
+    ("NameError", "is not defined",
+     "Переменные и символы НЕ сохраняются между вызовами инструмента: каждый "
+     "вызов стартует с чистого пространства имён. Объявите всё заново в этом же "
+     "коде (например x = symbols('x'))."),
+    ("ValueError", "truth value of an array",
+     "Массив numpy нельзя использовать в if/and/or. Работайте поэлементно "
+     "(np.where, .any(), .all()) или возьмите обычный float."),
+    ("AttributeError", "has no attribute 'evalf'",
+     "evalf() есть у выражений sympy, но не у обычного float. Стройте выражение "
+     "через sympy (Rational, sqrt, symbols), тогда точность не теряется."),
+]
+
+
+def _hint_for(exc: Exception) -> str:
+    name, text = type(exc).__name__, str(exc)
+    for kind, needle, hint in _ERROR_HINTS:
+        if name == kind and needle in text:
+            return f"\nHINT: {hint}"
+    return ""
+
+
 def _run_code(code: str, namespace: Dict[str, Any]) -> Tuple[str, str]:
     """Исполняет код, возвращает (status, output).
+
+    Статусы: SUCCESS, ERROR и PARTIAL — последний для случая, когда скрипт
+    успел что-то напечатать и только потом упал.
 
     Значение последнего выражения печатается автоматически — модели постоянно
     пишут последней строкой просто `answer` и ждут, что увидят результат.
@@ -171,9 +225,22 @@ def _run_code(code: str, namespace: Dict[str, Any]) -> Tuple[str, str]:
                 if value is not None:
                     print(repr(value))
     except Exception as exc:
-        printed = buffer.getvalue()
-        detail = f"{type(exc).__name__}: {exc}"
-        return "ERROR", (printed + detail) if printed else detail
+        printed = buffer.getvalue().strip()
+        detail = f"{type(exc).__name__}: {exc}{_hint_for(exc)}"
+        # Разделяем «упал сразу» и «посчитал, напечатал и упал в конце».
+        # Раньше оба случая уходили под меткой ERROR, и вывод вида
+        # «cos A = 11/25 ... AP = 100/13 TypeError: ...» модель видела как
+        # полный провал. Замер: 40 таких вызовов из 825 и 10k символов
+        # выброшенного полезного результата.
+        if printed:
+            return "PARTIAL", (
+                f"{printed}\n"
+                f"--- the script printed everything above, then stopped here ---\n"
+                f"{detail}\n"
+                f"The output above was produced before the failure and is still "
+                f"usable; fix only the part that crashed."
+            )
+        return "ERROR", detail
 
     return "SUCCESS", buffer.getvalue()
 
@@ -387,8 +454,10 @@ def python_exec(code: str) -> str:
 
     Write multi-line code and print() what you need; the value of the final
     expression is printed automatically. Prefer exact types (Rational, sqrt)
-    over floats. Execution is capped at 10 seconds, so derive a formula or
-    narrow the range instead of brute-forcing millions of cases.
+    over floats. Execution is capped at 30 seconds.
+
+    Each call starts from a clean namespace: nothing you defined in a previous
+    call survives, so declare symbols and helpers again in every script.
 
     Example:
         n = symbols('n', integer=True, positive=True)
@@ -427,6 +496,16 @@ def python_exec(code: str) -> str:
     text = (output or "").strip()
     if status == "ERROR":
         return f"ERROR: {text}"
+    if status == "PARTIAL":
+        # Без префикса ERROR: результат тут есть, и метка «ошибка» заставляла
+        # модель выбрасывать готовые вычисления целиком.
+        if len(text) > MAX_OUTPUT_CHARS:
+            head, tail = text.rsplit("--- the script printed", 1)
+            keep = MAX_OUTPUT_CHARS - len(tail) - 40
+            text = (head[:max(keep, 200)]
+                    + f"\n... [output truncated at {MAX_OUTPUT_CHARS} chars]\n"
+                    + "--- the script printed" + tail)
+        return f"PARTIAL RESULT (the script failed part-way):\n{text}"
     if not text:
         return "(no output — nothing was printed and the last line was not an expression)"
     if len(text) > MAX_OUTPUT_CHARS:
