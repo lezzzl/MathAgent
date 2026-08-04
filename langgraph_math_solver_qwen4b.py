@@ -1058,6 +1058,7 @@ class AgentState(TypedDict):
     max_stuck_steps: int
     skip_verifier: bool
     max_step_attempts: int
+    finish_at_fraction: float
 
     unreliable_eval_streak: int
     max_unreliable_evals: int
@@ -1677,11 +1678,22 @@ def route_after_commit(state: AgentState):
         return "verify"
     steps = state.get('steps') or []
     can_finish = bool(steps) and not state.get('finish_attempted')
-    if state.get('tokens_used', 0) >= state.get('token_budget', 10**9):
+    used = state.get('tokens_used', 0)
+    budget = state.get('token_budget', 10**9)
+    # Порог ниже 1.0 намеренно: если ждать полного исчерпания, на сам finish
+    # бюджета уже не остаётся и задача выходит за лимит. Забираем ответ, пока
+    # на короткий вызов ещё хватает.
+    finish_at = float(state.get('finish_at_fraction', 0.85))
+    if used >= budget:
         if can_finish:
             print("\n[Router] Бюджет исчерпан, но шаги есть — собираю ответ из них.")
             return "finish"
         return "give_up"
+    if can_finish and budget < 10**9 and used >= finish_at * budget:
+        print(f"\n[Router] Израсходовано {used:,}/{budget:,} ({used/budget:.0%} ≥ "
+              f"{finish_at:.0%}) при {len(steps)} принятых шагах — собираю ответ, "
+              f"пока бюджет на это есть.")
+        return "finish"
     if state.get('stuck_streak', 0) >= state.get('max_stuck_steps', 2):
         print(f"\n[Router] {state['stuck_streak'] + 1} committed steps in a row added no new content.")
         return "finish" if can_finish else "give_up"
@@ -1787,6 +1799,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "step_recovery_attempts": 0,
         "max_step_attempts": 3,
         "skip_verifier": False,
+        "finish_at_fraction": 0.85,
     }
     if args is not None:
         state.update({
@@ -1802,6 +1815,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
             "use_tools": not getattr(args, "no_tools", False),
             "max_step_attempts": getattr(args, "max_step_attempts", 3),
             "skip_verifier": bool(getattr(args, "no_verify_step", False)),
+            "finish_at_fraction": getattr(args, "finish_at", 0.85),
         })
     state.update(overrides)
     return state
