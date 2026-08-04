@@ -159,6 +159,14 @@ def parse_benchmark_args(
              "меняется); 'qwen4b' — тот же граф со стадией сегментации одного "
              "шага.",
     )
+    parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Зерно выборки. Без него каждый прогон — независимая выборка, и "
+             "32%% задач плавают от прогона к прогону: одиночным прогоном "
+             "эффект правки промпта измерить нельзя. Зерно каждого вызова "
+             "выводится из (seed, task_id, номер вызова), поэтому прогоны "
+             "воспроизводятся, а ветки внутри прогона остаются разными.",
+    )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--skip", type=int, default=0, help="Пропустить N первых задач")
     parser.add_argument(
@@ -220,7 +228,11 @@ def parse_benchmark_args(
              "градуированный (0/0.25/0.5/0.75/1.0): 0.5 = 'корректно и есть "
              "прогресс'. Прежние 0.8 при бинарной шкале означали 'ровно 1.0'.",
     )
-    group.add_argument("--branch-mode", default="multi", choices=["single", "multi"])
+    # Дефолт single: замер §2.5 показал, что ветвление на каждом шаге не даёт
+    # ничего (+18% токенов, 0 задач), а верного ответа не было ни в одной
+    # отвергнутой ветке. Все реальные прогоны и так шли с single — дефолт
+    # приведён в соответствие. В recovery multi включается независимо от флага.
+    group.add_argument("--branch-mode", default="single", choices=["single", "multi"])
     group.add_argument(
         "--token-budget", type=int, default=800000,
         help="Лимит токенов на задачу. Дефолт поднят с 250k: с включёнными "
@@ -231,7 +243,35 @@ def parse_benchmark_args(
     )
     group.add_argument("--max-stuck-steps", type=int, default=2)
     group.add_argument("--max-unreliable-evals", type=int, default=3)
-    group.add_argument("--max-recoveries", type=int, default=5)
+    # 5 был жёстким стопом на всю задачу: замер v9 показал, что 7 сдач из 8 —
+    # именно «recovery budget exhausted», причём один трудный depth съедал
+    # бюджет и задача умирала, не дойдя до более лёгких шагов. Теперь это мягкий
+    # потолок, а жёсткий лимит на попытки живёт per-depth (--max-step-attempts).
+    group.add_argument("--max-recoveries", type=int, default=15)
+    group.add_argument(
+        "--max-step-attempts", type=int, default=3,
+        help="Сколько раз пробовать ОДИН и тот же шаг, прежде чем признать его "
+             "безнадёжным. Именно этот лимит теперь жёсткий, а не глобальный.",
+    )
+    group.add_argument(
+        "--samples", type=int, default=1,
+        help="Сколько независимых решений задачи брать перед голосованием. "
+             "1 — как раньше. Смысл: 32%% задач решаются то верно, то нет от "
+             "прогона к прогону; голосование забирает эту полосу. Второй и "
+             "третий сэмплы запускаются только для ненадёжных задач "
+             "(см. --resample-token-threshold), поэтому цена далеко не кратная.",
+    )
+    group.add_argument(
+        "--resample-token-threshold", type=int, default=400000,
+        help="Порог расхода, выше которого первый сэмпл считается ненадёжным и "
+             "запускается добор. 0 — добирать всегда при --samples > 1.",
+    )
+    group.add_argument(
+        "--no-verify-step", action="store_true",
+        help="Не звать верификатора в конце задачи. Его вердикт ни на что не "
+             "влияет, ошибается на верных задачах в 41% случаев и стоит ~4% "
+             "бюджета — на замерах его стоит отключать.",
+    )
     group.add_argument(
         "--min-steps-before-answer", type=int, default=0,
         help="Сколько шагов должно быть принято, прежде чем \\boxed{} засчитывается "
@@ -632,9 +672,41 @@ def load_completed_task_ids(path: Path) -> set[str]:
     return done
 
 
-def _solve_with_graph(graph, problem: str, args: argparse.Namespace) -> tuple[str | None, dict]:
-    """Пошаговый режим: возвращает (ответ, метрики агента)."""
+def _vote(answers: list[str]) -> tuple[str | None, dict]:
+    """Голосование по финальным ответам нескольких независимых решений.
+
+    Сравнение по нормализованной форме (иначе `\\frac{1}{2}` и `\\frac12`
+    считались бы разными ответами), а возвращается исходная запись — её потом
+    разбирает math-verify.
+    """
+    from answer_utils import normalize_answer
+
+    buckets: dict[str, list[str]] = {}
+    for a in answers:
+        a = (a or "").strip()
+        if not a:
+            continue
+        buckets.setdefault(normalize_answer(a) or a, []).append(a)
+    if not buckets:
+        return None, {"votes": {}, "agreement": 0.0}
+    # При равенстве голосов побеждает тот, что встретился раньше: порядок
+    # сэмплов детерминирован зерном, значит и разрешение ничьи воспроизводимо.
+    best = max(buckets.values(), key=len)
+    return best[0], {
+        "votes": {k: len(v) for k, v in buckets.items()},
+        "agreement": len(best) / max(len(answers), 1),
+    }
+
+
+def _solve_once(graph, problem: str, args: argparse.Namespace,
+                task_id: Any = None) -> tuple[str | None, dict]:
+    """Одно независимое решение задачи."""
     reset_calculator_state()
+    if getattr(args, "seed", None) is not None and hasattr(solver_mod, "begin_task_seed"):
+        # Зерно привязано к task_id, а не к порядку решения: при --workers N
+        # задачи заканчиваются в произвольном порядке, и счётчик «по порядку»
+        # давал бы разные зёрна одной задаче в разных прогонах.
+        solver_mod.begin_task_seed(task_id)
     # Каждый пайплайн знает форму своего состояния. qwen4b/-full предоставляют
     # make_initial_state (у них есть свои поля вроде candidate_raw/segmented);
     # оригинал такой функции не имеет — для него собираем состояние по-старому.
@@ -705,6 +777,59 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace) -> tuple[st
     return state.get("final_answer"), metrics
 
 
+def _solve_with_graph(graph, problem: str, args: argparse.Namespace,
+                      task_id: Any = None) -> tuple[str | None, dict]:
+    """Решает задачу; при --samples > 1 берёт ответ большинством голосов.
+
+    Зачем. Разбор всех чистых прогонов: 54 задачи из 90 решаются всегда, 7 не
+    решаются никогда, а 29 (32%) плавают от прогона к прогону. Плавающие — это
+    задачи, где верный ответ находится, но не каждый раз; одиночное решение
+    выбрасывает эту информацию. Голосование по нескольким независимым решениям
+    бьёт ровно в эту полосу.
+
+    Добор адаптивный: второй и третий сэмплы запускаются только там, где первый
+    выглядит ненадёжным (сдался, не дал ответа или сжёг больше
+    --resample-token-threshold токенов). На 54 «всегда решаемых» задачах это не
+    стоит ничего, а дорогие задачи и так дорогие.
+    """
+    samples = max(1, int(getattr(args, "samples", 1) or 1))
+    if samples == 1:
+        return _solve_once(graph, problem, args, task_id)
+
+    threshold = int(getattr(args, "resample_token_threshold", 400_000) or 0)
+    answers: list[str] = []
+    metrics_all: list[dict] = []
+    for i in range(samples):
+        if getattr(args, "seed", None) is not None and hasattr(solver_mod, "begin_task_seed"):
+            # Разные сэмплы одной задачи обязаны идти разными путями, иначе
+            # голосование выродится в один и тот же ответ. Зерно остаётся
+            # воспроизводимым: оно детерминировано номером сэмпла.
+            solver_mod.begin_task_seed(f"{task_id}#{i}")
+        answer, m = _solve_once(graph, problem, args, task_id)
+        answers.append(answer or "")
+        metrics_all.append(m)
+        if i == 0:
+            shaky = (m.get("gave_up") or not (answer or "").strip()
+                     or (threshold and m.get("tokens_used", 0) > threshold))
+            if not shaky:
+                print(f"  [samples] первый сэмпл уверенный — добор не нужен.")
+                break
+            print(f"  [samples] первый сэмпл ненадёжен (сдался={m.get('gave_up')}, "
+                  f"ответ={answer!r}, токенов={m.get('tokens_used', 0):,}) — добираю.")
+
+    final, vote_info = _vote(answers)
+    merged = dict(metrics_all[0])
+    merged["tokens_used"] = sum(m.get("tokens_used", 0) for m in metrics_all)
+    merged["gave_up"] = final is None
+    merged["samples"] = len(metrics_all)
+    merged["sample_answers"] = answers
+    merged.update(vote_info)
+    if len(metrics_all) > 1:
+        print(f"  [samples] {len(metrics_all)} сэмплов, голоса {vote_info['votes']}, "
+              f"согласие {vote_info['agreement']:.0%} -> {final!r}")
+    return final, merged
+
+
 def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     """Решает задачи бенчмарка выбранным режимом и пишет результаты в JSONL."""
     from datasets import load_dataset
@@ -729,6 +854,14 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     solver_mod.API_KEY = args.api_key
     solver_mod.DEFAULT_MAX_TOKENS = args.max_tokens
     solver_mod.REQUEST_TIMEOUT = args.timeout
+    if getattr(args, "seed", None) is not None:
+        if hasattr(solver_mod, "SEED"):
+            solver_mod.SEED = args.seed
+            print(f"[config] seed={args.seed} — прогон воспроизводим "
+                  f"(зерно вызова выводится из seed + task_id + номер вызова)")
+        else:
+            print(f"[config] ⚠️  --seed={args.seed} игнорируется: пайплайн "
+                  f"'{args.pipeline}' не поддерживает зерно")
 
     dataset = load_dataset_offline_safe(config, getattr(args, "data_file", None))
 
@@ -864,7 +997,7 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
         RECORDER.start_task(task_id, problem, ground_truth=ground_truth,
                             benchmark=config.name)
         try:
-            solution, agent_metrics = _solve_with_graph(graph, problem, args)
+            solution, agent_metrics = _solve_with_graph(graph, problem, args, task_id)
         except Exception as exc:  # noqa: BLE001 — одна задача не валит прогон
             error = f"{type(exc).__name__}: {exc}"
             with write_lock:
