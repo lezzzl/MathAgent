@@ -810,7 +810,12 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace,
             # Разные сэмплы одной задачи обязаны идти разными путями, иначе
             # голосование выродится в один и тот же ответ. Зерно остаётся
             # воспроизводимым: оно детерминировано номером сэмпла.
-            solver_mod.begin_task_seed(f"{task_id}#{i}")
+            #
+            # Нулевой сэмпл намеренно берёт ГОЛЫЙ task_id — тот же, что и при
+            # --samples 1. Тогда прогон с голосованием повторяет одиночный шаг в
+            # шаг на первой траектории, и разница между ними — ровно вклад
+            # добора, а не смена пути сэмплирования.
+            solver_mod.begin_task_seed(task_id if i == 0 else f"{task_id}#{i}")
         answer, m = _solve_once(graph, problem, args, task_id)
         answers.append(answer or "")
         metrics_all.append(m)
@@ -938,6 +943,19 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             "workers": args.workers,
             "timeout": args.timeout,
             "max_tokens": args.max_tokens,
+            # Всё, что делает прогоны сопоставимыми или несопоставимыми, обязано
+            # лежать в шапке траектории. Без seed нельзя отличить сеянный прогон
+            # от несеянного, а значит нельзя сказать, законно ли сравнение двух
+            # прогонов вообще — именно на этом мы уже один раз обожглись.
+            "seed": getattr(args, "seed", None),
+            "samples": getattr(args, "samples", 1),
+            "resample_token_threshold": getattr(args, "resample_token_threshold", None),
+            "finish_at": getattr(args, "finish_at", None),
+            "max_recoveries": args.max_recoveries,
+            "max_step_attempts": getattr(args, "max_step_attempts", None),
+            "verifier_enabled": not getattr(args, "no_verify_step", False),
+            "generator_num_predict": solver_mod.ROLES["generator"].num_predict
+            if hasattr(solver_mod, "ROLES") else None,
             "started_utc": datetime.now(timezone.utc).isoformat(),
         }
         print(f"[trajectory] запись траекторий включена -> {trajectory_path}")
