@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "run_id": "nikita-qwen35-4b-aime24-v6",
+  "model": "Qwen/Qwen3.5-4B",
+  "pipeline": "qwen4b",
+  "prompt": "conf/base/prompts/agent-step-qwen4b-v6.yml",
+  "prompt_version": "agent-step-qwen4b-v6",
+  "role": "solver",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": null,
+    "top_k": null,
+    "min_p": null,
+    "presence_penalty": null,
+    "repetition_penalty": null,
+    "seed": null,
+    "max_tokens": 800000
+  },
+  "runtime": {
+    "concurrency": 32,
+    "timeout": 1200.0,
+    "max_retries": 1
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3"
+  },
+  "agent": {
+    "branch_mode": "single",
+    "k_branches": 3,
+    "score_threshold": 0.5,
+    "use_tools": true,
+    "token_budget": 800000,
+    "generator_num_predict": 40000
+  },
+  "status": "completed",
+  "created_at": "2026-08-02T23:39:20.456742+00:00",
+  "updated_at": "2026-08-03T09:40:28.602964+00:00",
+  "benchmarks": {
+    "AIME24": {
+      "dataset": "HuggingFaceH4/aime_2024",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "C:/Users/Nikita Yevdokimov/Practice/MathAgent/results/runs/nikita-qwen35-4b-aime24-v6/aime24.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-03T09:40:28.586888+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 29,
+        "failed_tasks": 1,
+        "remaining_tasks": 0,
+        "input_tokens": 1993433,
+        "output_tokens": 4728198,
+        "total_tokens": 6721631,
+        "wall_time_seconds": 65686.951,
+        "tasks_per_second": 0.0005
+      }
+    }
+  },
+  "summary": {
+    "total_tasks": 30,
+    "successful_tasks": 29,
+    "failed_tasks": 1,
+    "remaining_tasks": 0,
+    "input_tokens": 1993433,
+    "output_tokens": 4728198,
+    "total_tokens": 6721631,
+    "wall_time_seconds": 65686.951,
+    "tasks_per_second": 0.0005
+  }
+}

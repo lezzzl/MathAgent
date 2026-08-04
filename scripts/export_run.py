@@ -113,6 +113,18 @@ def infer_temperature(tasks: List[dict]) -> Optional[float]:
     return min(temps) if temps else None
 
 
+def infer_generator_num_predict(tasks: List[dict]) -> Optional[int]:
+    """Потолок генерации у генератора — из записей вызовов.
+
+    В шапке прогона его нет, а различать прогоны по нему нужно: лимит роли
+    поднимается через ROLE_NUM_PREDICT, не меняя версию промпта, и без этого
+    поля два таких прогона выглядят в manifest.json одинаково.
+    """
+    caps = {r.get("num_predict") for t in tasks for r in t.get("records", [])
+            if r.get("stage") == "generate" and r.get("num_predict")}
+    return max(caps) if caps else None
+
+
 def export_benchmark(bench: str, trajectory: Path, run_id: str, out_dir: Path
                      ) -> Dict[str, Any]:
     data = json.loads(trajectory.read_text(encoding="utf-8"))
@@ -120,6 +132,8 @@ def export_benchmark(bench: str, trajectory: Path, run_id: str, out_dir: Path
     tasks = data.get("tasks", []) or []
     if run.get("temperature") is None:
         run["temperature"] = infer_temperature(tasks)
+    if run.get("generator_num_predict") is None:
+        run["generator_num_predict"] = infer_generator_num_predict(tasks)
 
     verified_path = find_verified(trajectory)
     verified: Dict[str, dict] = {}
@@ -291,6 +305,10 @@ def main() -> int:
             "score_threshold": run_meta.get("score_threshold"),
             "use_tools": run_meta.get("use_tools"),
             "token_budget": run_meta.get("token_budget"),
+            # Потолок одной генерации у роли generator. Поднимается через
+            # ROLE_NUM_PREDICT без смены версии промпта, поэтому без этого поля
+            # два таких прогона неразличимы в манифесте.
+            "generator_num_predict": run_meta.get("generator_num_predict"),
         },
         "status": args.status,
         "created_at": run_meta.get("started_utc", datetime.now(timezone.utc).isoformat()),

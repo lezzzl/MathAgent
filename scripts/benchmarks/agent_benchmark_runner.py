@@ -162,6 +162,14 @@ def parse_benchmark_args(
     parser.add_argument("--limit", type=int)
     parser.add_argument("--skip", type=int, default=0, help="Пропустить N первых задач")
     parser.add_argument(
+        "--task-ids", default=None,
+        help="Гонять только эти задачи: список id через запятую либо путь к файлу "
+             "с id (по одному в строке, '#' — комментарий). Нужен для замеров на "
+             "фиксированном подмножестве: --skip/--limit режут только непрерывный "
+             "кусок, а подмножество «15 решаемых + 15 нерешаемых» непрерывным не "
+             "бывает. Применяется ДО --skip/--limit.",
+    )
+    parser.add_argument(
         "--workers", type=int, default=4,
         help="Сколько задач бенчмарка решать параллельно. Одновременных запросов "
              "к серверу будет workers * sample-workers — именно это число определяет "
@@ -331,6 +339,30 @@ def resolve_output_path(config: BenchmarkConfig, output: Path | None) -> Path:
 
 
 _LOCAL_LOADERS = {".jsonl": "json", ".json": "json", ".parquet": "parquet", ".csv": "csv"}
+
+
+def parse_task_ids(value: "str | None") -> "set[str] | None":
+    """Разбирает --task-ids: либо путь к файлу, либо список через запятую.
+
+    Файл удобнее для длинных подмножеств и тем, что его можно закоммитить рядом
+    с замером: подмножество — часть методики, а не разовый аргумент командной
+    строки.
+    """
+    if not value:
+        return None
+    candidate = Path(value)
+    if candidate.exists():
+        raw = candidate.read_text(encoding="utf-8").splitlines()
+    else:
+        raw = value.split(",")
+    ids = {
+        line.split("#", 1)[0].strip()
+        for line in raw
+    }
+    ids.discard("")
+    if not ids:
+        raise ValueError(f"--task-ids не содержит ни одного id: {value!r}")
+    return ids
 
 
 def load_dataset_offline_safe(config: BenchmarkConfig, data_file: "str | None" = None):
@@ -711,6 +743,24 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
               f"оставлено {len(dataset)}/{before} задач")
         if len(dataset) == 0:
             raise ValueError("answer_filter отсеял все задачи — проверьте фильтр и поле эталона")
+
+    # Фиксированное подмножество задач. Идёт после answer_filter и до skip/limit:
+    # так «--task-ids файл --limit 5» означает «первые пять из подмножества».
+    wanted = parse_task_ids(getattr(args, "task_ids", None))
+    if wanted is not None:
+        before = len(dataset)
+        tid = config.task_id_field
+        dataset = dataset.filter(lambda item: str(item[tid]) in wanted)
+        found = {str(item[tid]) for item in dataset}
+        missing = wanted - found
+        print(f"[task-ids] отобрано {len(dataset)}/{before} задач по списку из {len(wanted)} id")
+        if missing:
+            print(f"[task-ids] ⚠️  не найдены в датасете: {sorted(missing)[:20]}"
+                  f"{' …' if len(missing) > 20 else ''}")
+        if len(dataset) == 0:
+            raise ValueError(
+                f"--task-ids не совпал ни с одной задачей. Поле id этого бенчмарка — "
+                f"'{tid}'; проверьте, что в списке значения именно из него.")
 
     start = max(0, args.skip)
     end = min(start + args.limit, len(dataset)) if args.limit else len(dataset)
