@@ -23,8 +23,10 @@ from mathagent.pipelines.agent_eval.nodes_code import (
 )
 from mathagent.pipelines.agent_eval.nodes_react import (
     create_react_agent_node,
+    create_react_precheck_node,
     record_react_tool_call,
     route_after_react_agent,
+    route_after_react_precheck,
 )
 from mathagent.pipelines.agent_eval.nodes_step_code import (
     commit_final_step,
@@ -47,6 +49,7 @@ from mathagent.tools.python_tools import (
     create_repair_tool,
 )
 from mathagent.tools.python_executor import NotebookSessionManager
+from mathagent.tools.tool_review import create_tool_review_tool
 
 
 @dataclass(frozen=True)
@@ -148,6 +151,9 @@ class ReactAgentState(TypedDict):
     tool_call_count: NotRequired[int]
     agent_history: NotRequired[list[dict[str, Any]]]
     tool_history: NotRequired[list[dict[str, Any]]]
+    precheck_history: NotRequired[list[dict[str, Any]]]
+    precheck_rejection_count: NotRequired[int]
+    force_final_reason: NotRequired[str]
     format_retry_count: NotRequired[int]
     had_format_recovery: NotRequired[bool]
     finish_reason: NotRequired[str]
@@ -498,12 +504,15 @@ def create_react_agent_graph(
     model_config: ModelConfig,
     prompt_path: Path,
     max_tool_calls: int = 8,
+    max_precheck_rejections: int = 3,
     execution_timeout: float = 10.0,
     node_generation: NodeGeneration | None = None,
 ) -> Any:
     """Создаёт ReAct-граф с набором tools из выбранной версии промпта."""
     if max_tool_calls < 1:
         raise ValueError("max_tool_calls must be positive")
+    if max_precheck_rejections < 1:
+        raise ValueError("max_precheck_rejections must be positive")
     if execution_timeout <= 0:
         raise ValueError("execution_timeout must be positive")
 
@@ -515,6 +524,7 @@ def create_react_agent_graph(
         generation,
     )
     cot_enabled = prompt_has_role(prompt_path, "cot")
+    precheck_enabled = prompt_has_role(prompt_path, "tool_checker")
     cot_tool = None
     repair_tool = None
     notebook_manager = None
@@ -534,6 +544,16 @@ def create_react_agent_graph(
         repair_tool = create_repair_tool(execution_timeout)
         executable_tools = [python_tool, repair_tool]
     final_answer_tool = create_final_answer_tool()
+    review_tool = None
+    precheck_model = None
+    if precheck_enabled:
+        precheck_model = create_node_model(
+            model_config,
+            prompt_path,
+            "tool_checker",
+            generation,
+        )
+        review_tool = create_tool_review_tool()
 
     graph = StateGraph(ReactAgentState)
     graph.add_node(
@@ -546,8 +566,19 @@ def create_react_agent_graph(
             max_tool_calls,
             repair_tool=repair_tool,
             cot_tool=cot_tool,
+            precheck_enabled=precheck_enabled,
         ),
     )
+    if precheck_model is not None and review_tool is not None:
+        graph.add_node(
+            "precheck",
+            create_react_precheck_node(
+                precheck_model,
+                review_tool,
+                prompt_path,
+                max_precheck_rejections,
+            ),
+        )
     graph.add_node(
         "tools",
         ToolNode(executable_tools, handle_tool_errors=False),
@@ -558,14 +589,27 @@ def create_react_agent_graph(
         "agent",
         route_after_react_agent,
         {
-            "tools": "tools",
+            "tools": "precheck" if precheck_enabled else "tools",
             "agent": "agent",
             "finished": END,
         },
     )
+    if precheck_enabled:
+        graph.add_conditional_edges(
+            "precheck",
+            route_after_react_precheck,
+            {
+                "tools": "tools",
+                "agent": "agent",
+            },
+        )
     graph.add_edge("tools", "record_tool")
     graph.add_edge("record_tool", "agent")
-    recursion_limit = 3 * max_tool_calls + 6
+    recursion_limit = (
+        (4 if precheck_enabled else 3) * max_tool_calls
+        + 2 * max_precheck_rejections
+        + 6
+    )
     compiled_graph = graph.compile().with_config({"recursion_limit": recursion_limit})
     if notebook_manager is not None:
         return ManagedNotebookGraph(compiled_graph, notebook_manager)

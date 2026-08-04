@@ -125,6 +125,7 @@ def parse_benchmark_args(
     parser.add_argument("--max-repairs", type=int, default=2)
     parser.add_argument("--max-coder-format-retries", type=int, default=1)
     parser.add_argument("--max-tool-calls", type=int, default=8)
+    parser.add_argument("--max-precheck-rejections", type=int, default=3)
     parser.add_argument("--execution-timeout", type=float, default=10.0)
     parser.add_argument("--limit", type=int) # ограничивает число задач из датасета, чтобы быстро проверить работу runner
 
@@ -216,6 +217,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-coder-format-retries must be non-negative")
     if args.max_tool_calls < 1:
         raise ValueError("--max-tool-calls must be positive")
+    if args.max_precheck_rejections < 1:
+        raise ValueError("--max-precheck-rejections must be positive")
     if args.execution_timeout <= 0:
         raise ValueError("--execution-timeout must be positive")
     if args.vllm_max_num_seqs < 1:
@@ -289,8 +292,16 @@ def create_manifest_config(
                                     "python_mode": "notebook",
                                     "cot_parser": "tolerant-v1",
                                 }
-                                if prompt_version
-                                in {"react-agent-v2", "react-agent-v3"}
+                                if "cot" in node_generation
+                                else {}
+                            ),
+                            **(
+                                {
+                                    "max_precheck_rejections": (
+                                        args.max_precheck_rejections
+                                    )
+                                }
+                                if "tool_checker" in node_generation
                                 else {}
                             ),
                         }
@@ -360,6 +371,7 @@ def create_graph(
             model_config,
             prompt_path,
             max_tool_calls=args.max_tool_calls,
+            max_precheck_rejections=args.max_precheck_rejections,
             execution_timeout=args.execution_timeout,
             node_generation=node_generation,
         )
