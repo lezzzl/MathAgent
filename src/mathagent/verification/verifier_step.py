@@ -5,7 +5,7 @@ import ollama
 
 from roles import Role
 
-MODEL_NAME = 'qwen3.5:4b'
+MODEL_NAME = 'qwen3.5:9b'
 PROMPTS_PATH = Path("prompts/verificator-stepwise.yml")
 
 _stepwise_role = Role.from_yaml(PROMPTS_PATH, "verifier_stepwise_check")
@@ -67,7 +67,7 @@ _STEP_PATTERN = re.compile(
 
 def _extract_steps(source_text: str, logger):
     """
-    Извлекает список пошаговых проверок из блока <steps>...</steps>.
+    извлекает список пошаговых проверок из блока <steps>...</steps>.
     """
     steps_block = _extract_tag("steps", source_text)
     if not steps_block:
@@ -76,16 +76,25 @@ def _extract_steps(source_text: str, logger):
 
     matches = list(_STEP_PATTERN.finditer(steps_block))
     parsed_steps = []
+    seen_texts = set()
+
     for idx, m in enumerate(matches, start=1):
         text = (m.group(1) or "").strip() or "Модель не описала шаг."
         scratch = (m.group(2) or "").strip()
         check_raw = (m.group(3) or "").strip()
         comment = (m.group(4) or "").strip()
 
+        normalized = text.lower()
+        if normalized in seen_texts:
+            logger.warning(
+                f"Обнаружено зацикливание генерации на шаге {idx} "
+                f"(повтор текста шага: '{text[:60]}...'). "
+                f"Отбрасываю этот и все последующие шаги."
+            )
+            break
+        seen_texts.add(normalized)
         is_ok = _parse_check_status(check_raw, logger)
         if scratch:
-            # Промежуточный пересчёт не показываем (не кладём в
-            # итоговый verification_steps), но логируем
             logger.info(f"step {idx} scratch: {scratch}")
         parsed_steps.append({
             "step_number": idx,
@@ -113,8 +122,8 @@ def _run_stepwise_check(question: str, model_answer: str, logger):
             messages=messages,
             options={
                 'temperature': 0.1,
-                'num_ctx': 8192,
-                'num_predict': 4608,
+                'num_ctx': 16384,
+                'num_predict': 10000,
                 'stop': _stepwise_role.stop,
             }
         )
@@ -190,7 +199,7 @@ def _run_finalize(question: str, model_answer: str, steps_block: str, logger):
             options={
                 'temperature': 0.1,
                 'num_ctx': 8192,
-                'num_predict': 512,
+                'num_predict': 2048,
                 'stop': _finalize_role.stop,
             }
         )
