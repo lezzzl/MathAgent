@@ -15,6 +15,12 @@ from mathagent.pipelines.agent_eval.nodes import (
     get_message_usage,
     load_prompt_role,
 )
+from mathagent.tools.python_executor import NotebookSessionManager
+from mathagent.tools.python_tools import (
+    compact_execution,
+    compact_stdout,
+    execute_notebook_code,
+)
 
 
 def clean_agent_message(message: AIMessage, message_id: str) -> AIMessage:
@@ -32,6 +38,8 @@ def build_react_trace(
     tool_history: list[dict[str, Any]],
     finish_reason: str,
     precheck_history: list[dict[str, Any]] | None = None,
+    planner_trace: dict[str, Any] | None = None,
+    repair_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Собирает компактную траекторию без messages и hidden reasoning."""
     trace = {
@@ -42,6 +50,10 @@ def build_react_trace(
     }
     if precheck_history is not None:
         trace["prechecks"] = precheck_history
+    if planner_trace is not None:
+        trace["planner"] = planner_trace
+    if repair_history is not None:
+        trace["repairs"] = repair_history
     return trace
 
 
@@ -99,22 +111,71 @@ def execution_failed(tool_history: list[dict[str, Any]]) -> bool:
     return execution["returncode"] != 0 or execution["timeout"] is True
 
 
+def create_react_planner_node(
+    model: Any,
+    prompt_path: Path,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """Формирует один предварительный необязательный план перед ReAct-циклом."""
+    prompt_version, role = load_prompt_role(prompt_path, "planner")
+
+    def planner(state: dict[str, Any]) -> dict[str, Any]:
+        task_prompt = role["task"].replace("{problem}", state["problem"])
+        started = time.perf_counter()
+        message = model.invoke(
+            [
+                SystemMessage(content=role["system"]),
+                HumanMessage(content=task_prompt),
+            ]
+        )
+        latency = time.perf_counter() - started
+        if not isinstance(message.content, str) or not message.content.strip():
+            raise ValueError("ReAct planner returned an empty plan")
+        plan = message.content.strip()
+        usage = get_message_usage(message)
+        return {
+            "plan": plan,
+            "planner_trace": {
+                "plan": plan,
+                "usage": usage,
+                "latency_seconds": round(latency, 3),
+            },
+            "reasoning": add_reasoning(state, "planner", message),
+            "usage": add_usage(state, "planner", message),
+            "prompt_version": prompt_version,
+        }
+
+    return planner
+
+
 def create_react_agent_node(
     model: Any,
-    python_tool: BaseTool,
+    execution_tools: list[BaseTool],
     final_answer_tool: BaseTool,
     prompt_path: Path,
     max_tool_calls: int,
     repair_tool: BaseTool | None = None,
     cot_tool: BaseTool | None = None,
     precheck_enabled: bool = False,
+    planner_enabled: bool = False,
+    structured_repair_enabled: bool = False,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Вызывает ReAct-модель и обрабатывает tools выбранной версии промпта."""
     if repair_tool is not None and cot_tool is not None:
         raise ValueError("ReAct graph cannot enable cot and repair together")
+    if not execution_tools:
+        raise ValueError("ReAct graph requires at least one execution tool")
+
+    execution_tools_by_name = {tool.name: tool for tool in execution_tools}
+    if len(execution_tools_by_name) != len(execution_tools):
+        raise ValueError("ReAct execution tool names must be unique")
 
     prompt_version, role = load_prompt_role(prompt_path, "agent")
-    budgeted_tools = [python_tool]
+    advisory_evidence = (
+        "CoT, Python, or SymPy evidence"
+        if "sympy" in execution_tools_by_name
+        else "CoT or Python evidence"
+    )
+    budgeted_tools = list(execution_tools)
     if cot_tool is not None:
         budgeted_tools.insert(0, cot_tool)
     if repair_tool is not None:
@@ -145,6 +206,22 @@ def create_react_agent_node(
                     id="react:problem",
                 ),
             ]
+            if planner_enabled:
+                plan = state.get("plan")
+                if not isinstance(plan, str) or not plan.strip():
+                    raise ValueError("ReAct agent requires a non-empty planner output")
+                new_messages.append(
+                    HumanMessage(
+                        content=(
+                            "Advisory initial plan from the planner:\n"
+                            f"{plan}\n\n"
+                            "Treat this plan as a hypothesis, not a fixed sequence. "
+                            f"Revise or abandon any step when {advisory_evidence} "
+                            "shows that another approach is better."
+                        ),
+                        id="react:advisory_plan",
+                    )
+                )
 
         tool_call_count = state.get("tool_call_count", 0)
         tool_calls_remaining = max(max_tool_calls - tool_call_count, 0)
@@ -212,22 +289,34 @@ def create_react_agent_node(
             arguments = tool_call.get("args") or {}
             history_entry["tool_call_id"] = tool_call.get("id")
 
-            if tool_name == python_tool.name:
+            if tool_name in execution_tools_by_name:
+                tool_label = {
+                    "python": "Python",
+                    "sympy": "SymPy",
+                }.get(str(tool_name), str(tool_name))
                 code = arguments.get("code")
                 purpose = arguments.get("purpose")
                 context = arguments.get("context")
                 if forced_final:
-                    format_error = "Python cannot be called after the execution limit"
+                    format_error = (
+                        f"{tool_label} cannot be called after the execution limit"
+                    )
                 elif not isinstance(code, str) or not code.strip():
-                    format_error = "Python tool call must contain non-empty code"
+                    format_error = (
+                        f"{tool_label} tool call must contain non-empty code"
+                    )
                 elif cot_tool is not None and (
                     not isinstance(context, str) or not context.strip()
                 ):
-                    format_error = "Python tool call must contain non-empty context"
+                    format_error = (
+                        f"{tool_label} tool call must contain non-empty context"
+                    )
                 elif purpose is not None and not isinstance(purpose, str):
-                    format_error = "Python purpose must be text when provided"
+                    format_error = (
+                        f"{tool_label} purpose must be text when provided"
+                    )
                 else:
-                    history_entry["action"] = "python"
+                    history_entry["action"] = tool_name
                     return {
                         **base_update,
                         "messages": [*new_messages, clean_message],
@@ -309,6 +398,16 @@ def create_react_agent_node(
                             (
                                 list(state.get("precheck_history", []))
                                 if precheck_enabled
+                                else None
+                            ),
+                            (
+                                dict(state["planner_trace"])
+                                if isinstance(state.get("planner_trace"), dict)
+                                else None
+                            ),
+                            (
+                                list(state.get("repair_history", []))
+                                if structured_repair_enabled
                                 else None
                             ),
                         ),
@@ -528,8 +627,13 @@ def route_after_react_agent(state: dict[str, Any]) -> str:
     raise ValueError(f"Unknown ReAct agent status: {status}")
 
 
-def record_react_tool_call(state: dict[str, Any]) -> dict[str, Any]:
-    """Сохраняет artifact выполненного Python, repair или CoT tool."""
+def record_react_tool_call(
+    state: dict[str, Any],
+    *,
+    structured_repair_enabled: bool = False,
+    max_tool_repairs: int = 0,
+) -> dict[str, Any]:
+    """Сохраняет artifact выполненного execution, repair или CoT tool."""
     messages = state["messages"]
     if len(messages) < 2:
         raise ValueError("Tool result has no matching agent message")
@@ -553,7 +657,7 @@ def record_react_tool_call(state: dict[str, Any]) -> dict[str, Any]:
     tool_history = list(state.get("tool_history", []))
     state_update: dict[str, Any] = {}
 
-    if tool_name == "python":
+    if tool_name in {"python", "sympy"}:
         purpose = arguments.get("purpose")
         purpose = purpose.strip() if isinstance(purpose, str) else None
         context = arguments.get("context")
@@ -565,6 +669,9 @@ def record_react_tool_call(state: dict[str, Any]) -> dict[str, Any]:
             "code": arguments["code"].strip(),
             "execution": tool_message.artifact,
         }
+        if structured_repair_enabled:
+            history_entry["recovered"] = False
+            history_entry["repair_attempt_indices"] = []
         if context is not None:
             history_entry["context"] = context
         else:
@@ -613,9 +720,400 @@ def record_react_tool_call(state: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"Unsupported ReAct tool: {tool_name}")
 
     tool_history.append(history_entry)
-    return {
+    update = {
         **state_update,
         "tool_call_count": tool_index + 1,
         "tool_history": tool_history,
         "status": "tool_executed",
     }
+    if (
+        structured_repair_enabled
+        and tool_name in {"python", "sympy"}
+        and execution_failed(tool_history)
+        and max_tool_repairs > 0
+    ):
+        update.update(
+            {
+                "repair_attempt": 0,
+                "repair_code": history_entry["code"],
+                "repair_execution": tool_message.artifact,
+                "repair_tool_call_id": tool_call["id"],
+                "repair_tool_name": tool_name,
+                "repair_context": history_entry.get("context", ""),
+                "repair_feedback": (
+                    "No previous repair candidate has been rejected. Fix the latest "
+                    "structured execution error."
+                ),
+                "status": "repair_required",
+            }
+        )
+    return update
+
+
+def route_after_react_execution(state: dict[str, Any]) -> str:
+    """Выбирает автоматический repair после execution error или возврат агенту."""
+    if state["status"] == "repair_required":
+        return "repair"
+    if state["status"] == "tool_executed":
+        return "agent"
+    raise ValueError(f"Unknown ReAct execution status: {state['status']}")
+
+
+def repair_diagnostic(execution: dict[str, Any]) -> dict[str, Any]:
+    """Выделяет structured diagnostic без полного stdout и traceback."""
+    compact = compact_execution(execution)
+    compact.pop("stdout", None)
+    return compact
+
+
+def normalize_repair_code(code: str) -> str:
+    """Нормализует repair-код для исполнения и поиска повторных кандидатов."""
+    value = code.replace("\r\n", "\n").replace("\r", "\n").strip()
+    lines = value.splitlines()
+    if lines and lines[0].strip().lower() in {"```", "```py", "```python"}:
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(line.rstrip() for line in lines).strip()
+
+
+def repair_diagnostic_excerpt(execution: dict[str, Any]) -> str:
+    """Показывает repair-модели ошибочную строку и позицию compiler caret."""
+    source_line = execution.get("source_line")
+    line = execution.get("line")
+    offset = execution.get("offset")
+    if not isinstance(source_line, str) or not source_line:
+        return "No exact source line is available; use the structured diagnostic."
+
+    location = f"line {line}" if isinstance(line, int) else "unknown line"
+    if isinstance(offset, int) and offset > 0:
+        caret = " " * (offset - 1) + "^"
+        return f"{location}:\n{source_line}\n{caret}"
+    return f"{location}:\n{source_line}"
+
+
+def repair_error_signature(execution: dict[str, Any]) -> tuple[Any, ...]:
+    """Строит устойчивую сигнатуру ошибки для обнаружения повторного сбоя."""
+    return (
+        execution.get("error_type"),
+        execution.get("message"),
+        execution.get("line"),
+        execution.get("source_line"),
+        bool(execution.get("timeout")),
+    )
+
+
+def duplicate_repair_source(
+    state: dict[str, Any],
+    candidate: str,
+) -> str | None:
+    """Находит исходную или repair-ячейку, которую дословно повторил кандидат."""
+    normalized_candidate = normalize_repair_code(candidate)
+    tool_call_id = state["repair_tool_call_id"]
+    for tool_call in reversed(state.get("tool_history", [])):
+        if tool_call.get("tool_call_id") != tool_call_id:
+            continue
+        original_code = tool_call.get("code")
+        if (
+            isinstance(original_code, str)
+            and normalize_repair_code(original_code) == normalized_candidate
+        ):
+            return "original"
+        break
+
+    for repair in state.get("repair_history", []):
+        if repair.get("tool_call_id") != tool_call_id:
+            continue
+        previous_code = repair.get("code")
+        if (
+            isinstance(previous_code, str)
+            and normalize_repair_code(previous_code) == normalized_candidate
+        ):
+            return f"repair_{repair['index']}"
+    return None
+
+
+def duplicate_repair_execution(
+    previous_execution: dict[str, Any],
+    duplicate_of: str,
+) -> dict[str, Any]:
+    """Создаёт trace-диагностику для кандидата, не запущенного как дубликат."""
+    return {
+        "executed": False,
+        "success": False,
+        "stdout": "",
+        "stderr": "",
+        "error_type": "DuplicateRepairCandidate",
+        "message": f"Repair candidate duplicates {duplicate_of}",
+        "line": previous_execution.get("line"),
+        "offset": previous_execution.get("offset"),
+        "source_line": previous_execution.get("source_line"),
+        "returncode": None,
+        "timeout": False,
+        "latency_seconds": 0.0,
+        "session_reset": False,
+        "session_version": previous_execution.get("session_version"),
+        "available_names": list(previous_execution.get("available_names", [])),
+        "defined_names": [],
+        "names_truncated": bool(previous_execution.get("names_truncated", False)),
+    }
+
+
+def next_repair_feedback(
+    previous_execution: dict[str, Any],
+    execution: dict[str, Any],
+) -> str:
+    """Объясняет следующей repair-попытке, чем закончился новый кандидат."""
+    error_type = execution.get("error_type") or "execution error"
+    if repair_error_signature(previous_execution) == repair_error_signature(execution):
+        source_line = execution.get("source_line") or "unknown source line"
+        return (
+            "The previous candidate changed, but it produced the same "
+            f"{error_type} with the same diagnostic. Rewrite the complete failing "
+            f"statement instead of preserving its token pattern: {source_line}"
+        )
+    return (
+        "The previous candidate was executed but failed with "
+        f"{error_type}: {execution.get('message') or 'no error message'}. "
+        "Use the latest diagnostic and return a different, corrected cell."
+    )
+
+
+def repair_exhaustion_content(
+    execution: dict[str, Any],
+    repair_history: list[dict[str, Any]],
+    tool_call_id: str,
+) -> str:
+    """Собирает последнюю реальную ошибку и сводку исчерпанного repair-loop."""
+    current_repairs = [
+        repair
+        for repair in repair_history
+        if repair.get("tool_call_id") == tool_call_id
+    ]
+    duplicate_count = sum(
+        repair.get("candidate_validation", {}).get("reason") == "duplicate_code"
+        for repair in current_repairs
+    )
+    payload = {
+        "last_execution_error": repair_diagnostic(execution),
+        "repair_attempts": len(current_repairs),
+        "duplicate_candidates_rejected": duplicate_count,
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def create_react_code_repair_node(
+    model: Any,
+    prompt_path: Path,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """Генерирует полную исправленную ячейку по последней execution-ошибке."""
+    prompt_version, role = load_prompt_role(prompt_path, "repair")
+    candidate_validation_enabled = "{repair_feedback}" in role["task"]
+
+    def repair(state: dict[str, Any]) -> dict[str, Any]:
+        attempt = state.get("repair_attempt", 0) + 1
+        execution = state["repair_execution"]
+        replacements = {
+            "problem": state["problem"],
+            "tool_name": state["repair_tool_name"],
+            "context": state.get("repair_context", ""),
+            "code": state["repair_code"],
+            "diagnostic": json.dumps(
+                repair_diagnostic(execution),
+                ensure_ascii=False,
+                indent=2,
+            ),
+            "diagnostic_excerpt": repair_diagnostic_excerpt(execution),
+            "repair_feedback": state.get(
+                "repair_feedback",
+                "No previous repair candidate has been rejected.",
+            ),
+            "stdout": compact_stdout(execution.get("stdout", "")),
+            "available_names": json.dumps(
+                execution.get("available_names", []),
+                ensure_ascii=False,
+            ),
+            "repair_attempt": str(attempt),
+        }
+        task_prompt = role["task"]
+        for field, value in replacements.items():
+            task_prompt = task_prompt.replace(f"{{{field}}}", value)
+
+        repair_index = len(state.get("repair_history", []))
+        call_key = f"repair_{repair_index}"
+        started = time.perf_counter()
+        message = model.invoke(
+            [
+                SystemMessage(content=role["system"]),
+                HumanMessage(content=task_prompt),
+            ]
+        )
+        latency = time.perf_counter() - started
+        if not isinstance(message.content, str) or not message.content.strip():
+            raise ValueError("ReAct code repair returned empty code")
+        repair_code = (
+            normalize_repair_code(message.content)
+            if candidate_validation_enabled
+            else message.content.strip()
+        )
+        if not repair_code:
+            raise ValueError("ReAct code repair returned empty code")
+        update = {
+            "repair_code": repair_code,
+            "repair_attempt": attempt,
+            "repair_model_usage": get_message_usage(message),
+            "repair_model_latency": round(latency, 3),
+            "reasoning": add_reasoning(state, call_key, message),
+            "usage": add_usage(state, call_key, message),
+            "prompt_version": prompt_version,
+            "status": "repair_generated",
+        }
+        if candidate_validation_enabled:
+            duplicate_of = duplicate_repair_source(state, repair_code)
+            update["repair_candidate_validation"] = {
+                "accepted": duplicate_of is None,
+                "reason": "duplicate_code" if duplicate_of is not None else None,
+                "duplicate_of": duplicate_of,
+            }
+        return update
+
+    return repair
+
+
+def create_react_repair_executor_node(
+    manager: NotebookSessionManager,
+    max_tool_repairs: int,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """Исполняет repair-ячейку и завершает либо продолжает локальный цикл."""
+
+    def execute_repair(state: dict[str, Any]) -> dict[str, Any]:
+        session_id = state.get("python_session_id")
+        if not isinstance(session_id, str) or not session_id:
+            raise ValueError("ReAct code repair requires a notebook session id")
+
+        previous_execution = state["repair_execution"]
+        candidate_validation_value = state.get("repair_candidate_validation")
+        candidate_validation = (
+            dict(candidate_validation_value)
+            if isinstance(candidate_validation_value, dict)
+            else None
+        )
+        if candidate_validation is None or candidate_validation["accepted"]:
+            content, raw_execution = execute_notebook_code(
+                manager,
+                session_id,
+                state["repair_code"],
+            )
+            execution = (
+                {**raw_execution, "executed": True}
+                if candidate_validation is not None
+                else raw_execution
+            )
+        else:
+            duplicate_of = candidate_validation["duplicate_of"]
+            execution = duplicate_repair_execution(
+                previous_execution,
+                duplicate_of,
+            )
+            content = json.dumps(compact_execution(execution), ensure_ascii=False)
+        repair_history = list(state.get("repair_history", []))
+        repair_index = len(repair_history)
+        repair_entry = {
+            "index": repair_index,
+            "tool_call_id": state["repair_tool_call_id"],
+            "tool_name": state["repair_tool_name"],
+            "attempt": state["repair_attempt"],
+            "code": state["repair_code"],
+            "execution": execution,
+            "usage": state.get("repair_model_usage", {}),
+            "latency_seconds": state.get("repair_model_latency", 0.0),
+        }
+        if candidate_validation is not None:
+            repair_entry["candidate_validation"] = candidate_validation
+        repair_history.append(repair_entry)
+
+        tool_history = list(state["tool_history"])
+        origin = dict(tool_history[-1])
+        attempt_indices = list(origin.get("repair_attempt_indices", []))
+        attempt_indices.append(repair_index)
+        origin["repair_attempt_indices"] = attempt_indices
+        succeeded = execution.get("returncode") == 0 and not execution.get("timeout")
+        origin["recovered"] = succeeded
+        tool_history[-1] = origin
+
+        real_execution = (
+            execution
+            if candidate_validation is None or candidate_validation["accepted"]
+            else previous_execution
+        )
+        update: dict[str, Any] = {
+            "repair_execution": real_execution,
+            "repair_history": repair_history,
+            "tool_history": tool_history,
+        }
+        if succeeded:
+            update.update(
+                {
+                    "messages": [
+                        HumanMessage(
+                            content=(
+                                "The automatic code repair succeeded. Its final "
+                                f"execution result is:\n{content}"
+                            ),
+                            id=f"react:repair_result:{repair_index}",
+                        )
+                    ],
+                    "status": "repair_succeeded",
+                }
+            )
+        elif state["repair_attempt"] >= max_tool_repairs:
+            exhaustion = (
+                repair_exhaustion_content(
+                    real_execution,
+                    repair_history,
+                    state["repair_tool_call_id"],
+                )
+                if candidate_validation is not None
+                else content
+            )
+            update.update(
+                {
+                    "messages": [
+                        HumanMessage(
+                            content=(
+                                "Automatic code repair exhausted its retry limit. "
+                                "Use this final structured error to choose a new "
+                                f"action:\n{exhaustion}"
+                            ),
+                            id=f"react:repair_exhausted:{repair_index}",
+                        )
+                    ],
+                    "status": "repair_exhausted",
+                }
+            )
+        else:
+            if candidate_validation is None:
+                feedback = None
+            elif candidate_validation["accepted"]:
+                feedback = next_repair_feedback(previous_execution, execution)
+            else:
+                feedback = (
+                    "The previous candidate was rejected without execution because "
+                    f"it duplicated {candidate_validation['duplicate_of']}. Return "
+                    "different code that rewrites the exact failing statement."
+                )
+            if feedback is not None:
+                update["repair_feedback"] = feedback
+            update["status"] = "repair_failed"
+        return update
+
+    return execute_repair
+
+
+def route_after_react_repair(state: dict[str, Any]) -> str:
+    """Повторяет repair после ошибки либо возвращает управление агенту."""
+    if state["status"] == "repair_failed":
+        return "repair"
+    if state["status"] in {"repair_succeeded", "repair_exhausted"}:
+        return "agent"
+    raise ValueError(f"Unknown ReAct repair status: {state['status']}")
