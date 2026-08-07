@@ -83,12 +83,20 @@ class NotebookPythonExecutor:
         self.timeout = timeout
         self._process: subprocess.Popen[str] | None = None
         self._lock = threading.Lock()
+        self._session_version = 0
+        self._available_names: list[str] = []
+        self._names_truncated = False
 
-    def run(self, code: str) -> dict[str, str | int | bool | None]:
+    def run(self, code: str) -> dict[str, Any]:
         """Выполняет ячейку в текущей сессии и сбрасывает её после timeout."""
         with self._lock:
+            code = _strip_code_fence(code)
+            syntax_error = self._preflight_compile(code)
+            if syntax_error is not None:
+                return syntax_error
+
             process = self._ensure_process()
-            request = json.dumps({"code": _strip_code_fence(code)}, ensure_ascii=False)
+            request = json.dumps({"code": code}, ensure_ascii=False)
             try:
                 if process.stdin is None:
                     raise RuntimeError("Notebook worker stdin is unavailable")
@@ -96,11 +104,13 @@ class NotebookPythonExecutor:
                 process.stdin.flush()
             except (BrokenPipeError, OSError, RuntimeError) as exc:
                 self._stop_process()
-                return _worker_failure(exc)
+                return self._worker_failure(exc)
 
             if process.stdout is None:
                 self._stop_process()
-                return _worker_failure(RuntimeError("Notebook worker stdout is unavailable"))
+                return self._worker_failure(
+                    RuntimeError("Notebook worker stdout is unavailable")
+                )
 
             selector = selectors.DefaultSelector()
             try:
@@ -111,33 +121,114 @@ class NotebookPythonExecutor:
 
             if not ready:
                 self._stop_process()
-                return {
-                    "stdout": "",
-                    "stderr": "Python notebook cell exceeded its timeout",
-                    "returncode": None,
-                    "timeout": True,
-                    "session_reset": True,
-                }
+                self._available_names = []
+                self._names_truncated = False
+                return self._diagnostic(
+                    success=False,
+                    error_type="TimeoutError",
+                    message="Python notebook cell exceeded its timeout",
+                    stderr="Python notebook cell exceeded its timeout",
+                    returncode=None,
+                    timeout=True,
+                    session_reset=True,
+                )
 
             response_line = process.stdout.readline()
             if not response_line:
                 worker_stderr = self._read_worker_stderr(process)
                 self._stop_process()
-                return {
-                    "stdout": "",
-                    "stderr": worker_stderr or "Python notebook worker terminated",
-                    "returncode": 1,
-                    "timeout": False,
-                    "session_reset": True,
-                }
+                self._available_names = []
+                self._names_truncated = False
+                message = worker_stderr or "Python notebook worker terminated"
+                return self._diagnostic(
+                    success=False,
+                    error_type="WorkerError",
+                    message=message,
+                    stderr=message,
+                    returncode=1,
+                    timeout=False,
+                    session_reset=True,
+                )
 
             try:
                 result = json.loads(response_line)
             except json.JSONDecodeError as exc:
                 self._stop_process()
-                return _worker_failure(exc)
+                return self._worker_failure(exc)
             result["session_reset"] = False
+            result["session_version"] = self._session_version
+            self._available_names = list(result.get("available_names", []))
+            self._names_truncated = bool(result.get("names_truncated", False))
             return result
+
+    def _preflight_compile(self, code: str) -> dict[str, Any] | None:
+        """Возвращает SyntaxError до worker, не изменяя notebook namespace."""
+        try:
+            compile(code, "<generated-cell>", "exec")
+        except SyntaxError as exc:
+            message = exc.msg or str(exc)
+            stderr = f"SyntaxError: {message}"
+            return self._diagnostic(
+                success=False,
+                error_type="SyntaxError",
+                message=message,
+                stderr=stderr,
+                returncode=1,
+                timeout=False,
+                session_reset=False,
+                line=exc.lineno,
+                offset=exc.offset,
+                source_line=exc.text.rstrip("\n") if exc.text else None,
+            )
+        return None
+
+    def _diagnostic(
+        self,
+        *,
+        success: bool,
+        error_type: str | None,
+        message: str | None,
+        stderr: str,
+        returncode: int | None,
+        timeout: bool,
+        session_reset: bool,
+        line: int | None = None,
+        offset: int | None = None,
+        source_line: str | None = None,
+    ) -> dict[str, Any]:
+        """Собирает единый structured-v1 результат вне worker-процесса."""
+        return {
+            "success": success,
+            "stdout": "",
+            "stderr": stderr,
+            "error_type": error_type,
+            "message": message,
+            "line": line,
+            "offset": offset,
+            "source_line": source_line,
+            "returncode": returncode,
+            "timeout": timeout,
+            "session_reset": session_reset,
+            "session_version": self._session_version,
+            "available_names": list(self._available_names),
+            "defined_names": [],
+            "names_truncated": self._names_truncated,
+        }
+
+    def _worker_failure(self, exception: Exception) -> dict[str, Any]:
+        """Описывает аварийную потерю worker и очищает известный namespace."""
+        self._available_names = []
+        self._names_truncated = False
+        message = f"{type(exception).__name__}: {exception}"
+        return self._diagnostic(
+            success=False,
+            error_type=type(exception).__name__,
+            message=str(exception),
+            stderr=message,
+            returncode=1,
+            timeout=False,
+            session_reset=True,
+        )
 
     def close(self) -> None:
         """Завершает persistent процесс и освобождает его ресурсы."""
@@ -157,6 +248,9 @@ class NotebookPythonExecutor:
             text=True,
             bufsize=1,
         )
+        self._session_version += 1
+        self._available_names = []
+        self._names_truncated = False
         return self._process
 
     def _stop_process(self) -> None:
@@ -241,14 +335,3 @@ def _strip_code_fence(code: str) -> str:
     if value.endswith("```"):
         value = value[: -len("```")].strip()
     return value
-
-
-def _worker_failure(exception: Exception) -> dict[str, str | int | bool | None]:
-    """Возвращает структурированную ошибку аварийной потери worker-сессии."""
-    return {
-        "stdout": "",
-        "stderr": f"{type(exception).__name__}: {exception}",
-        "returncode": 1,
-        "timeout": False,
-        "session_reset": True,
-    }

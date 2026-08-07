@@ -26,6 +26,7 @@ from mathagent.agent.graph import (
     create_solver_graph,
     create_step_code_agent_graph,
 )
+from mathagent.pipelines.agent_eval.nodes import load_prompt_tools, prompt_has_role
 from scripts.benchmarks.run_artifacts import (
     append_jsonl_record,
     configure_run_logger,
@@ -125,6 +126,7 @@ def parse_benchmark_args(
     parser.add_argument("--max-repairs", type=int, default=2)
     parser.add_argument("--max-coder-format-retries", type=int, default=1)
     parser.add_argument("--max-tool-calls", type=int, default=8)
+    parser.add_argument("--max-tool-repairs", type=int, default=5)
     parser.add_argument("--max-precheck-rejections", type=int, default=3)
     parser.add_argument("--execution-timeout", type=float, default=10.0)
     parser.add_argument("--limit", type=int) # ограничивает число задач из датасета, чтобы быстро проверить работу runner
@@ -217,6 +219,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-coder-format-retries must be non-negative")
     if args.max_tool_calls < 1:
         raise ValueError("--max-tool-calls must be positive")
+    if args.max_tool_repairs < 0:
+        raise ValueError("--max-tool-repairs must be non-negative")
     if args.max_precheck_rejections < 1:
         raise ValueError("--max-precheck-rejections must be positive")
     if args.execution_timeout <= 0:
@@ -241,6 +245,20 @@ def create_manifest_config(
     В неё входят параметры, влияющие на результат и производительность, но не
     попадают API-ключ и URL сервера, которые не нужны для сравнения запусков.
     """
+    prompt_tools = load_prompt_tools(prompt_path) if prompt_path.exists() else {}
+    execution_tools = [
+        tool_name
+        for tool_name in prompt_tools
+        if tool_name in {"python", "sympy"}
+    ]
+    structured_repair_configured = (
+        args.pipeline == "react_agent"
+        and prompt_path.exists()
+        and prompt_has_role(prompt_path, "repair")
+    )
+    repair_candidate_validation_configured = (
+        structured_repair_configured and prompt_version == "react-agent-v8"
+    )
     return {
         "run_id": run_id,
         "model": args.model,
@@ -289,10 +307,40 @@ def create_manifest_config(
                             "max_tool_calls": args.max_tool_calls,
                             **(
                                 {
+                                    "max_tool_repairs": args.max_tool_repairs,
+                                    "execution_diagnostics": "structured-v1",
+                                    "repair_mode": (
+                                        "separate-node-v2"
+                                        if repair_candidate_validation_configured
+                                        else "separate-node-v1"
+                                    ),
+                                    **(
+                                        {
+                                            "repair_candidate_validation": (
+                                                "compile-deduplicate-v1"
+                                            )
+                                        }
+                                        if repair_candidate_validation_configured
+                                        else {}
+                                    ),
+                                }
+                                if structured_repair_configured
+                                else {}
+                            ),
+                            **(
+                                {
                                     "python_mode": "notebook",
                                     "cot_parser": "tolerant-v1",
                                 }
                                 if "cot" in node_generation
+                                else {}
+                            ),
+                            **(
+                                {
+                                    "execution_tools": execution_tools,
+                                    "notebook_isolation": "shared",
+                                }
+                                if "sympy" in execution_tools
                                 else {}
                             ),
                             **(
@@ -371,6 +419,7 @@ def create_graph(
             model_config,
             prompt_path,
             max_tool_calls=args.max_tool_calls,
+            max_tool_repairs=args.max_tool_repairs,
             max_precheck_rejections=args.max_precheck_rejections,
             execution_timeout=args.execution_timeout,
             node_generation=node_generation,

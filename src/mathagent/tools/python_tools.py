@@ -75,6 +75,9 @@ def compact_stdout(stdout: str) -> str:
 
 def get_error_type(execution: dict[str, Any]) -> str | None:
     """Определяет тип execution-ошибки для компактного observation."""
+    structured_type = execution.get("error_type")
+    if isinstance(structured_type, str) and structured_type:
+        return structured_type
     if execution["timeout"]:
         return "TimeoutError"
     if execution["returncode"] == 0:
@@ -91,15 +94,27 @@ def compact_execution(execution: dict[str, Any]) -> dict[str, Any]:
     """Формирует короткий Python observation для контекста модели."""
     stderr_lines = execution["stderr"].splitlines()
     compact = {
+        "success": execution.get("success", execution["returncode"] == 0),
         "stdout": compact_stdout(execution["stdout"]),
         "stderr": "\n".join(stderr_lines[-STDERR_TAIL_LINES:]),
         "error_type": execution["error_type"],
+        "message": execution.get("message"),
+        "line": execution.get("line"),
+        "offset": execution.get("offset"),
+        "source_line": execution.get("source_line"),
         "returncode": execution["returncode"],
         "timeout": execution["timeout"],
         "latency_seconds": execution["latency_seconds"],
     }
-    if "session_reset" in execution:
-        compact["session_reset"] = execution["session_reset"]
+    for field in (
+        "session_reset",
+        "session_version",
+        "available_names",
+        "defined_names",
+        "names_truncated",
+    ):
+        if field in execution:
+            compact[field] = execution[field]
     return compact
 
 
@@ -135,34 +150,60 @@ def create_python_tool(
     return python_tool
 
 
-def create_notebook_python_tool(manager: NotebookSessionManager) -> BaseTool:
-    """Создаёт notebook-like Python-tool с отдельной сессией на задачу."""
+def create_notebook_code_tool(
+    name: str,
+    manager: NotebookSessionManager,
+    description: str,
+) -> BaseTool:
+    """Создаёт именованный notebook-tool с отдельной сессией на задачу."""
 
     @tool(
-        "python",
-        description=REACT_V2_PYTHON_DESCRIPTION,
+        name,
+        description=description,
         response_format="content_and_artifact",
     )
-    def python_tool(
+    def notebook_tool(
         code: str,
         context: str,
         state: Annotated[dict[str, Any], InjectedState],
     ) -> tuple[str, dict[str, Any]]:
-        """Выполняет ячейку, сохраняя namespace, цель и context задачи."""
+        """Выполняет ячейку, сохраняя namespace и context текущей задачи."""
         del context
         session_id = state.get("python_session_id")
         if not isinstance(session_id, str) or not session_id:
-            raise ValueError("Notebook Python tool requires a session id")
-        started = time.perf_counter()
-        execution = manager.run(session_id, code)
-        execution["latency_seconds"] = round(time.perf_counter() - started, 3)
-        execution["error_type"] = get_error_type(execution)
-        return (
-            json.dumps(compact_execution(execution), ensure_ascii=False),
-            execution,
-        )
+            raise ValueError(f"Notebook {name} tool requires a session id")
+        return execute_notebook_code(manager, session_id, code)
 
-    return python_tool
+    return notebook_tool
+
+
+def execute_notebook_code(
+    manager: NotebookSessionManager,
+    session_id: str,
+    code: str,
+) -> tuple[str, dict[str, Any]]:
+    """Выполняет notebook-ячейку для tool или автоматической repair-ноды."""
+    started = time.perf_counter()
+    execution = manager.run(session_id, code)
+    execution["latency_seconds"] = round(time.perf_counter() - started, 3)
+    execution["error_type"] = get_error_type(execution)
+    return json.dumps(compact_execution(execution), ensure_ascii=False), execution
+
+
+def create_notebook_python_tool(
+    manager: NotebookSessionManager,
+    description: str = REACT_V2_PYTHON_DESCRIPTION,
+) -> BaseTool:
+    """Создаёт notebook-like Python-tool с отдельной сессией на задачу."""
+    return create_notebook_code_tool("python", manager, description)
+
+
+def create_notebook_sympy_tool(
+    manager: NotebookSessionManager,
+    description: str,
+) -> BaseTool:
+    """Создаёт отдельный notebook-like SymPy-tool для точной символики."""
+    return create_notebook_code_tool("sympy", manager, description)
 
 
 def create_repair_tool(timeout: float) -> BaseTool:
