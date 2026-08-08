@@ -1,4 +1,5 @@
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Any, NotRequired, TypedDict
 from uuid import uuid4
@@ -11,6 +12,7 @@ from langgraph.prebuilt import ToolNode
 from mathagent.agent.vllm_chat import ChatVLLM
 from mathagent.pipelines.agent_eval.nodes import (
     create_solver_node,
+    load_prompt_tools,
     load_prompt_role,
     prompt_has_role,
 )
@@ -22,29 +24,22 @@ from mathagent.pipelines.agent_eval.nodes_code import (
     create_repair_node,
 )
 from mathagent.pipelines.agent_eval.nodes_react import (
+    create_react_code_repair_node,
     create_react_agent_node,
+    create_react_planner_node,
     create_react_precheck_node,
+    create_react_repair_executor_node,
     record_react_tool_call,
     route_after_react_agent,
+    route_after_react_execution,
     route_after_react_precheck,
-)
-from mathagent.pipelines.agent_eval.nodes_step_code import (
-    commit_final_step,
-    commit_next_step,
-    create_plan_parser_node,
-    create_step_coder_node,
-    create_step_controller_node,
-    create_step_executor_node,
-    create_step_finalizer_node,
-    create_step_planner_node,
-    create_step_repair_node,
-    initialize_step_code_state,
-    parse_step_output,
+    route_after_react_repair,
 )
 from mathagent.tools.final_answer import create_final_answer_tool
 from mathagent.tools.cot import create_cot_tool
 from mathagent.tools.python_tools import (
     create_notebook_python_tool,
+    create_notebook_sympy_tool,
     create_python_tool,
     create_repair_tool,
 )
@@ -104,53 +99,28 @@ class CodeAgentState(TypedDict):
     trace: NotRequired[dict[str, Any]]
 
 
-class StepCodeAgentState(TypedDict):
-    """Описывает состояние динамического пошагового code-agent графа."""
-
-    problem: str
-    messages: Annotated[list[AnyMessage], add_messages]
-    plan_raw: NotRequired[str]
-    plan: NotRequired[list[str]]
-    current_step: NotRequired[str]
-    step_index: NotRequired[int]
-    completed_code: NotRequired[list[str]]
-    current_code: NotRequired[str]
-    stdout: NotRequired[str]
-    intermediate_stdout: NotRequired[str]
-    stderr: NotRequired[str]
-    returncode: NotRequired[int | None]
-    timeout: NotRequired[bool]
-    marker_found: NotRequired[bool]
-    repair_attempt: NotRequired[int]
-    coder_format_retry: NotRequired[int]
-    output_valid: NotRequired[bool]
-    output_error: NotRequired[str | None]
-    parsed_output: NotRequired[dict[str, Any]]
-    step_result: NotRequired[Any]
-    coder_action: NotRequired[str | None]
-    coder_next_step: NotRequired[str | None]
-    controller_route: NotRequired[str | None]
-    finish_reason: NotRequired[str | None]
-    attempt_history: NotRequired[list[dict[str, Any]]]
-    controller_history: NotRequired[list[dict[str, Any]]]
-    planner_trace: NotRequired[dict[str, Any]]
-    status: NotRequired[str]
-    solution: NotRequired[str | None]
-    reasoning: NotRequired[dict[str, str]]
-    usage: NotRequired[dict[str, Any]]
-    prompt_version: NotRequired[str]
-    trace: NotRequired[dict[str, Any]]
-
-
 class ReactAgentState(TypedDict):
     """Описывает состояние ReAct-цикла с нативным Python tool."""
 
     problem: str
     messages: Annotated[list[AnyMessage], add_messages]
     python_session_id: NotRequired[str]
+    plan: NotRequired[str]
+    planner_trace: NotRequired[dict[str, Any]]
     tool_call_count: NotRequired[int]
     agent_history: NotRequired[list[dict[str, Any]]]
     tool_history: NotRequired[list[dict[str, Any]]]
+    repair_history: NotRequired[list[dict[str, Any]]]
+    repair_attempt: NotRequired[int]
+    repair_code: NotRequired[str]
+    repair_execution: NotRequired[dict[str, Any]]
+    repair_tool_call_id: NotRequired[str]
+    repair_tool_name: NotRequired[str]
+    repair_context: NotRequired[str]
+    repair_feedback: NotRequired[str]
+    repair_candidate_validation: NotRequired[dict[str, Any]]
+    repair_model_usage: NotRequired[dict[str, Any]]
+    repair_model_latency: NotRequired[float]
     precheck_history: NotRequired[list[dict[str, Any]]]
     precheck_rejection_count: NotRequired[int]
     force_final_reason: NotRequired[str]
@@ -166,11 +136,20 @@ class ReactAgentState(TypedDict):
 
 
 class ManagedNotebookGraph:
-    """Добавляет отдельную Python-сессию каждому синхронному graph invocation."""
+    """Добавляет отдельные notebook-сессии каждому graph invocation."""
 
-    def __init__(self, graph: Any, manager: NotebookSessionManager) -> None:
+    def __init__(
+        self,
+        graph: Any,
+        managers: NotebookSessionManager | list[NotebookSessionManager],
+    ) -> None:
         self.graph = graph
-        self.manager = manager
+        self.managers = (
+            [managers] if isinstance(managers, NotebookSessionManager) else managers
+        )
+        if not self.managers:
+            raise ValueError("ManagedNotebookGraph requires a session manager")
+        self.manager = self.managers[0]
 
     def invoke(
         self,
@@ -187,7 +166,8 @@ class ManagedNotebookGraph:
                 **kwargs,
             )
         finally:
-            self.manager.close(session_id)
+            for manager in self.managers:
+                manager.close(session_id)
 
     def __getattr__(self, name: str) -> Any:
         """Делегирует диагностические методы исходному compiled graph."""
@@ -377,133 +357,11 @@ def create_code_agent_graph(
     return graph.compile()
 
 
-def create_step_code_agent_graph(
-    model_config: ModelConfig,
-    prompt_path: Path,
-    max_steps: int = 8,
-    max_repairs: int = 2,
-    max_coder_format_retries: int = 1,
-    execution_timeout: float = 10.0,
-    node_generation: NodeGeneration | None = None,
-) -> Any:
-    """Создаёт динамический граф пошаговой генерации и выполнения кода."""
-    if max_steps < 1:
-        raise ValueError("max_steps must be positive")
-    if max_repairs < 0:
-        raise ValueError("max_repairs must be non-negative")
-    if max_coder_format_retries < 0:
-        raise ValueError("max_coder_format_retries must be non-negative")
-    if execution_timeout <= 0:
-        raise ValueError("execution_timeout must be positive")
-
-    generation = node_generation if node_generation is not None else {}
-    graph = StateGraph(StepCodeAgentState)
-    graph.add_node("initialize", initialize_step_code_state)
-    graph.add_node(
-        "planner",
-        create_step_planner_node(
-            create_node_model(
-                model_config,
-                prompt_path,
-                "planner",
-                generation,
-            ),
-            prompt_path,
-            max_steps,
-        ),
-    )
-    graph.add_node("parse_plan", create_plan_parser_node(max_steps))
-    graph.add_node(
-        "step_coder",
-        create_step_coder_node(
-            create_node_model(
-                model_config,
-                prompt_path,
-                "step_coder",
-                generation,
-            ),
-            prompt_path,
-        ),
-    )
-    graph.add_node(
-        "execute_step",
-        create_step_executor_node(execution_timeout),
-    )
-    graph.add_node("parse_step_output", parse_step_output)
-    graph.add_node(
-        "controller",
-        create_step_controller_node(
-            max_steps,
-            max_repairs,
-            max_coder_format_retries,
-        ),
-    )
-    graph.add_node("commit_next", commit_next_step)
-    graph.add_node("commit_finish", commit_final_step)
-    graph.add_node(
-        "finalizer",
-        create_step_finalizer_node(
-            create_node_model(
-                model_config,
-                prompt_path,
-                "finalizer",
-                generation,
-            ),
-            prompt_path,
-        ),
-    )
-    if max_repairs > 0:
-        graph.add_node(
-            "repair",
-            create_step_repair_node(
-                create_node_model(
-                    model_config,
-                    prompt_path,
-                    "repair",
-                    generation,
-                ),
-                prompt_path,
-            ),
-        )
-        graph.add_edge("repair", "execute_step")
-
-    graph.add_edge(START, "initialize")
-    graph.add_edge("initialize", "planner")
-    graph.add_edge("planner", "parse_plan")
-    graph.add_edge("parse_plan", "step_coder")
-    graph.add_edge("step_coder", "execute_step")
-    graph.add_edge("execute_step", "parse_step_output")
-    graph.add_edge("parse_step_output", "controller")
-
-    routes = {
-        "retry_coder": "step_coder",
-        "commit_next": "commit_next",
-        "commit_finish": "commit_finish",
-        "finalize": "finalizer",
-    }
-    if max_repairs > 0:
-        routes["repair"] = "repair"
-    graph.add_conditional_edges(
-        "controller",
-        lambda state: state["controller_route"],
-        routes,
-    )
-    graph.add_edge("commit_next", "step_coder")
-    graph.add_edge("commit_finish", "finalizer")
-    graph.add_edge("finalizer", END)
-
-    recursion_limit = (
-        8
-        + max_steps
-        * (6 + 4 * max_repairs + 4 * max_coder_format_retries)
-    )
-    return graph.compile().with_config({"recursion_limit": recursion_limit})
-
-
 def create_react_agent_graph(
     model_config: ModelConfig,
     prompt_path: Path,
     max_tool_calls: int = 8,
+    max_tool_repairs: int = 5,
     max_precheck_rejections: int = 3,
     execution_timeout: float = 10.0,
     node_generation: NodeGeneration | None = None,
@@ -511,6 +369,8 @@ def create_react_agent_graph(
     """Создаёт ReAct-граф с набором tools из выбранной версии промпта."""
     if max_tool_calls < 1:
         raise ValueError("max_tool_calls must be positive")
+    if max_tool_repairs < 0:
+        raise ValueError("max_tool_repairs must be non-negative")
     if max_precheck_rejections < 1:
         raise ValueError("max_precheck_rejections must be positive")
     if execution_timeout <= 0:
@@ -525,9 +385,39 @@ def create_react_agent_graph(
     )
     cot_enabled = prompt_has_role(prompt_path, "cot")
     precheck_enabled = prompt_has_role(prompt_path, "tool_checker")
+    planner_enabled = prompt_has_role(prompt_path, "planner")
+    structured_repair_configured = cot_enabled and prompt_has_role(
+        prompt_path,
+        "repair",
+    )
+    structured_repair_enabled = (
+        structured_repair_configured and max_tool_repairs > 0
+    )
+    prompt_tools = load_prompt_tools(prompt_path)
+    unsupported_tools = set(prompt_tools) - {"python", "sympy"}
+    if unsupported_tools:
+        names = ", ".join(sorted(unsupported_tools))
+        raise ValueError(f"Unsupported ReAct execution tools: {names}")
+    planner_model = None
+    if planner_enabled:
+        planner_model = create_node_model(
+            model_config,
+            prompt_path,
+            "planner",
+            generation,
+        )
+    structured_repair_model = None
+    if structured_repair_enabled:
+        structured_repair_model = create_node_model(
+            model_config,
+            prompt_path,
+            "repair",
+            generation,
+        )
     cot_tool = None
     repair_tool = None
-    notebook_manager = None
+    notebook_managers: list[NotebookSessionManager] = []
+    execution_tools: list[Any]
     if cot_enabled:
         cot_model = create_node_model(
             model_config,
@@ -537,10 +427,28 @@ def create_react_agent_graph(
         )
         cot_tool = create_cot_tool(cot_model, prompt_path)
         notebook_manager = NotebookSessionManager(timeout=execution_timeout)
-        python_tool = create_notebook_python_tool(notebook_manager)
-        executable_tools = [cot_tool, python_tool]
+        notebook_managers.append(notebook_manager)
+        python_description = prompt_tools.get("python", {}).get("description")
+        python_tool = create_notebook_python_tool(
+            notebook_manager,
+            **(
+                {"description": python_description}
+                if isinstance(python_description, str)
+                else {}
+            ),
+        )
+        execution_tools = [python_tool]
+        if "sympy" in prompt_tools:
+            execution_tools.append(
+                create_notebook_sympy_tool(
+                    notebook_manager,
+                    prompt_tools["sympy"]["description"],
+                )
+            )
+        executable_tools = [cot_tool, *execution_tools]
     else:
         python_tool = create_python_tool(execution_timeout)
+        execution_tools = [python_tool]
         repair_tool = create_repair_tool(execution_timeout)
         executable_tools = [python_tool, repair_tool]
     final_answer_tool = create_final_answer_tool()
@@ -560,15 +468,22 @@ def create_react_agent_graph(
         "agent",
         create_react_agent_node(
             agent_model,
-            python_tool,
+            execution_tools,
             final_answer_tool,
             prompt_path,
             max_tool_calls,
             repair_tool=repair_tool,
             cot_tool=cot_tool,
             precheck_enabled=precheck_enabled,
+            planner_enabled=planner_enabled,
+            structured_repair_enabled=structured_repair_enabled,
         ),
     )
+    if planner_model is not None:
+        graph.add_node(
+            "planner",
+            create_react_planner_node(planner_model, prompt_path),
+        )
     if precheck_model is not None and review_tool is not None:
         graph.add_node(
             "precheck",
@@ -583,8 +498,36 @@ def create_react_agent_graph(
         "tools",
         ToolNode(executable_tools, handle_tool_errors=False),
     )
-    graph.add_node("record_tool", record_react_tool_call)
-    graph.add_edge(START, "agent")
+    graph.add_node(
+        "record_tool",
+        partial(
+            record_react_tool_call,
+            structured_repair_enabled=structured_repair_enabled,
+            max_tool_repairs=max_tool_repairs,
+        ),
+    )
+    if structured_repair_model is not None:
+        if not notebook_managers:
+            raise ValueError("Structured repair requires a notebook manager")
+        graph.add_node(
+            "code_repair",
+            create_react_code_repair_node(
+                structured_repair_model,
+                prompt_path,
+            ),
+        )
+        graph.add_node(
+            "execute_repair",
+            create_react_repair_executor_node(
+                notebook_managers[0],
+                max_tool_repairs,
+            ),
+        )
+    if planner_enabled:
+        graph.add_edge(START, "planner")
+        graph.add_edge("planner", "agent")
+    else:
+        graph.add_edge(START, "agent")
     graph.add_conditional_edges(
         "agent",
         route_after_react_agent,
@@ -604,13 +547,34 @@ def create_react_agent_graph(
             },
         )
     graph.add_edge("tools", "record_tool")
-    graph.add_edge("record_tool", "agent")
+    if structured_repair_enabled and max_tool_repairs > 0:
+        graph.add_conditional_edges(
+            "record_tool",
+            route_after_react_execution,
+            {
+                "repair": "code_repair",
+                "agent": "agent",
+            },
+        )
+        graph.add_edge("code_repair", "execute_repair")
+        graph.add_conditional_edges(
+            "execute_repair",
+            route_after_react_repair,
+            {
+                "repair": "code_repair",
+                "agent": "agent",
+            },
+        )
+    else:
+        graph.add_edge("record_tool", "agent")
     recursion_limit = (
         (4 if precheck_enabled else 3) * max_tool_calls
+        + 2 * max_tool_calls * max_tool_repairs
         + 2 * max_precheck_rejections
+        + (1 if planner_enabled else 0)
         + 6
     )
     compiled_graph = graph.compile().with_config({"recursion_limit": recursion_limit})
-    if notebook_manager is not None:
-        return ManagedNotebookGraph(compiled_graph, notebook_manager)
+    if notebook_managers:
+        return ManagedNotebookGraph(compiled_graph, notebook_managers)
     return compiled_graph
