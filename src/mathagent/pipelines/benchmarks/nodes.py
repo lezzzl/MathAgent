@@ -11,6 +11,7 @@ manifest и runner.log в один эксперимент под results/runs/<r
 """
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,50 @@ BENCHMARK_SCRIPTS: dict[str, Path] = {
     "imo_answerbench": ROOT / "scripts/benchmarks/run_imo_answerbench.py",
     "math500": ROOT / "scripts/benchmarks/run_math500.py",
 }
+
+
+def normalize_select(value: Any) -> list[str]:
+    """Приводит benchmarks.select к списку ключей бенчмарков.
+
+    `kedro run --params` режет строку по запятым БЕЗ учёта скобок
+    (kedro/framework/cli/utils.py::split_string), поэтому привычное
+    `benchmarks.select=[aime26,hmmt26]` разваливается на `select=[aime26` и
+    `hmmt26` — второй кусок падает с "must contain a key and a value". Чтобы
+    список всё-таки задавался через --params, принимаем три формы:
+
+    * список из YAML — `conf/base/parameters.yml`, обычный случай;
+    * dict от OmegaConf для поэлементной формы (запятых внутри нет, CLI её
+      не ломает) — `benchmarks.select.0=aime26,benchmarks.select.1=hmmt26`;
+    * строка с разделителем `;` или `|` — `benchmarks.select=aime26;hmmt26`.
+      Скобки допустимы, но OmegaConf разберёт `[aime26;hmmt26]` как список из
+      одного склеенного элемента, поэтому режем разделители и внутри элементов.
+    """
+    if isinstance(value, str):
+        items: list[Any] = [value]
+    elif isinstance(value, dict):
+        # OmegaConf.from_dotlist делает из `select.0=…` словарь со строковыми
+        # ключами-индексами; порядок восстанавливаем по числовому значению.
+        try:
+            keys = sorted(value, key=lambda k: int(k))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"benchmarks.select задан как словарь с неиндексными ключами: "
+                f"{sorted(value)}. Ожидалась поэлементная форма "
+                f"benchmarks.select.0=…,benchmarks.select.1=…"
+            ) from exc
+        items = [value[key] for key in keys]
+    else:
+        items = list(value)
+
+    select = [
+        part.strip()
+        for item in items
+        for part in re.split(r"[;|]", str(item).strip().strip("[]"))
+        if part.strip()
+    ]
+    if not select:
+        raise ValueError("benchmarks.select пуст — нечего запускать")
+    return select
 
 
 def _build_command(
@@ -96,7 +141,7 @@ def run_benchmarks(params: dict[str, Any]) -> dict[str, Any]:
         validate_run_id,
     )
 
-    select = list(params["select"])
+    select = normalize_select(params["select"])
     unknown = [key for key in select if key not in BENCHMARK_SCRIPTS]
     if unknown:
         raise ValueError(
