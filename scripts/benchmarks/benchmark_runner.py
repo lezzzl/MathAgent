@@ -24,7 +24,6 @@ from mathagent.agent.graph import (
     create_code_agent_graph,
     create_react_agent_graph,
     create_solver_graph,
-    create_step_code_agent_graph,
 )
 from mathagent.pipelines.agent_eval.nodes import load_prompt_tools, prompt_has_role
 from scripts.benchmarks.run_artifacts import (
@@ -43,7 +42,6 @@ from scripts.benchmarks.run_artifacts import (
 
 DEFAULT_SOLVER_PROMPT = ROOT / "conf/base/prompts/solver-v0.yml"
 DEFAULT_CODE_AGENT_PROMPT = ROOT / "conf/base/prompts/code-agent-v1.yml"
-DEFAULT_STEP_CODE_AGENT_PROMPT = ROOT / "conf/base/prompts/step-code-agent-v0.yml"
 DEFAULT_REACT_AGENT_PROMPT = ROOT / "conf/base/prompts/react-agent-v0.yml"
 DEFAULT_MODEL = "Qwen/Qwen3.5-4B"
 
@@ -118,13 +116,11 @@ def parse_benchmark_args(
 
     parser.add_argument(
         "--pipeline",
-        choices=("solver", "code_agent", "step_code_agent", "react_agent"),
+        choices=("solver", "code_agent", "react_agent"),
         default="solver",
     )
     parser.add_argument("--prompt", type=Path)
-    parser.add_argument("--max-steps", type=int, default=8)
     parser.add_argument("--max-repairs", type=int, default=2)
-    parser.add_argument("--max-coder-format-retries", type=int, default=1)
     parser.add_argument("--max-tool-calls", type=int, default=8)
     parser.add_argument("--max-tool-repairs", type=int, default=5)
     parser.add_argument("--max-precheck-rejections", type=int, default=3)
@@ -213,10 +209,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-retries must be non-negative")
     if args.max_repairs < 0:
         raise ValueError("--max-repairs must be non-negative")
-    if args.max_steps < 1:
-        raise ValueError("--max-steps must be positive")
-    if args.max_coder_format_retries < 0:
-        raise ValueError("--max-coder-format-retries must be non-negative")
     if args.max_tool_calls < 1:
         raise ValueError("--max-tool-calls must be positive")
     if args.max_tool_repairs < 0:
@@ -294,16 +286,6 @@ def create_manifest_config(
                 "pipeline_config": {
                     **(
                         {
-                            "max_steps": args.max_steps,
-                            "max_coder_format_retries": (
-                                args.max_coder_format_retries
-                            ),
-                        }
-                        if args.pipeline == "step_code_agent"
-                        else {}
-                    ),
-                    **(
-                        {
                             "max_tool_calls": args.max_tool_calls,
                             **(
                                 {
@@ -359,7 +341,7 @@ def create_manifest_config(
                     "execution_timeout": args.execution_timeout,
                 }
             }
-            if args.pipeline in ("code_agent", "step_code_agent", "react_agent")
+            if args.pipeline in ("code_agent", "react_agent")
             else {}
         ),
     }
@@ -399,17 +381,6 @@ def create_graph(
             model_config,
             prompt_path,
             max_repairs=args.max_repairs,
-            execution_timeout=args.execution_timeout,
-            node_generation=node_generation,
-        )
-        return GraphBuild(graph, node_generation)
-    if args.pipeline == "step_code_agent":
-        graph = create_step_code_agent_graph(
-            model_config,
-            prompt_path,
-            max_steps=args.max_steps,
-            max_repairs=args.max_repairs,
-            max_coder_format_retries=args.max_coder_format_retries,
             execution_timeout=args.execution_timeout,
             node_generation=node_generation,
         )
@@ -769,7 +740,6 @@ def _run_benchmark(
     default_prompts = {
         "solver": DEFAULT_SOLVER_PROMPT,
         "code_agent": DEFAULT_CODE_AGENT_PROMPT,
-        "step_code_agent": DEFAULT_STEP_CODE_AGENT_PROMPT,
         "react_agent": DEFAULT_REACT_AGENT_PROMPT,
     }
     prompt_path = args.prompt or default_prompts[args.pipeline]
