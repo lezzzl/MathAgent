@@ -66,6 +66,12 @@ def _build_command(
         "--pipeline", str(params.get("pipeline", "solver")),
     ]
     command.append("--thinking" if gen["thinking"] else "--no-thinking")
+    # флаги ReAct-агента прокидываем только когда выбран pipeline=react
+    if params.get("pipeline") == "react":
+        react = params.get("react") or {}
+        command += ["--react-max-steps", str(react.get("max_steps", 6))]
+        if react.get("tester"):
+            command.append("--react-tester")
     # prompt хранится относительно корня репозитория; подпроцесс работает с cwd=ROOT
     if params.get("prompt"):
         command += ["--prompt", str(params["prompt"])]

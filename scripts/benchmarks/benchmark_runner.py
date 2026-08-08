@@ -98,7 +98,12 @@ def parse_benchmark_args(
     parser.add_argument("--timeout", type=float, default=1800.0)
     parser.add_argument("--max-retries", type=int, default=1)
 
-    parser.add_argument("--pipeline", choices=("solver",), default="solver")
+    parser.add_argument("--pipeline", choices=("solver", "react"), default="solver")
+    # параметры ReAct-пайплайна (используются только при --pipeline react)
+    parser.add_argument("--react-max-steps", type=int, default=6)
+    parser.add_argument(
+        "--react-tester", action="store_true", help="дать солверу инструмент test_claim"
+    )
     parser.add_argument("--prompt", type=Path)
     parser.add_argument("--limit", type=int) # ограничивает число задач из датасета, чтобы быстро проверить работу runner
 
@@ -254,6 +259,17 @@ def create_graph(
         timeout=args.timeout,
         max_retries=args.max_retries,
     )
+    if args.pipeline == "react":
+        # ReAct-агент с инструментами (само-проверка кодом). Промпт должен быть
+        # в формате react-tools.yml. Тестировщик по флагу --react-tester.
+        from mathagent.agent.react import create_react_graph
+
+        return create_react_graph(
+            model_config,
+            prompt_path,
+            max_steps=args.react_max_steps,
+            use_tester=args.react_tester,
+        )
     return create_solver_graph(model_config, prompt_path)
 
 

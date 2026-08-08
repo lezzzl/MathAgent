@@ -72,7 +72,11 @@ benchmarks:
     vllm_max_model_len: 73728
 
   prompt: conf/base/prompts/solver-reasoning.yml   # набор ролей/промптов (путь от корня)
-  pipeline: solver                  # какой граф собирать
+  pipeline: solver                  # solver (голый reasoning) | react (агент с тулами)
+  # параметры ReAct-агента (только при pipeline=react; промпт тогда — react-tools.yml)
+  react:
+    max_steps: 6                    # лимит вызовов инструментов на задачу
+    tester: false                   # true → дать солверу инструмент test_claim
   run_id: null                      # null → сгенерируется; задать тот же для resume
   resume: false                     # продолжить прерванный run (нужен явный run_id)
   limit: null                       # напр. 2 — быстрый прогон на 2 задачах
