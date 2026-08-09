@@ -221,3 +221,4 @@ results/**/*.jsonl
 
 # Generated dashboard evaluation sidecars
 results/evaluations/
+results/exps/
