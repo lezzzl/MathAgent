@@ -181,7 +181,7 @@ run_supervisor() {
   trap 'exit 143' TERM
   trap cleanup EXIT
 
-  # A separate session makes the vLLM API server and all engine workers one
+  # A separate session makes the SGLang API server and all engine workers one
   # process group, allowing the supervisor to terminate the whole tree safely.
   setsid "${args[@]}" "$@" &
   child_pid=$!
@@ -209,7 +209,7 @@ start_background() {
   for _ in {1..50}; do
     existing_pid="$(get_managed_pid 2>/dev/null || true)"
     if [[ "${existing_pid}" == "${supervisor_pid}" ]]; then
-      echo "Started vLLM supervisor PID ${supervisor_pid}"
+      echo "Started SGLang supervisor PID ${supervisor_pid}"
       echo "Log: ${LOG_FILE}"
       echo "Stop: ${SCRIPT_PATH} --stop"
       return 0
@@ -253,7 +253,7 @@ show_status() {
     echo "SGLang is not running under this supervisor."
     return 1
   fi
-  echo "vLLM supervisor PID ${pid} is running."
+  echo "SGLang supervisor PID ${pid} is running."
   ps -o pid,ppid,pgid,etime,cmd --forest -g "${pid}" 2>/dev/null || true
 }
 
