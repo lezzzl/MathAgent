@@ -67,7 +67,6 @@ _DEFAULT_ROLE_DEFS: Dict[str, Dict[str, Any]] = {
         "num_predict": 24000,
         "enable_thinking": True,
     },
-    # НОВАЯ роль: вырезает один шаг из сырого ответа генератора.
     "segmenter": {
         "system": _FALLBACK_SYSTEM,
         "user_template": "{context}\n\nRaw draft:\n{raw}",
@@ -110,10 +109,6 @@ ROLES: Dict[str, Role] = {
 
 def _num_predict_overrides() -> Dict[str, int]:
     """Разбирает ROLE_NUM_PREDICT="generator=55000,verifier=30000".
-
-    Лимит роли живёт в yml, и поднять его для одного прогона раньше можно было
-    только новой версией промпта — что портит А/Б: версия перестаёт означать
-    «одно изменение». Через окружение лимит становится отдельной осью.
     """
     out: Dict[str, int] = {}
     for chunk in ROLE_NUM_PREDICT_ENV.split(","):
@@ -174,57 +169,17 @@ API_KEY = os.getenv("OPENAI_API_KEY", "token-abc123")
 DEFAULT_MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
 MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "40000"))
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
-
-# Если шаг из <step> длиннее этого — подозреваем, что модель втиснула туда сразу
-# несколько шагов, и всё равно прогоняем через сегментатор.
 MAX_STEP_CHARS = int(os.getenv("MAX_STEP_CHARS", "1500"))
-
-# Сколько символов черновика отдавать сегментатору. Замер на aime24/25/26:
-# стадия segment съедала 18.8% всего бюджета при 23k токенов на вызов, и это
-# почти целиком ВХОД — ему подавалась вся генерация вместе с размышлениями.
-# Сам шаг практически всегда лежит в хвосте (после </think> или последнего
-# <step>), поэтому передавать начало черновика бессмысленно.
 SEGMENTER_INPUT_CHARS = int(os.getenv("SEGMENTER_INPUT_CHARS", "8000"))
-
-# Сетевые сбои (таймаут/обрыв) — не то же самое, что «модель ничего не ответила».
-# Раньше они молча превращались в пустой ответ с tokens=0, и это выглядело как
-# плохое качество модели: пустой шаг -> score 0 -> recovery, а у оценщика ещё и
-# «ненадёжный раунд». На прогоне aime26 так было 14 таймаутов, и одна задача
-# из-за них сдалась с диагнозом «формат JSON», израсходовав 0 токенов.
 CHAT_RETRIES = int(os.getenv("CHAT_RETRIES", "1"))
 CHAT_RETRY_BACKOFF = float(os.getenv("CHAT_RETRY_BACKOFF", "5"))
-
-# Переспрос оценщика, когда вердикт не разобрался. Держим коротким: нужен ровно
-# балл, вся проверка уже сделана в предыдущем ответе.
 EVAL_REASK = (
     "Your previous reply did not contain a parseable verdict. Reply now with "
     "ONLY the two sections, nothing before or after:\n"
     "###SCORE###\n0.0 or 1.0\n###RATIONALE###\none sentence."
 )
 EVAL_REASK_NUM_PREDICT = int(os.getenv("EVAL_REASK_NUM_PREDICT", "1000"))
-
-# Потолок генерации у ролей можно поднять, не заводя новую версию промпта:
-# ROLE_NUM_PREDICT="generator=55000,verifier=30000". Нужен для А/Б лимита
-# генератора — на прогонах 0802 половина задач упиралась в 40000 (см. память).
 ROLE_NUM_PREDICT_ENV = os.getenv("ROLE_NUM_PREDICT", "")
-
-# ---------------------------------------------------------------------------
-# Зерно выборки
-# ---------------------------------------------------------------------------
-# Зачем. Разбор всех чистых прогонов показал: 54 задачи из 90 решаются ВСЕГДА,
-# 7 не решаются НИКОГДА, а 29 (32%) плавают от прогона к прогону. Ядро не
-# сдвинулось ни на задачу за всю линейку промптов v4 -> v9 — то есть одиночный
-# прогон в принципе не может измерить эффект правки промпта, полоса шума шире
-# любого наблюдённого эффекта.
-#
-# Причина — прогоны шли независимыми выборками: параметр seed у _chat был, но
-# его никто не передавал. С зерном две конфигурации идут по одному и тому же
-# пути сэмплирования, и разница между ними перестаёт тонуть в жребии.
-#
-# Зерно у каждого ВЫЗОВА своё: одно и то же зерно на все вызовы сделало бы
-# ветки k>1 побайтово одинаковыми и убило бы ветвление. Поэтому значение
-# выводится детерминированно из (SEED, task_id, номер вызова внутри задачи) —
-# воспроизводимо между прогонами и различно внутри прогона.
 SEED: Optional[int] = None
 _seed_state = threading.local()
 
@@ -234,8 +189,6 @@ def begin_task_seed(task_id: Any) -> None:
     if SEED is None:
         _seed_state.base = None
         return
-    # crc32, а не hash(): встроенный hash строк солится PYTHONHASHSEED и от
-    # запуска к запуску даёт разные значения — воспроизводимости бы не было.
     _seed_state.base = (SEED * 1_000_003 + zlib.crc32(str(task_id).encode())) % (2 ** 31 - 1)
     _seed_state.counter = 0
 
@@ -249,16 +202,12 @@ def _next_seed() -> Optional[int]:
 
 
 # ---------------------------------------------------------------------------
-# Инструмент python_exec поверх «сырого» OpenAI-API
+# Инструмент python_exec поверх OpenAI-API
 # ---------------------------------------------------------------------------
 # Модуль намеренно не тянет langchain (в отличие от 9B-пайплайна), поэтому цикл
 # вызова инструментов реализован напрямую на /chat/completions: описываем
 # функцию в поле tools, читаем tool_calls из ответа, исполняем и возвращаем
 # результат сообщением роли "tool".
-#
-# ВАЖНО: сервер должен быть поднят с --enable-auto-tool-choice
-# --tool-call-parser hermes, иначе модель напишет вызов текстом и он не
-# распознается. На такой случай ниже есть спасательный разбор из текста.
 TOOL_SCHEMA = [{
     "type": "function",
     "function": {
@@ -442,7 +391,6 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
 _TEXT_TOOL_CALL_RE = re.compile(r"<tool_call>|<\|tool_call\|>|<function=", re.IGNORECASE)
 
 # Нативный формат Qwen3.x: <function=name><parameter=code>...</parameter></function>.
-# Именно его модель пишет вместо JSON, и парсер hermes на сервере его НЕ понимает
 _QWEN_FN_RE = re.compile(r"<function=([\w.]+)\s*>(.*?)(?:</function>|$)", re.DOTALL | re.IGNORECASE)
 _QWEN_PARAM_RE = re.compile(r"<parameter=([\w.]+)\s*>(.*?)(?:</parameter>|$)", re.DOTALL | re.IGNORECASE)
 _JSON_BLOCK_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*(?:</tool_call>|$)", re.DOTALL | re.IGNORECASE)
@@ -518,9 +466,6 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
 
     token_cap = int((num_predict or DEFAULT_MAX_TOKENS) * TOOL_LOOP_TOKEN_FACTOR)
     for hop in range(max_hops):
-        # Последний виток отключает инструменты, чтобы модель обязательно выдала
-        # сам шаг. Помимо счётчиков витков и вызовов, ограничиваем и токены:
-        # иначе один вызов роли способен съесть треть бюджета всей задачи.
         over_budget = total_tokens >= token_cap
         if over_budget and hop:
             print(f"      [TOOL BUDGET] Вызов роли израсходовал {total_tokens} токенов "
@@ -539,9 +484,6 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
         calls = result.tool_calls
         assistant_content = result.content or ""
         if not calls and not last_hop:
-            # Сервер не распознал вызов и отдал его текстом — разбираем сами,
-            # иначе модель ждёт результата, которого никто не даст, а шаг
-            # получает сырой <tool_call> вместо математики.
             calls = _salvage_tool_calls(assistant_content)
             if calls:
                 n_salvaged += len(calls)
@@ -552,7 +494,6 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
         if not calls:
             break
 
-        # Ответ ассистента с вызовами обязан попасть в историю до результатов.
         convo.append({
             "role": "assistant",
             "content": assistant_content,
@@ -588,8 +529,6 @@ def _chat_with_tools(messages: List[dict], *, temperature, num_predict, enable_t
 
     if result is None:
         result = ChatResult("", "", 0, None, "no response")
-    # Текст мог остаться с сырым блоком вызова (последний виток, разбор не
-    # применялся) — вычищаем, иначе он утечёт в шаг.
     if _TEXT_TOOL_CALL_RE.search(result.text or ""):
         result = result._replace(content=_strip_tool_call_text(result.text), reasoning="")
     return result, total_tokens, n_calls, n_salvaged
@@ -889,19 +828,12 @@ def _parse_delimited(content: str) -> Optional[Tuple[Optional[float], Optional[b
     if not content:
         return None
     text = _THINK_BLOCK_RE.sub("", content)
-    # Берём ПОСЛЕДНЕЕ вхождение каждого маркера. С включёнными размышлениями
-    # сервер не отделяет reasoning_content, блок размышлений приходит в content,
-    # и модель успевает отрепетировать формат внутри него. Первое вхождение —
-    # это черновик, финальный вердикт всегда последний.
     score_all = list(_SEG_SCORE_RE.finditer(text))
     valid_all = list(_SEG_VALID_RE.finditer(text))
     if not score_all and not valid_all:
         return None
     score_m = score_all[-1] if score_all else None
     valid_m = valid_all[-1] if valid_all else None
-    # Не регуляркой с (.*?)$: при DOTALL первое же вхождение дотягивается до
-    # конца строки, и finditer возвращает только его. Берём позицию последнего
-    # маркера и режем текст вручную.
     rat_marks = list(_SEG_RATIONALE_MARK_RE.finditer(text))
     if rat_marks:
         tail = text[rat_marks[-1].end():]
@@ -1086,6 +1018,10 @@ class AgentState(TypedDict):
     min_steps_before_answer: int
     # Сколько раз ответ был отвергнут как преждевременный.
     premature_answers: Annotated[int, operator.add]
+    # ПАССИВНЫЙ замер: сколько раз боксированное значение не встречалось в тексте
+    # шага до самого бокса. Ни на что не влияет, нужен для статистики по режиму
+    # «вывели одно число, забоксили другое».
+    answers_not_in_step_text: Annotated[int, operator.add]
     # Глубина (число ранее принятых шагов), на которой ответ всё-таки засчитан.
     answer_depth: Optional[int]
 
@@ -1150,10 +1086,6 @@ def generate_step(state: AgentState):
     multi = state.get('branch_mode') == 'multi' or state.get('in_recovery')
     k = state.get('k_branches', 3) if multi else 1
 
-    # Бюджет проверяется роутерами МЕЖДУ раундами, но один раунд с k ветками и
-    # циклом инструментов стоит десятки тысяч токенов, поэтому раунд, начатый
-    # у самой границы, уводил далеко за лимит (замер: перебор до 229k при
-    # бюджете 600k). Если остатка не хватает на k веток — сокращаем k.
     remaining = state.get('token_budget', 10**9) - state.get('tokens_used', 0)
     role_cost = int((ROLES["generator"].num_predict or DEFAULT_MAX_TOKENS)
                     * (TOOL_LOOP_TOKEN_FACTOR if state.get("use_tools") else 1.0))
@@ -1307,21 +1239,6 @@ def evaluate_steps(state: AgentState):
         ]
         depth_now = len(state.get('steps', []))
         if use_tools:
-            # Оценщик проверяет чужие вычисления, и без инструмента он делал это
-            # прозой: 21.5% всего бюджета прогона при ~11k токенов на вердикт
-            # (в трассах видно, как он вручную раскрывает многочлены).
-            #
-            # Лимиты жёстче, чем у генератора, и были ужаты ещё раз (3/4 -> 2/2)
-            # по итогам замера на aime24: с инструментом стадия evaluate выросла
-            # с 21.2% до 31.5% бюджета (+852k токенов), потому что модель не
-            # заменила прозу вызовом, а ДОБАВИЛА вызовы к прозе — вердиктов стало
-            # 248 вместо 136 при почти той же длине каждого. Совокупный рост
-            # расхода стоил двух задач, умерших по бюджету.
-            #
-            # Гипотеза за ужатием: основной прирост различающей способности
-            # (разрыв отказов вырос с +6 до +32 п.п.) даёт первый вызов, а хвост
-            # цикла дорогой. Проверяется по трассе: на каком витке оценщик менял
-            # вердикт. Если окажется, что поздние витки важны, вернуть 3/4.
             res, tks, n_calls, n_salv = _chat_with_tools(
                 messages, temperature=role.temperature, num_predict=role.num_predict,
                 enable_thinking=role.enable_thinking, stage="evaluate",
@@ -1339,15 +1256,6 @@ def evaluate_steps(state: AgentState):
 
         score, rationale, reliable = _parse_eval_response(res.text)
 
-        # Неразобранный вердикт молча превращался в 0.0, то есть в ОТКЛОНЕНИЕ
-        # шага. На прогонах 0802 так терялось 17% вердиктов на aime24 и 26% на
-        # aime26: верные шаги отбрасывались, задача уходила в recovery и
-        # доедала бюджет. Почти всегда причина — цикл инструментов закончился
-        # текстом без маркера, а не содержательное несогласие.
-        #
-        # Поэтому один переспрос без инструментов и без размышлений: он стоит
-        # ~200 токенов против ~11k на лишний круг генерации, и отклонение
-        # остаётся только тогда, когда оценщик действительно его вынес.
         if not reliable and not res.error:
             print(f"    - Candidate {i+1}: вердикт не разобран — переспрашиваю "
                   f"без инструментов.")
@@ -1511,6 +1419,49 @@ def give_up(state: AgentState):
     }
 
 
+# Числа в тексте шага: целые и десятичные, без индексов вида x_2 и без кусков
+# LaTeX-команд. Нужны только для ПАССИВНОЙ диагностики (см. _answer_shape).
+# Хвостовая точка — это конец предложения, а не часть числа: без отдельной
+# оговорки «105.» не распознавалось вообще (точка попадала под запрет справа).
+_NUMBER_RE = re.compile(r"(?<![\w\\.])(-?\d+(?:\.\d+)?)(?!\.?\d)(?!\w)")
+
+
+def _answer_shape(step: str, answer: Optional[str], prior_steps: List[str]) -> Dict[str, Any]:
+    """Записывает СЫРЫЕ факты о том, как боксированное значение соотносится с
+    текстом шага. Это не детектор и не правило: ничего не блокирует, ни на что
+    не влияет, никакой интерпретации здесь не делается.
+
+    Зачем. На разных бенчмарках повторяется режим «вывели одно число, забоксили
+    другое» (hmmt задача 13: вывели 105, ответили 266; aime24 задача 87: 699
+    против 700; hmmt задача 12: посчитали 29, забоксили 29+1=30). Какой именно
+    признак его отличает от нормального финального шага — заранее неизвестно:
+    в задаче 12, например, само число 30 в тексте шага присутствует, так что
+    простая проверка «ответ встречался раньше» его не ловит.
+
+    Поэтому функция не угадывает признак, а складывает данные, по которым его
+    можно искать офлайн. Никаких ключевых слов и никаких предположений о
+    формате ответа или о бенчмарке здесь нет и быть не должно.
+    """
+    if not answer:
+        return {}
+    head = step.split("\\boxed", 1)[0]
+    in_step = [m.group(1) for m in _NUMBER_RE.finditer(head)]
+    prior_nums = [m.group(1) for m in _NUMBER_RE.finditer(" ".join(prior_steps))]
+    ans = answer.strip()
+    return {
+        "boxed_value": ans,
+        # Встречалось ли значение ответа в тексте шага до самого бокса.
+        "boxed_seen_before_box": ans in in_step,
+        # Встречалось ли оно в уже принятых шагах.
+        "boxed_seen_in_prior_steps": ans in prior_nums,
+        "last_number_before_box": in_step[-1] if in_step else None,
+        "distinct_numbers_in_step": len(set(in_step)),
+        # Сами числа (с потолком, чтобы не раздувать траекторию) — по ним и
+        # ведётся офлайн-поиск признака.
+        "numbers_before_box": in_step[-12:],
+    }
+
+
 def commit_step(state: AgentState):
     scores = state['candidate_scores']
     steps = state['candidate_steps']
@@ -1548,11 +1499,17 @@ def commit_step(state: AgentState):
     elif answer:
         print(f"  -> Explicit answer found: {answer}")
 
+    shape = _answer_shape(best_step, answer, prior_steps)
+    if shape and not shape["boxed_seen_before_box"]:
+        print(f"  ℹ️  [ANSWER SHAPE] Ответ {answer!r} не встречается в тексте шага до "
+              f"бокса; последнее число перед ним — {shape['last_number_before_box']!r}. "
+              f"Только замер, на решение не влияет.")
+
     RECORDER.record(
         stage="commit", depth=len(prior_steps), branch=best_idx + 1,
         content=best_step, score=best_score, answer=answer,
         premature=bool(premature), no_progress=no_progress,
-        all_scores=list(scores),
+        all_scores=list(scores), **shape,
     )
 
     result = {
@@ -1568,14 +1525,12 @@ def commit_step(state: AgentState):
     }
     if answer:
         result["answer_depth"] = len(prior_steps)
+        result["answers_not_in_step_text"] = 0 if shape.get(
+            "boxed_seen_before_box") else 1
     return result
 
 
 def verify_solution(state: AgentState):
-    # Верификатор наблюдательный: его вердикт не влияет ни на ответ, ни на
-    # маршрут, при этом на верных задачах он ошибается в 41% случаев и стоит
-    # ~4% бюджета прогона (824k токенов на 90 задачах). На замерах его имеет
-    # смысл выключать; диагностику он даёт только когда его читают руками.
     if state.get('skip_verifier'):
         print("\n[Node: Verify] Пропущен (--no-verify-step).")
         return {"is_valid": False,
@@ -1633,10 +1588,6 @@ def route_after_eval(state: AgentState):
         print(f"\n[Router] Evaluator unparseable for {unreliable_streak} rounds in a row "
               f"(limit {max_unreliable}). Giving up.")
         return "give_up"
-
-    # Исчерпание попыток больше не означает пустой ответ: если принятые шаги
-    # есть, сначала пробуем собрать из них ответ (§ finish_answer). Замер v9:
-    # 7 сдач из 8 — «recovery exhausted», и у всех было 1–5 принятых шагов.
     def _out_of_attempts(why: str) -> str:
         if state.get('steps') and not state.get('finish_attempted'):
             print(f"\n[Router] {why} Принятые шаги есть — пробую собрать ответ из них.")
@@ -1680,9 +1631,6 @@ def route_after_commit(state: AgentState):
     can_finish = bool(steps) and not state.get('finish_attempted')
     used = state.get('tokens_used', 0)
     budget = state.get('token_budget', 10**9)
-    # Порог ниже 1.0 намеренно: если ждать полного исчерпания, на сам finish
-    # бюджета уже не остаётся и задача выходит за лимит. Забираем ответ, пока
-    # на короткий вызов ещё хватает.
     finish_at = float(state.get('finish_at_fraction', 0.85))
     if used >= budget:
         if can_finish:
@@ -1711,7 +1659,7 @@ def build_solver_graph():
     workflow = StateGraph(AgentState)
 
     workflow.add_node("generate_step", generate_step)
-    workflow.add_node("segment_step", segment_step)          # НОВЫЙ узел
+    workflow.add_node("segment_step", segment_step)          
     workflow.add_node("evaluate_steps", evaluate_steps)
     workflow.add_node("trigger_recovery", trigger_recovery)
     workflow.add_node("commit_step", commit_step)
@@ -1734,8 +1682,7 @@ def build_solver_graph():
         {"verify": "verify_solution", "generate": "generate_step",
          "finish": "finish_answer", "give_up": "give_up"},
     )
-    # Собрал ответ — идём проверять как обычное решение; не собрал — сдаёмся,
-    # но уже честно: попытка была.
+
     workflow.add_conditional_edges(
         "finish_answer", route_after_finish,
         {"verify": "verify_solution", "give_up": "give_up"},
@@ -1746,9 +1693,6 @@ def build_solver_graph():
     return workflow.compile()
 
 
-# ---------------------------------------------------------------------------
-# 9. Начальное состояние + smoke-test
-# ---------------------------------------------------------------------------
 def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
     """Начальное состояние. При переданном args (argparse Namespace из раннера)
     берёт из него параметры поиска; иначе — разумные дефолты. Форму состояния
@@ -1761,18 +1705,11 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "candidate_scores": [],
         "k_branches": 3,
         "score_threshold": 0.8,
-        # Замер §2.5: ветвление не дало ничего (HMMT 19/30 -> 19/30 при +18%
-        # токенов), а все наши прогоны и так шли с --branch-mode single. Дефолт
-        # приведён в соответствие с практикой; multi по-прежнему включается в
-        # recovery, где он и нужен.
         "branch_mode": "single",
         "base_temperature": None,
         "tokens_used": 0,
         "token_budget": 250000,
         "in_recovery": False,
-        # Глобальный потолок теперь мягкий: жёсткий стоп даёт per-depth
-        # max_step_attempts, а исчерпание глобального ведёт в finish_answer, а
-        # не в пустой ответ. При 5 семь задач из восьми умирали именно здесь.
         "max_recoveries": 15,
         "total_recovery_events": 0,
         "finish_attempted": False,
@@ -1790,6 +1727,7 @@ def make_initial_state(problem: str, args=None, **overrides) -> Dict[str, Any]:
         "tool_salvaged": 0,
         "min_steps_before_answer": 0,
         "premature_answers": 0,
+        "answers_not_in_step_text": 0,
         "answer_depth": None,
         "final_answer": None,
         "is_valid": False,
@@ -1825,11 +1763,6 @@ DEFAULT_PROMPT_PATH = Path(__file__).resolve().parent / "conf/base/prompts/agent
 
 
 if __name__ == "__main__":
-    # Автономный smoke-test: решает одну задачу против сервера qwen4b.
-    # MODEL / OPENAI_BASE_URL / OPENAI_API_KEY берутся из окружения.
-    # Логи содержат кириллицу и эмодзи, а консоль Windows по умолчанию cp1251 —
-    # без этого первый же print падает с UnicodeEncodeError (раннер бенчмарков
-    # делает то же самое у себя на старте).
     for _stream in (sys.stdout, sys.stderr):
         if hasattr(_stream, "reconfigure"):
             _stream.reconfigure(encoding="utf-8", errors="replace")

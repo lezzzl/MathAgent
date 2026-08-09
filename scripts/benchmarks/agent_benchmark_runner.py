@@ -23,6 +23,7 @@ import langgraph_math_solver
 import langgraph_math_solver_qwen4b
 from tools import reset_calculator_state, shutdown_workers
 from trajectory import RECORDER
+import run_console
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -184,6 +185,17 @@ def parse_benchmark_args(
              "пиковый размер KV-кэша. Дефолт рассчитан на выделенный сервер с A100; "
              "на слабой машине снижайте",
     )
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="Печатать подробности каждого узла (прежнее поведение). По "
+             "умолчанию в терминал идёт одна строка на задачу, а подробности "
+             "живут в траектории и JSONL.",
+    )
+    parser.add_argument(
+        "--color", choices=["auto", "always", "never"], default="auto",
+        help="Цвет в терминале. auto — только когда stdout это терминал: при "
+             "перенаправлении в файл escape-последовательности только мешают.",
+    )
     parser.add_argument("--no-tools", action="store_true", help="Отключить использование калькулятора")
     parser.add_argument(
         "--thinking", choices=["auto", "on", "off"], default="auto",
@@ -271,6 +283,26 @@ def parse_benchmark_args(
         "--resample-token-threshold", type=int, default=400000,
         help="Порог расхода, выше которого первый сэмпл считается ненадёжным и "
              "запускается добор. 0 — добирать всегда при --samples > 1.",
+    )
+    group.add_argument(
+        "--resample-min-steps", type=int, default=0,
+        help="Добирать сэмплы, если решение получено за это число принятых шагов "
+             "или меньше. Общая эвристика: очень короткое решение олимпиадной "
+             "задачи подозрительно, а порог по расходу такие случаи не ловит — "
+             "они дешёвые. 0 (по умолчанию) — правило выключено.",
+    )
+    group.add_argument(
+        "--vote-tiebreak-samples", type=int, default=1,
+        help="Сколько дополнительных сэмплов запускать, если большинства нет "
+             "(все варианты набрали поровну). При ничьей победитель иначе "
+             "определяется порядком сэмплов, а не голосами. 0 — не добирать.",
+    )
+    group.add_argument(
+        "--split-sample-budget", action="store_true",
+        help="Делить --token-budget между сэмплами, чтобы суммарный расход "
+             "задачи не рос кратно числу сэмплов. По умолчанию выключено: "
+             "включение меняет условия замера, поэтому его стоит вводить "
+             "отдельным экспериментом.",
     )
     group.add_argument(
         "--no-verify-step", action="store_true",
@@ -694,13 +726,22 @@ def _vote(answers: list[str]) -> tuple[str | None, dict]:
             continue
         buckets.setdefault(normalize_answer(a) or a, []).append(a)
     if not buckets:
-        return None, {"votes": {}, "agreement": 0.0}
-    # При равенстве голосов побеждает тот, что встретился раньше: порядок
-    # сэмплов детерминирован зерном, значит и разрешение ничьи воспроизводимо.
-    best = max(buckets.values(), key=len)
+        return None, {"votes": {}, "agreement": 0.0, "quorum": False, "tied": 0}
+    ranked = sorted(buckets.values(), key=len, reverse=True)
+    best = ranked[0]
+    top = len(best)
+    # Сколько вариантов делят первое место. Если больше одного, победитель
+    # выбран порядком сэмплов, а не голосами: замер на hmmt показал, что в двух
+    # задачах из пяти таких верный ответ ПРИСУТСТВОВАЛ и проиграл ничью
+    # (№24 ['', '4', '20'] при эталоне 20; №10 то же с парой корней).
+    tied = sum(1 for b in ranked if len(b) == top)
     return best[0], {
         "votes": {k: len(v) for k, v in buckets.items()},
-        "agreement": len(best) / max(len(answers), 1),
+        "agreement": top / max(len(answers), 1),
+        # quorum=False означает «настоящего большинства нет»: либо все варианты
+        # по одному голосу, либо несколько делят максимум.
+        "quorum": top >= 2 and tied == 1,
+        "tied": tied,
     }
 
 
@@ -746,8 +787,9 @@ def _solve_once(graph, problem: str, args: argparse.Namespace,
             "gave_up": False,
             "gave_up_reason": "",
             "step_recovery_attempts": 0,
-            "max_step_attempts": 3,
+            "max_step_attempts": getattr(args, "max_step_attempts", 3),
             "use_tools": not getattr(args, "no_tools", False),
+            "skip_verifier": bool(getattr(args, "no_verify_step", False)),
         }
     state = graph.invoke(initial_state)
     history = state.get("eval_history") or []
@@ -776,7 +818,8 @@ def _solve_once(graph, problem: str, args: argparse.Namespace,
     # видно ни как часто звался сегментатор, ни (главное) на какой глубине принят
     # ответ — а именно это показывает, не выродился ли пошаговый режим в CoT.
     for extra in ("segmenter_calls", "segmenter_unreliable",
-                  "premature_answers", "answer_depth", "api_errors",
+                  "premature_answers", "answers_not_in_step_text",
+                  "answer_depth", "api_errors",
                   "tool_calls", "tool_salvaged"):
         if extra in state:
             metrics[extra] = state.get(extra)
@@ -802,10 +845,21 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace,
     if samples == 1:
         return _solve_once(graph, problem, args, task_id)
 
+    if getattr(args, "split_sample_budget", False):
+        # Бюджет задачи делится между сэмплами: иначе каждый сэмпл имеет право
+        # израсходовать полный лимит, и трудная задача стоит кратно числу
+        # сэмплов (замер hmmt: 2.3 млн токенов на задачу при лимите 800k).
+        args = argparse.Namespace(**vars(args))
+        args.token_budget = max(1, args.token_budget // samples)
+
     threshold = int(getattr(args, "resample_token_threshold", 400_000) or 0)
+    min_steps = int(getattr(args, "resample_min_steps", 0) or 0)
+    extra = max(0, int(getattr(args, "vote_tiebreak_samples", 1) or 0))
     answers: list[str] = []
     metrics_all: list[dict] = []
-    for i in range(samples):
+    planned = samples
+    i = 0
+    while i < planned:
         if getattr(args, "seed", None) is not None and hasattr(solver_mod, "begin_task_seed"):
             # Разные сэмплы одной задачи обязаны идти разными путями, иначе
             # голосование выродится в один и тот же ответ. Зерно остаётся
@@ -819,16 +873,43 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace,
         answer, m = _solve_once(graph, problem, args, task_id)
         answers.append(answer or "")
         metrics_all.append(m)
-        if i == 0:
+        i += 1
+        if i == 1:
+            steps = m.get("steps_count") or 0
+            # Порог по расходу не задевает «уверенно неверные» задачи: они дешёвые
+            # и с ответом. На hmmt так были потеряны две задачи, где один сэмпл
+            # дал неверный ответ и второго мнения не спросили. Признак общий, без
+            # знания бенчмарка: решение из одного-двух шагов на олимпиадной задаче
+            # подозрительно коротко.
+            too_short = bool(min_steps) and steps <= min_steps
             shaky = (m.get("gave_up") or not (answer or "").strip()
-                     or (threshold and m.get("tokens_used", 0) > threshold))
+                     or (threshold and m.get("tokens_used", 0) > threshold)
+                     or too_short)
             if not shaky:
                 print(f"  [samples] первый сэмпл уверенный — добор не нужен.")
                 break
-            print(f"  [samples] первый сэмпл ненадёжен (сдался={m.get('gave_up')}, "
-                  f"ответ={answer!r}, токенов={m.get('tokens_used', 0):,}) — добираю.")
+            why = ("сдался" if m.get("gave_up") else
+                   "нет ответа" if not (answer or "").strip() else
+                   f"шагов {steps} ≤ {min_steps}" if too_short else
+                   f"токенов {m.get('tokens_used', 0):,} > {threshold:,}")
+            print(f"  [samples] первый сэмпл ненадёжен ({why}) — добираю.")
 
     final, vote_info = _vote(answers)
+
+    # Ничья: победитель определился порядком сэмплов, а не голосами. Один
+    # дополнительный сэмпл — единственный способ получить настоящее большинство;
+    # «вернуть пусто» здесь строго хуже, потому что в части таких задач верный
+    # ответ уже присутствует среди кандидатов и просто проиграл ничью.
+    while (extra and not vote_info["quorum"] and any(a.strip() for a in answers)
+           and len(answers) < planned + extra):
+        print(f"  [samples] большинства нет (голоса {vote_info['votes']}) — "
+              f"добираю сэмпл для разрешения ничьей.")
+        if getattr(args, "seed", None) is not None and hasattr(solver_mod, "begin_task_seed"):
+            solver_mod.begin_task_seed(f"{task_id}#{len(answers)}")
+        answer, m = _solve_once(graph, problem, args, task_id)
+        answers.append(answer or "")
+        metrics_all.append(m)
+        final, vote_info = _vote(answers)
     merged = dict(metrics_all[0])
     merged["tokens_used"] = sum(m.get("tokens_used", 0) for m in metrics_all)
     merged["gave_up"] = final is None
@@ -837,7 +918,8 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace,
     merged.update(vote_info)
     if len(metrics_all) > 1:
         print(f"  [samples] {len(metrics_all)} сэмплов, голоса {vote_info['votes']}, "
-              f"согласие {vote_info['agreement']:.0%} -> {final!r}")
+              f"согласие {vote_info['agreement']:.0%}, кворум={vote_info['quorum']} "
+              f"-> {final!r}")
     return final, merged
 
 
@@ -936,10 +1018,8 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             "k_branches": args.k_branches,
             "score_threshold": args.score_threshold,
             "token_budget": args.token_budget,
-            # Нужны для manifest.json при выгрузке в общий формат сравнения.
-            "temperature": (args.temperature
-                            if args.temperature is not None
-                            else solver_mod.ROLES["generator"].temperature),
+            # temperature и roles дописываются ниже, после загрузки промптов:
+            # здесь ROLES ещё держит аварийные значения по умолчанию.
             "workers": args.workers,
             "timeout": args.timeout,
             "max_tokens": args.max_tokens,
@@ -954,8 +1034,10 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             "max_recoveries": args.max_recoveries,
             "max_step_attempts": getattr(args, "max_step_attempts", None),
             "verifier_enabled": not getattr(args, "no_verify_step", False),
-            "generator_num_predict": solver_mod.ROLES["generator"].num_predict
-            if hasattr(solver_mod, "ROLES") else None,
+            # Параметры ролей сюда НЕ кладём: промпты грузятся ниже, и на этот
+            # момент ROLES ещё держит аварийные значения по умолчанию. Так поле
+            # generator_num_predict показывало 24000 (дефолт из кода) вместо
+            # реальных 40000 из yaml и увело внешний разбор прогона в сторону.
             "started_utc": datetime.now(timezone.utc).isoformat(),
         }
         print(f"[trajectory] запись траекторий включена -> {trajectory_path}")
@@ -984,6 +1066,23 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
         if args.temperature is not None
         else solver_mod.ROLES["generator"].temperature
     )
+
+    # Параметры ролей дописываем в шапку ТОЛЬКО здесь — после load_prompts_from_yaml,
+    # apply_thinking_override и warn_on_context_fit. Иначе в траекторию попадают
+    # не те значения, с которыми прогон реально пойдёт.
+    if RECORDER.enabled:
+        RECORDER.run_meta.update({
+            "temperature": effective_solver_temperature,
+            "roles": {
+                name: {"num_predict": role.num_predict,
+                       "temperature": role.temperature,
+                       "enable_thinking": role.enable_thinking}
+                for name, role in solver_mod.ROLES.items()
+            },
+        })
+        gen = solver_mod.ROLES.get("generator")
+        if gen is not None:
+            RECORDER.run_meta["generator_num_predict"] = gen.num_predict
     if args.temperature is not None:
         print(f"[config] --temperature={args.temperature} переопределяет "
               f"generator.temperature из yaml")
@@ -1020,13 +1119,13 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
 
         RECORDER.start_task(task_id, problem, ground_truth=ground_truth,
                             benchmark=config.name)
+        run_console.begin_task()
         try:
             solution, agent_metrics = _solve_with_graph(graph, problem, args, task_id)
         except Exception as exc:  # noqa: BLE001 — одна задача не валит прогон
             error = f"{type(exc).__name__}: {exc}"
             with write_lock:
                 counters["errors"] += 1
-            print(f"  ❌ task {task_id}: {error}")
         finally:
             RECORDER.finish_task(
                 final_answer=solution, ground_truth=ground_truth, error=error,
@@ -1059,6 +1158,9 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             else:
                 counters["consecutive_dead"] = 0
 
+        # Тревожные строки забираем здесь, пока буфер принадлежит этому потоку;
+        # печатает их поток-писатель вместе с итоговой строкой задачи.
+        alerts = run_console.take_alerts()
         return build_record(
             config,
             task_id,
@@ -1067,6 +1169,8 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             args.model,
             {
                 "dataset": config.dataset_name,
+                "_console": {"alerts": alerts, "error": error,
+                             "elapsed": round(time.perf_counter() - started, 3)},
                 **{field: item.get(field) for field in config.metadata_fields},
                 "prompt_version": args.pipeline,
                 "temperature": effective_solver_temperature,
@@ -1079,20 +1183,43 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
             },
         )
 
+    run_console.configure_color(args.color)
+    # Подробный вывод узлов глушим ЗДЕСЬ, после всех сообщений конфигурации:
+    # предупреждения про контекст, зерно и промпты должны остаться видимыми.
+    run_console.install([solver_mod, sys.modules.get("tools")], quiet=not args.verbose)
+    if not args.verbose and trajectory_path is None:
+        print("[config] ⚠️  Тихий вывод без --trajectory: сырые генерации и вердикты "
+              "никуда не сохранятся. Для разбора прогона добавьте --trajectory "
+              "или --verbose.")
     print(f"Пайплайн: {args.pipeline} | задач: {total} | параллельно: {args.workers} | вывод: {output_path}")
     try:
         with output_path.open(mode, encoding="utf-8") as output:
             with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
                 for record in pool.map(solve_one, pending):
+                    # Служебный блок для консоли в JSONL не пишем: он нужен
+                    # только чтобы донести данные из рабочего потока сюда.
+                    console = record["metadata"].pop("_console", {})
                     with write_lock:
                         output.write(json.dumps(record, ensure_ascii=False) + "\n")
                         output.flush()
                         counters["done"] += 1
-                        print(
-                            f"[{counters['done']:0{width}d}/{total:0{width}d}] "
-                            f"{config.name} task {record['task_id']} -> {record['solution']!r} "
-                            f"(эталон {record['ground_truth']})"
-                        )
+                        metrics = record["metadata"].get("agent_metrics") or {}
+                        status = run_console.status_of(
+                            record["solution"], record["ground_truth"],
+                            console.get("error"))
+                        counters[status] = counters.get(status, 0) + 1
+                        extra = f"task {record['task_id']}"
+                        if metrics.get("samples", 1) > 1:
+                            extra += f" | sm {metrics['samples']}"
+                        if metrics.get("gave_up"):
+                            extra += " | gave up"
+                        run_console.emit(
+                            run_console.task_line(
+                                counters["done"], total, status,
+                                record["solution"], record["ground_truth"],
+                                metrics.get("tokens_used", 0),
+                                console.get("elapsed", 0.0), extra),
+                            console.get("alerts", []), console.get("error"))
     finally:
         # Процессы-песочницы переиспользуются между задачами, поэтому гасим их
         # один раз в конце — в том числе при Ctrl+C, чтобы не оставлять сирот.
@@ -1104,7 +1231,14 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
                 print(f"[trajectory] сохранено: {saved}")
                 print(f"[trajectory] просмотр:  python scripts/make_viewer.py {saved}")
 
-    print(f"Saved {counters['done']} records to {output_path}")
+    tally = " | ".join(f"{name} {counters[name]}"
+                       for name in ("PASS", "FAIL", "EMPTY", "ERROR", "?")
+                       if counters.get(name))
+    print(f"Saved {counters['done']} records to {output_path}"
+          + (f"   ({tally})" if tally else ""))
+    if tally:
+        print("Статусы в строках задач — быстрая сверка для глаз; итоговая "
+              "точность считается ниже отдельным процессом.")
     if counters["errors"]:
         print(f"Задач с ошибками: {counters['errors']}")
 
