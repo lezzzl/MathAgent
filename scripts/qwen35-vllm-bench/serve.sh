@@ -26,6 +26,12 @@ KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-auto}"
 ENABLE_PREFIX_CACHING="${ENABLE_PREFIX_CACHING:-0}"
 ENABLE_ASYNC_SCHEDULING="${ENABLE_ASYNC_SCHEDULING:-1}"
 SPECULATIVE_CONFIG="${SPECULATIVE_CONFIG:-}"
+# Qwen3.x emits tool calls as <function=...><parameter=...>. The `hermes` parser
+# does not understand that format at all: every call falls through to the
+# client-side fallback (measured 100% salvaged on hermes, 0% on qwen3_coder).
+# Without any parser the calls leak into the reply as raw text and the run is
+# meaningless. Set TOOL_CALL_PARSER="" to serve without tool support.
+TOOL_CALL_PARSER="${TOOL_CALL_PARSER:-qwen3_coder}"
 
 export CUDA_VISIBLE_DEVICES
 
@@ -52,6 +58,10 @@ args=(
   --language-model-only
   --reasoning-parser qwen3
 )
+
+if [[ -n "${TOOL_CALL_PARSER}" ]]; then
+  args+=(--enable-auto-tool-choice --tool-call-parser "${TOOL_CALL_PARSER}")
+fi
 
 if [[ "${ENABLE_ASYNC_SCHEDULING}" == "1" ]]; then
   args+=(--async-scheduling)
