@@ -2,6 +2,8 @@ import json
 import operator
 import os
 import re
+import threading
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional, Tuple
@@ -127,6 +129,43 @@ DEFAULT_MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
 MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "40000"))
 
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
+
+# Зерно прогона. Выставляется раннером по --seed; None — как раньше, каждый
+# вызов независимая выборка. Без зерна два прогона одной конфигурации отличаются
+# случайно, и одиночный прогон не может измерить эффект правки: на линии 4B это
+# давало 32% «плавающих» задач и полосу шума шириной ~9 задач из 30.
+SEED: Optional[int] = None
+_seed_state = threading.local()
+
+
+def begin_task_seed(task_id: Any) -> None:
+    """Начинает новую задачу: фиксирует базу зерна и сбрасывает счётчик вызовов.
+
+    База выводится из (SEED, task_id), поэтому одна и та же задача получает одно
+    и то же зерно в разных прогонах, а разные задачи — разные. crc32, а не
+    hash(): PYTHONHASHSEED рандомизирует hash() между процессами и ломал бы
+    воспроизводимость.
+    """
+    if SEED is None:
+        _seed_state.base = None
+        return
+    _seed_state.base = (SEED * 1_000_003 + zlib.crc32(str(task_id).encode())) % (2 ** 31 - 1)
+    _seed_state.counter = 0
+
+
+def _next_seed() -> Optional[int]:
+    """Зерно очередного вызова внутри задачи.
+
+    Счётчик потокобезопасен (threading.local), поэтому воркеры не перетирают
+    зёрна друг друга. Ветки внутри задачи получают разные зёрна — иначе k
+    кандидатов пришли бы побайтово одинаковыми.
+    """
+    base = getattr(_seed_state, "base", None)
+    if base is None:
+        return None
+    _seed_state.counter = getattr(_seed_state, "counter", 0) + 1
+    return (base + _seed_state.counter * 7919) % (2 ** 31 - 1)
+
 
 def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=False,
           enable_thinking=None):
@@ -477,6 +516,10 @@ class AgentState(TypedDict):
     max_unreliable_evals: int
     eval_history: Annotated[List[Dict[str, Any]], operator.add]
     thinking_overruns: Annotated[int, operator.add]
+    # Верификатор наблюдательный: его вердикт не меняет ответ, но стоит ~5%
+    # бюджета и на верных решениях ошибается в 41% случаев. На замерах его
+    # отключают (--no-verify-step), диагностику оставляют по умолчанию.
+    skip_verifier: bool
 
     final_answer: Optional[str]
     is_valid: bool
@@ -525,7 +568,7 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     def call(enable_thinking):
         llm = make_llm(temp, model_name=MODEL_NAME, base_url=BASE_URL, api_key=API_KEY,
                        max_tokens=role.num_predict, with_tools=use_tools,
-                       enable_thinking=enable_thinking)
+                       enable_thinking=enable_thinking, seed=_next_seed())
         messages = [SystemMessage(content=role.system_prompt), HumanMessage(content=context)]
         if use_tools:
             return generator_with_tools.invoke(
@@ -642,7 +685,7 @@ def evaluate_steps(state: AgentState):
         user_content = role.user_template.format(context=context, step=step)
         llm = make_llm(role.temperature, model_name=MODEL_NAME, base_url=BASE_URL, api_key=API_KEY,
                 max_tokens=role.num_predict, with_tools=use_tools,
-                enable_thinking=role.enable_thinking)
+                enable_thinking=role.enable_thinking, seed=_next_seed())
         messages = [
             SystemMessage(content=role.system_prompt),
             HumanMessage(content=user_content),
@@ -794,12 +837,21 @@ def commit_step(state: AgentState):
 
 
 def verify_solution(state: AgentState):
+    if state.get("skip_verifier"):
+        # Молча пропускать нельзя: в run_meta пишется verifier_enabled, и без
+        # этой строки прогон без верификатора неотличим от прогона с ним.
+        print("\n[Node: Verify] Пропущен (--no-verify-step).")
+        return {
+            "is_valid": False,
+            "verifier_rationale": "verifier disabled (--no-verify-step)",
+        }
     print("\n[Node: Verify] Running verifier...")
     role = ROLES["verifier"]
     context = _build_context(state['problem'], state.get('steps', []))
     messages = role.build_messages(context=context)
     content, tks = _chat(messages, json_format=role.json_format, temperature=role.temperature,
-                         num_predict=role.num_predict, enable_thinking=role.enable_thinking)
+                         num_predict=role.num_predict, enable_thinking=role.enable_thinking,
+                         seed=_next_seed())
 
     is_valid, rationale, reliable = _parse_verify_response(content)
     if not reliable:

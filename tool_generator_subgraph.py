@@ -39,7 +39,7 @@ def count_chain_tokens(messages: List[AnyMessage]) -> int:
 
 def make_llm(temperature, *, model_name, base_url, api_key,
               max_tokens=None, json_format=False, with_tools=True,
-              enable_thinking=None):
+              enable_thinking=None, seed=None):
     """Собирает клиента модели.
 
     with_tools=False не просто запрещает исполнять тулы, а вообще не отдаёт их
@@ -50,10 +50,16 @@ def make_llm(temperature, *, model_name, base_url, api_key,
     (Qwen3.x) через chat_template_kwargs. Замер на оценщике: 420 токенов и 12 с
     против 5277 токенов и 153 с. None — не трогать, для обычных моделей это
     единственный корректный вариант.
+
+    seed делает вызов воспроизводимым. None — сервер сэмплирует свободно, и
+    прогон нельзя сравнить с другим прогоном: при temperature 0.6 это разные
+    выборки, а не разные конфигурации.
     """
     kwargs = {}
     if enable_thinking is not None:
         kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": enable_thinking}}
+    if seed is not None:
+        kwargs["seed"] = seed
     llm = ChatOpenAI(base_url=base_url, api_key=api_key, model=model_name,
                       temperature=temperature, max_tokens=max_tokens, **kwargs)
     if json_format:
