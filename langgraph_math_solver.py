@@ -10,7 +10,7 @@ from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 import requests
 import yaml
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
 
@@ -127,6 +127,18 @@ BASE_URL = os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1")
 API_KEY = os.getenv("OPENAI_API_KEY", "token-abc123")
 DEFAULT_MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
 MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "40000"))
+# Потолок на ОДИН шаг, уходящий оценщику. Это предохранитель от вырожденной
+# генерации, а не стилевое ограничение: на прогоне 0810 шаг в 191 400 символов
+# (~50k токенов) стал промптом оценщика и дал HTTP 400 (49537 вход + 16000
+# запрошенных = 65537 при max_model_len 65536), что убило задачу целиком вместе
+# с уже найденным верным ответом.
+#
+# Значение выбрано по фактическим данным того же прогона: самые длинные ЗАКОННЫЕ
+# шаги — 23 581 / 20 990 / 18 380 символов, и задачи с ними решались верно.
+# Поэтому режем сильно выше них (32000), иначе предохранитель начнёт рубить
+# работающие решения. У 4B лимит 1500, но там шаг реально короткий — переносить
+# это число на 9B нельзя.
+MAX_STEP_CHARS = int(os.getenv("MAX_STEP_CHARS", "32000"))
 
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
 
@@ -261,6 +273,21 @@ def _extract_step_content(raw: str) -> str:
                 step = f"Final answer: {clean_tail}"
 
     return step
+
+
+def _clamp_step(step: str) -> str:
+    """Обрезает вырожденно длинный шаг, чтобы он не снёс лимит контекста.
+
+    Оставляем ГОЛОВУ: у бесконечного повтора осмысленное начало, а хвост — мусор,
+    и именно хвост раздувает промпт. Обрезка помечается явно, иначе оценщик
+    решит, что генератор оборвался на полуслове, и завалит шаг за незаконченность.
+    """
+    if not step or len(step) <= MAX_STEP_CHARS:
+        return step
+    print(f"      ⚠️  [STEP CLAMP] Шаг {len(step)} симв. > {MAX_STEP_CHARS} — "
+          f"вырожденная генерация, обрезаю. Полный текст остаётся в траектории.")
+    head = step[:MAX_STEP_CHARS].rstrip()
+    return head + "\n\n[... шаг обрезан: генерация превысила лимит длины ...]"
 
 
 def _build_context(problem: str, steps: List[str]) -> str:
@@ -556,6 +583,37 @@ def _message_text(message: Any) -> str:
     return (extra.get("reasoning_content") or extra.get("reasoning") or "").strip()
 
 
+def _invoke_role(llm, messages, use_tools, *, max_hops=4, max_total_tool_calls=8):
+    """Вызывает модель и возвращает (result, error) вместо того, чтобы падать.
+
+    Зачем: langchain-вызовы поднимают исключение (BadRequestError, таймаут,
+    обрыв соединения), оно пролетает сквозь graph.invoke() и раннер записывает
+    задачу как `solution=None, tokens_used=0, agent_metrics={}` — то есть будто
+    она не запускалась вовсе. На прогоне 0810 так была потеряна задача 88:
+    416 522 токена, принятый шаг и УЖЕ НАЙДЕННЫЙ верный ответ ушли в мусор
+    из-за одного HTTP 400 в самом конце.
+
+    Ошибка одного вызова не должна стоить задачи: возвращаем пустой результат,
+    а решение, что с этим делать, принимает узел графа.
+    """
+    try:
+        if use_tools:
+            return generator_with_tools.invoke(
+                {"messages": messages, "max_hops": max_hops,
+                 "max_total_tool_calls": max_total_tool_calls},
+                config={"configurable": {"llm": llm}},
+            ), None
+        return {"messages": list(messages) + [llm.invoke(messages)]}, None
+    except KeyboardInterrupt:
+        raise
+    except Exception as exc:  # noqa: BLE001 — любой сбой вызова, не только HTTP
+        detail = f"{type(exc).__name__}: {exc}"
+        print(f"      ⚠️  [СЕТЕВОЙ СБОЙ] вызов роли не удался, ветка потеряна: {detail[:300]}")
+        # Пустой AIMessage обязателен: без него последним сообщением осталось бы
+        # HumanMessage, и вызывающий код принял бы ПРОМПТ за ответ модели.
+        return {"messages": list(messages) + [AIMessage(content="")]}, detail
+
+
 def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     """Один вызов генератора с откатом при обрыве на размышлениях.
     У thinking-моделей размышления идут в тот же num_predict, что и ответ. Если
@@ -570,14 +628,11 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
                        max_tokens=role.num_predict, with_tools=use_tools,
                        enable_thinking=enable_thinking, seed=_next_seed())
         messages = [SystemMessage(content=role.system_prompt), HumanMessage(content=context)]
-        if use_tools:
-            return generator_with_tools.invoke(
-                {"messages": messages, "max_hops": 5},
-                config={"configurable": {"llm": llm}},
-            )
-        return {"messages": messages + [llm.invoke(messages)]}
+        return _invoke_role(llm, messages, use_tools, max_hops=5)
 
-    result = call(role.enable_thinking)
+    result, err = call(role.enable_thinking)
+    if err:
+        return result, False
     last = result["messages"][-1]
     truncated_empty = (
         not _message_text(last)
@@ -623,7 +678,7 @@ def generate_step(state: AgentState):
                 print(f"      [tool_result] {m.content[:200]}")
         final_msg = result["messages"][-1]
         raw_text = _message_text(final_msg)
-        step_text = _extract_step_content(raw_text)
+        step_text = _clamp_step(_extract_step_content(raw_text))
         candidates.append(step_text)
 
         tks = count_chain_tokens(result["messages"])
@@ -690,20 +745,39 @@ def evaluate_steps(state: AgentState):
             SystemMessage(content=role.system_prompt),
             HumanMessage(content=user_content),
         ]
-        if use_tools:
-            result = generator_with_tools.invoke(
-                {"messages": messages, "max_hops": 4, "max_total_tool_calls": 8},
-                config={"configurable": {"llm": llm}},
-            )
-        else:
-            result = {"messages": messages + [llm.invoke(messages)]}
+        result, call_err = _invoke_role(llm, messages, use_tools,
+                                        max_hops=4, max_total_tool_calls=8)
         final_msg = result["messages"][-1]
         content = _message_text(final_msg)
 
         tks = count_chain_tokens(result["messages"])
         total_tokens += tks
 
+        # Пустой вердикт из-за обрыва по num_predict — не приговор шагу. На
+        # прогоне 0810 таких было 8 из 89 (9%), и ВСЕ восемь вернули пустоту:
+        # размышления оценщика съедали лимит целиком. Пустой ответ молча
+        # становился score=0.0, то есть отклонением ВЕРНОГО шага (так был
+        # потерян \boxed{127} в задаче 88). Переспрашиваем один раз без
+        # размышлений — это ~400 токенов против ~11k на лишний круг генерации.
+        if not call_err and not content.strip() and _finish_reason(final_msg) == "length":
+            print(f"      ⚠️  [ОЦЕНЩИК ОБОРВАН] размышления съели лимит "
+                  f"({role.num_predict}), вердикта нет. Переспрашиваю без размышлений.")
+            llm_retry = make_llm(role.temperature, model_name=MODEL_NAME, base_url=BASE_URL,
+                                 api_key=API_KEY, max_tokens=role.num_predict,
+                                 with_tools=False, enable_thinking=False, seed=_next_seed())
+            retry, retry_err = _invoke_role(llm_retry, messages, False)
+            if not retry_err:
+                content = _message_text(retry["messages"][-1])
+                tks_retry = count_chain_tokens(retry["messages"])
+                total_tokens += tks_retry
+                tks += tks_retry
+
         score, rationale, reliable = _parse_eval_response(content)
+        if call_err:
+            # Сбой вызова — это не суждение о шаге. Помечаем вердикт
+            # ненадёжным, иначе инфраструктурная ошибка молча отвергает шаг.
+            reliable = False
+            rationale = f"Evaluator call failed, verdict unknown: {call_err[:200]}"
         any_reliable = any_reliable or reliable
         seen[key] = (score, rationale)
         scores.append(score)
@@ -782,8 +856,21 @@ def give_up(state: AgentState):
             f"steps indefinitely until the token budget dies."
         )
     print(f"\n[Node: Give Up] {reason}")
+    # Сдача с уже выведенным ответом — чистая потеря. Если в принятых шагах есть
+    # \boxed{}, отдаём его: он получен агентом, а альтернатива это null, который
+    # гарантированно неверен. Ответ помечен как несданный (is_valid=False), так
+    # что диагностика не врёт.
+    salvaged = None
+    for step in reversed(state.get('steps', []) or []):
+        candidate = extract_answer(step or "")
+        if candidate:
+            salvaged = candidate
+            break
+    if salvaged:
+        print(f"  -> Спасён ответ из принятых шагов: {salvaged!r} (вместо null).")
+        reason = f"{reason} Ответ взят из последнего принятого шага, содержащего \\boxed{{}}."
     return {
-        "final_answer": None,
+        "final_answer": salvaged,
         "is_valid": False,
         "verifier_rationale": reason,
         "gave_up": True,

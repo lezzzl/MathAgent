@@ -113,6 +113,20 @@ def infer_temperature(tasks: List[dict]) -> Optional[float]:
     return min(temps) if temps else None
 
 
+def infer_generator_thinking(tasks: List[dict]) -> Optional[bool]:
+    """Реально ли у генератора были включены размышления.
+
+    Флаг `--thinking auto` означает «как в yaml», поэтому по самому флагу режим
+    не восстановить: для v11 auto даёт размышления включёнными, для v9 —
+    выключенными у оценщика. Записи вызовов хранят фактическое значение.
+    """
+    flags = {r.get("enable_thinking") for t in tasks for r in t.get("records", [])
+             if r.get("stage") == "generate" and r.get("enable_thinking") is not None}
+    if not flags:
+        return None
+    return bool(max(flags))
+
+
 def infer_generator_num_predict(tasks: List[dict]) -> Optional[int]:
     """Потолок генерации у генератора — из записей вызовов.
 
@@ -125,6 +139,127 @@ def infer_generator_num_predict(tasks: List[dict]) -> Optional[int]:
     return max(caps) if caps else None
 
 
+def export_from_jsonl(bench: str, source: Path, run_id: str, out_dir: Path
+                      ) -> Dict[str, Any]:
+    """Собирает выгрузку из JSONL прогона, когда траектории уже нет.
+
+    Траектория — основной источник: из неё берутся текст решения по шагам и
+    сырые генерации. Если её потеряли, JSONL всё равно содержит ответ, эталон,
+    метрики и метаданные задачи, и прогон не выпадает из сравнения целиком.
+
+    Отличия такой выгрузки, о которых надо знать читателю:
+      * `solution` — только финальный ответ, без текста шагов;
+      * `reasoning` пуст: сырые генерации жили лишь в траектории.
+    Оба факта помечены в metadata, чтобы никто не принял пустой reasoning за
+    «модель ничего не думала».
+    """
+    name = FILE_NAMES.get(bench, bench.lower())
+    out_path = out_dir / f"{name}.jsonl"
+    rows = [json.loads(l) for l in source.read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    n_ok = 0
+    totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    wall = 0.0
+    model = ""
+    dataset = ""
+
+    with out_path.open("w", encoding="utf-8") as handle:
+        for rec in rows:
+            meta = rec.get("metadata", {}) or {}
+            metrics = meta.get("agent_metrics") or {}
+            model = rec.get("model_name") or model
+            dataset = meta.get("dataset") or dataset
+            used = int(metrics.get("tokens_used") or 0)
+            totals["total_tokens"] += used
+            wall += float(meta.get("latency_seconds") or 0.0)
+            if rec.get("is_correct"):
+                n_ok += 1
+
+            answer = str(rec.get("solution") or "").strip()
+            # Раннер пишет отсутствующий ответ как строку "None" — это не ответ.
+            if answer.lower() == "none":
+                answer = ""
+            # Сайт сравнения достаёт ответ из \boxed{}: голое значение он не
+            # найдёт, поэтому оборачиваем, если обёртки ещё нет.
+            solution = ""
+            if answer:
+                solution = (answer if "\\boxed" in answer
+                            else f"Final answer: \\boxed{{{answer}}}")
+
+            handle.write(json.dumps({
+                "run_id": run_id,
+                "benchmark_name": bench,
+                "model_name": model,
+                "task_id": str(rec.get("task_id")),
+                "solution": solution,
+                "reasoning": "",
+                "ground_truth": str(rec.get("ground_truth") or ""),
+                "metadata": {
+                    "dataset": dataset,
+                    **{k: meta[k] for k in ("Category", "Subcategory", "Source")
+                       if k in meta},
+                    "prompt_version": meta.get("prompt_version"),
+                    "temperature": meta.get("temperature"),
+                    "top_p": None, "top_k": None, "min_p": None,
+                    "presence_penalty": None, "repetition_penalty": None,
+                    "seed": None,
+                    "thinking": None,
+                    "max_tokens": meta.get("max_tokens"),
+                    "latency_seconds": meta.get("latency_seconds"),
+                    "usage": {"input_tokens": 0, "output_tokens": 0,
+                              "total_tokens": used,
+                              "input_token_details": {}, "output_token_details": {},
+                              "finish_reason": None},
+                    "error": meta.get("error") or None,
+                    "agent": {
+                        "steps_count": metrics.get("steps_count"),
+                        "answer_depth": metrics.get("answer_depth"),
+                        "tool_calls": metrics.get("tool_calls"),
+                        "gave_up": metrics.get("gave_up"),
+                        "gave_up_reason": metrics.get("gave_up_reason"),
+                        "samples": metrics.get("samples"),
+                        "sample_answers": metrics.get("sample_answers"),
+                        "votes": metrics.get("votes"),
+                        "agreement": metrics.get("agreement"),
+                        "use_tools": meta.get("use_tools"),
+                    },
+                    # Честная пометка о происхождении записи.
+                    "export_source": "jsonl_without_trajectory",
+                    "verification_method": rec.get("verification_method"),
+                },
+            }, ensure_ascii=False) + "\n")
+
+    n = len(rows)
+    print(f"  {bench:16s} -> {out_path.name:22s} задач={n:4d} верно={n_ok:4d} "
+          f"({100*n_ok/max(n,1):5.1f}%) токенов={totals['total_tokens']:,} "
+          f"[из JSONL, без траектории: solution только ответ, reasoning пуст]")
+    return {
+        "dataset": dataset,
+        "split": "train",
+        "total_tasks": n,
+        "output": str((out_dir / f"{name}.jsonl").as_posix()),
+        "status": "completed",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "total_tasks": n,
+            "successful_tasks": sum(
+                1 for r in rows
+                if str(r.get("solution") or "").strip().lower() not in ("", "none")),
+            "failed_tasks": sum(
+                1 for r in rows
+                if str(r.get("solution") or "").strip().lower() in ("", "none")),
+            "remaining_tasks": 0,
+            "input_tokens": 0, "output_tokens": 0,
+            "total_tokens": totals["total_tokens"],
+            "wall_time_seconds": round(wall, 3),
+            "tasks_per_second": round(n / wall, 4) if wall else 0.0,
+        },
+        "_correct": n_ok,
+        "_run": {},
+        "_note": "экспорт из JSONL: траектория недоступна",
+    }
+
+
 def export_benchmark(bench: str, trajectory: Path, run_id: str, out_dir: Path
                      ) -> Dict[str, Any]:
     data = json.loads(trajectory.read_text(encoding="utf-8"))
@@ -132,8 +267,16 @@ def export_benchmark(bench: str, trajectory: Path, run_id: str, out_dir: Path
     tasks = data.get("tasks", []) or []
     if run.get("temperature") is None:
         run["temperature"] = infer_temperature(tasks)
-    if run.get("generator_num_predict") is None:
-        run["generator_num_predict"] = infer_generator_num_predict(tasks)
+    # Значение из записей вызовов авторитетнее шапки: в траекториях, снятых до
+    # 06.08, шапка собиралась ДО загрузки промптов и хранит аварийный дефолт
+    # (24000 вместо реальных 40000). Записи вызовов всегда содержат то, с чем
+    # прогон реально шёл.
+    inferred = infer_generator_num_predict(tasks)
+    if inferred:
+        run["generator_num_predict"] = inferred
+    thinking = infer_generator_thinking(tasks)
+    if thinking is not None:
+        run["generator_thinking"] = thinking
 
     verified_path = find_verified(trajectory)
     verified: Dict[str, dict] = {}
@@ -204,6 +347,13 @@ def export_benchmark(bench: str, trajectory: Path, run_id: str, out_dir: Path
                         "gave_up": metrics.get("gave_up"),
                         "gave_up_reason": metrics.get("gave_up_reason"),
                         "is_valid": metrics.get("is_valid"),
+                        # Голосование: сколько независимых решений было и
+                        # насколько они сошлись. Без этого по записи нельзя
+                        # понять, ответ получен с первого раза или большинством.
+                        "samples": metrics.get("samples"),
+                        "sample_answers": metrics.get("sample_answers"),
+                        "votes": metrics.get("votes"),
+                        "agreement": metrics.get("agreement"),
                     },
                 },
             }
@@ -238,8 +388,11 @@ def export_benchmark(bench: str, trajectory: Path, run_id: str, out_dir: Path
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("specs", nargs="+", metavar="BENCH=trajectory.json",
-                    help="пары «имя бенчмарка = путь к файлу траектории»")
+    ap.add_argument("specs", nargs="+", metavar="BENCH=путь",
+                    help="пары «имя бенчмарка = путь». Обычно это файл "
+                         "траектории (_trajectory.json); если её потеряли, "
+                         "можно указать JSONL прогона или *_verified.jsonl — "
+                         "тогда в выгрузке не будет текста шагов и reasoning.")
     ap.add_argument("--run-id", required=True, help="имя папки прогона")
     ap.add_argument("--out", type=Path, default=ROOT / "results" / "runs",
                     help="куда класть папку (по умолчанию results/runs)")
@@ -257,11 +410,17 @@ def main() -> int:
             print(f"Неверный формат: {spec!r}, нужно BENCH=путь")
             return 2
         bench, path = spec.split("=", 1)
-        trajectory = Path(path)
-        if not trajectory.exists():
-            print(f"Не найден файл траектории: {trajectory}")
+        source = Path(path)
+        if not source.exists():
+            print(f"Не найден файл: {source}")
             return 2
-        info = export_benchmark(bench, trajectory, args.run_id, out_dir)
+        # Траектория — основной источник. JSONL принимается как запасной, когда
+        # траектория потеряна: лучше выгрузить прогон без текста шагов, чем не
+        # выгрузить вовсе.
+        if source.suffix.lower() == ".jsonl":
+            info = export_from_jsonl(bench, source, args.run_id, out_dir)
+        else:
+            info = export_benchmark(bench, source, args.run_id, out_dir)
         run_meta = info.pop("_run") or run_meta
         info.pop("_correct", None)
         benchmarks[bench] = info
@@ -287,7 +446,14 @@ def main() -> int:
         "prompt_version": Path(str(run_meta.get("prompt", ""))).stem,
         "role": "solver",
         "generation": {
-            "thinking": run_meta.get("thinking") == "on",
+            # Флаг --thinking может стоять в auto, и тогда режим определяется
+            # per-role значением из yaml. Берём фактическое значение генератора,
+            # если оно есть в шапке, — иначе «auto» ошибочно читался бы как off.
+            "thinking": (
+                run_meta["generator_thinking"]
+                if run_meta.get("generator_thinking") is not None
+                else run_meta.get("thinking") == "on"
+            ),
             "temperature": run_meta.get("temperature"),
             "top_p": None, "top_k": None, "min_p": None,
             "presence_penalty": None, "repetition_penalty": None, "seed": None,
@@ -309,6 +475,17 @@ def main() -> int:
             # ROLE_NUM_PREDICT без смены версии промпта, поэтому без этого поля
             # два таких прогона неразличимы в манифесте.
             "generator_num_predict": run_meta.get("generator_num_predict"),
+            # Всё, что делает прогоны сопоставимыми. Без seed нельзя сказать,
+            # законно ли сравнивать два прогона; без samples непонятно, один это
+            # проход или голосование по нескольким.
+            "seed": run_meta.get("seed"),
+            "samples": run_meta.get("samples"),
+            "resample_token_threshold": run_meta.get("resample_token_threshold"),
+            "finish_at": run_meta.get("finish_at"),
+            "max_recoveries": run_meta.get("max_recoveries"),
+            "max_step_attempts": run_meta.get("max_step_attempts"),
+            "verifier_enabled": run_meta.get("verifier_enabled"),
+            "roles": run_meta.get("roles"),
         },
         "status": args.status,
         "created_at": run_meta.get("started_utc", datetime.now(timezone.utc).isoformat()),
