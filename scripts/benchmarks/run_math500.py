@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from scripts.benchmarks.agent_benchmark_runner import (
+from scripts.benchmarks.benchmark_runner import (
     BenchmarkConfig,
     parse_benchmark_args,
     run_benchmark,
@@ -31,7 +31,7 @@ CONFIG = BenchmarkConfig(
     task_id_field="unique_id",
     output_directory="math500",
     metadata_fields=("subject", "level"),
-    # problem_field/ground_truth_field — дефолтные problem/answer.
+    # problem_field/ground_truth_field — дефолтные problem/solution.
 )
 
 
