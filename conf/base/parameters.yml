@@ -58,7 +58,7 @@ benchmarks:
     repetition_penalty: 1.0
     seed: 42
     thinking: true                  # включить reasoning (<think>…</think>)
-    max_tokens: 49152               # предел длины ответа модели
+    max_tokens: 57344               # предел длины ответа (под vLLM max-model-len 73728)
 
   runtime:
     concurrency: 32                 # параллельных запросов к модели
@@ -71,12 +71,15 @@ benchmarks:
     vllm_max_num_seqs: 8
     vllm_max_model_len: 73728
 
-  prompt: conf/base/prompts/solver-reasoning.yml   # набор ролей/промптов (путь от корня)
-  pipeline: solver                  # solver (голый reasoning) | react (агент с тулами)
-  # параметры ReAct-агента (только при pipeline=react; промпт тогда — react-tools.yml)
+  # ДЕФОЛТ — ReAct-агент с инструментами (сильный reasoning-промпт + /think + тулы).
+  # Для голого baseline-reasoning переопредели:
+  #   --params benchmarks.pipeline=solver,benchmarks.prompt=conf/base/prompts/solver-reasoning.yml
+  prompt: conf/base/prompts/react-tools.yml   # набор ролей/промптов (путь от корня)
+  pipeline: react                   # react (агент с тулами) | solver (голый reasoning)
+  # параметры ReAct-агента (только при pipeline=react)
   react:
     max_steps: 6                    # лимит вызовов инструментов на задачу
-    tester: false                   # true → дать солверу инструмент test_claim
+    tester: true                    # солверу дан инструмент test_claim (вложенный тестировщик)
   run_id: null                      # null → сгенерируется; задать тот же для resume
   resume: false                     # продолжить прерванный run (нужен явный run_id)
   limit: null                       # напр. 2 — быстрый прогон на 2 задачах
