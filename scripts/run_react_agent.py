@@ -59,18 +59,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_persona(prompt_path: Path, role_name: str) -> str:
-    """Достать `system` выбранной роли из YAML-промпта."""
+def load_role(prompt_path: Path, role_name: str) -> tuple[str, str]:
+    """Достать (system-персону, task-шаблон) выбранной роли из YAML-промпта."""
     config = yaml.safe_load(prompt_path.read_text(encoding="utf-8"))
     try:
-        return config["roles"][role_name]["system"]
+        role = config["roles"][role_name]
+        return role["system"], role.get("task", "{problem}")
     except (KeyError, TypeError) as exc:
         raise ValueError(f"Нет роли '{role_name}' в {prompt_path}") from exc
 
 
 def main() -> int:
     args = parse_args()
-    persona = load_persona(args.prompt, args.role)
+    persona, task_template = load_role(args.prompt, args.role)
 
     model = ChatVLLM(
         model=args.model,
@@ -84,16 +85,18 @@ def main() -> int:
     # вложенный тестировщик), у самого тестировщика только run_python.
     tools = dict(TOOLS)
     if args.role == "solver" and not args.no_tester:
-        tester_persona = load_persona(args.prompt, "tester")
+        tester_persona, _ = load_role(args.prompt, "tester")
         test_claim = make_test_claim_tool(model, tester_persona, max_steps=args.tester_steps)
         tools[test_claim.name] = test_claim
 
     system_prompt = build_system_prompt(persona, tools)
     app = build_react_loop(model, tools, max_steps=args.max_steps)
 
+    # Задача через task-шаблон (там /think для глубокого рассуждения)
+    task = task_template.format(problem=args.question)
     result = app.invoke(
         {
-            "messages": [("system", system_prompt), ("human", args.question)],
+            "messages": [("system", system_prompt), ("human", task)],
             "steps": 0,
         }
     )

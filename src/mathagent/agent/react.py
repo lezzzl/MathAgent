@@ -183,18 +183,23 @@ def _transcript(messages: list[Any]) -> str:
 class _ReactSolver:
     """Обёртка ReAct-лупа под интерфейс graph.invoke({'problem': ...}) раннера."""
 
-    def __init__(self, app: Any, system_prompt: str, prompt_version: str) -> None:
+    def __init__(
+        self, app: Any, system_prompt: str, task_template: str, prompt_version: str
+    ) -> None:
         self._app = app
         self._system = system_prompt
+        self._task_template = task_template
         self._prompt_version = prompt_version
 
     def invoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Прогнать задачу через агента и вернуть поля, которые ждёт solve_item."""
+        # Задача идёт через task-шаблон (как у обычного solver) — там, напр., /think
+        task = self._task_template.format(problem=str(inputs["problem"]))
         result = self._app.invoke(
             {
                 "messages": [
                     ("system", self._system),
-                    ("human", str(inputs["problem"])),
+                    ("human", task),
                 ],
                 "steps": 0,
             }
@@ -229,6 +234,7 @@ def create_react_graph(
     try:
         prompt_version = str(config["version"])
         persona = config["roles"][role_name]["system"]
+        task_template = config["roles"][role_name].get("task", "{problem}")
     except (KeyError, TypeError) as exc:
         raise ValueError(
             f"Промпт {prompt_path} не в формате react-tools (нужны version и "
@@ -262,4 +268,4 @@ def create_react_graph(
 
     system_prompt = build_system_prompt(persona, tools)
     app = build_react_loop(model, tools, max_steps=max_steps)
-    return _ReactSolver(app, system_prompt, prompt_version)
+    return _ReactSolver(app, system_prompt, task_template, prompt_version)
