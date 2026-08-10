@@ -1,14 +1,18 @@
-# Имя файла — это run_id: результаты лягут в results/runs/aime26-yeahrmek/.
+# Имя файла — это run_id: результаты лягут в results/runs/test/.
 #
-# Проверочный прогон: один бенчмарк на одной карте. Обвязку (движок, ожидание
-# готовности, остановку, публикацию) несут run_benchmarks.sh и диспетчер, поэтому
-# здесь только настройки: GPU, RUN_ID и PUSH_RESULTS задавать нельзя.
+# Прогон агента на AIME 2026 напрямую, своей командой после `--`: kedro-пайплайна
+# benchmarks в этой ветке нет (он только в Ilya/agentic_loop), а этот скрипт есть.
+# Обвязку — движок, ожидание готовности, остановку, публикацию — по-прежнему
+# несут run_benchmarks.sh и диспетчер.
 #
-# Ветка — Ilya/agentic_loop: только на ней есть kedro-пайплайн benchmarks,
-# который поднимает run_benchmarks.sh (в main и yeahrmek/job_runner его нет).
+# --model и --base-url обязательны: по умолчанию скрипт берёт MODEL
+# (Qwen/Qwen3.5-9B — это имя весов, а сервер отдаёт модель как qwen35-9b) и
+# ollama-адрес, потому что BASE_URL наружу не экспортируется.
 command: >-
-  ENGINE=sglang PORT=8137 SERVED_MODEL_NAME=qwen35-9b SELECT=[aime26]
-  CONCURRENCY=16 GPU_MEMORY_UTILIZATION=0.90
-  scripts/run_benchmarks.sh
+  ENGINE=sglang PORT=8137 SERVED_MODEL_NAME=qwen35-9b GPU_MEMORY_UTILIZATION=0.90
+  scripts/run_benchmarks.sh --
+  python3 scripts/benchmarks/run_aime26.py
+  --model qwen35-9b --base-url http://127.0.0.1:8137/v1
+  --limit 5 --workers 8
 gpus: 1
 timeout_minutes: 120
