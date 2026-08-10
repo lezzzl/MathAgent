@@ -543,6 +543,11 @@ class AgentState(TypedDict):
     max_unreliable_evals: int
     eval_history: Annotated[List[Dict[str, Any]], operator.add]
     thinking_overruns: Annotated[int, operator.add]
+    # Счётчик сбоев вызова модели. Раннер по нему отличает мёртвый сервер от
+    # честной сдачи: без этого поля две задачи подряд без ответа трактуются как
+    # «сервер отвалился», и остаток прогона пропускается. Ровно так 9 упавших
+    # задач превратились в 19 на прогоне 0810T211145Z.
+    api_errors: Annotated[int, operator.add]
     # Верификатор наблюдательный: его вердикт не меняет ответ, но стоит ~5%
     # бюджета и на верных решениях ошибается в 41% случаев. На замерах его
     # отключают (--no-verify-step), диагностику оставляют по умолчанию.
@@ -616,6 +621,11 @@ def _invoke_role(llm, messages, use_tools, *, max_hops=4, max_total_tool_calls=8
 
 def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     """Один вызов генератора с откатом при обрыве на размышлениях.
+
+    Возвращает ТРИ значения: (result, overran, api_errors). Третье нужно, чтобы
+    раннер отличал сбой сети от честной сдачи модели: без него два пустых ответа
+    подряд трактуются как «сервер умер» и остаток прогона пропускается.
+
     У thinking-моделей размышления идут в тот же num_predict, что и ответ. Если
     их не хватило, сервер возвращает finish_reason='length' и ПУСТОЙ content —
     шаг теряется целиком. Recovery тут не помогает: он меняет температуру, а
@@ -632,7 +642,7 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
 
     result, err = call(role.enable_thinking)
     if err:
-        return result, False
+        return result, False, 1
     last = result["messages"][-1]
     truncated_empty = (
         not _message_text(last)
@@ -641,11 +651,15 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
     if truncated_empty and role.enable_thinking:
         print(f"      [THINKING OVERRUN] Размышления съели весь лимит "
               f"({role.num_predict} токенов), ответ пуст. Повтор без размышлений.")
-        return call(False), True
+        # call() отдаёт кортеж (result, error) — его обязательно распаковать.
+        # Возврат `call(False), True` возвращал бы ((result, error), True), и
+        # вызывающий код падал на result["messages"] с TypeError.
+        retry, retry_err = call(False)
+        return retry, True, (1 if retry_err else 0)
     if truncated_empty:
         print(f"      [TRUNCATED] Ответ пуст, finish_reason=length при лимите "
               f"{role.num_predict}. Поднимите num_predict генератора в yaml.")
-    return result, False
+    return result, False, 0
 
 
 def generate_step(state: AgentState):
@@ -661,6 +675,7 @@ def generate_step(state: AgentState):
     candidates = []
     total_tokens = 0
     overruns = 0
+    api_errors = 0
     context = _build_context(state['problem'], state.get('steps', []))
     
     use_tools = state.get("use_tools", True)
@@ -670,8 +685,9 @@ def generate_step(state: AgentState):
     for i in range(k):
         attempt = state.get('step_recovery_attempts', 0)
         temp = min(base_temp + 0.15 * i + 0.1 * attempt, 1.1)
-        result, overran = _generate_one(role, context, temp, use_tools)
+        result, overran, call_errors = _generate_one(role, context, temp, use_tools)
         overruns += overran
+        api_errors += call_errors
 
         for m in result["messages"]:
             if isinstance(m, ToolMessage):
@@ -706,7 +722,7 @@ def generate_step(state: AgentState):
         print(f"      Step:\n{step_text}\n")
 
     return {"candidate_steps": candidates, "tokens_used": total_tokens,
-            "thinking_overruns": overruns}
+            "thinking_overruns": overruns, "api_errors": api_errors}
 
 
 def evaluate_steps(state: AgentState):
@@ -717,6 +733,7 @@ def evaluate_steps(state: AgentState):
     seen: Dict[str, Tuple[float, str]] = {}
     total_tokens = 0
     any_reliable = False
+    eval_api_errors = 0
     use_tools = state.get("use_tools", True)
     context = _build_context(state['problem'], state.get('steps', []))
 
@@ -777,6 +794,7 @@ def evaluate_steps(state: AgentState):
             # Сбой вызова — это не суждение о шаге. Помечаем вердикт
             # ненадёжным, иначе инфраструктурная ошибка молча отвергает шаг.
             reliable = False
+            eval_api_errors += 1
             rationale = f"Evaluator call failed, verdict unknown: {call_err[:200]}"
         any_reliable = any_reliable or reliable
         seen[key] = (score, rationale)
@@ -808,6 +826,7 @@ def evaluate_steps(state: AgentState):
     return {
         "candidate_scores": scores,
         "tokens_used": total_tokens,
+        "api_errors": eval_api_errors,
         "unreliable_eval_streak": unreliable_streak,
         "eval_history": [{
             "depth": len(state.get('steps', [])),
@@ -861,14 +880,26 @@ def give_up(state: AgentState):
     # гарантированно неверен. Ответ помечен как несданный (is_valid=False), так
     # что диагностика не врёт.
     salvaged = None
+    source = ""
     for step in reversed(state.get('steps', []) or []):
-        candidate = extract_answer(step or "")
-        if candidate:
-            salvaged = candidate
+        found = extract_answer(step or "")
+        if found:
+            salvaged, source = found, "принятых шагов"
             break
+    if not salvaged:
+        # Принятых шагов может не быть вовсе: если оценщик недоступен, ни один
+        # кандидат не проходит приём, и задача сдаётся с null — при том что
+        # ответ уже сгенерирован. Ровно так была потеряна задача 88 на прогоне
+        # 0810. Кандидат не проверен оценщиком, но null неверен гарантированно,
+        # а кандидат — только вероятно.
+        for step in reversed(state.get('candidate_steps', []) or []):
+            found = extract_answer(step or "")
+            if found:
+                salvaged, source = found, "непринятых кандидатов (оценщик не вынес вердикт)"
+                break
     if salvaged:
-        print(f"  -> Спасён ответ из принятых шагов: {salvaged!r} (вместо null).")
-        reason = f"{reason} Ответ взят из последнего принятого шага, содержащего \\boxed{{}}."
+        print(f"  -> Спасён ответ из {source}: {salvaged!r} (вместо null).")
+        reason = f"{reason} Ответ взят из {source}."
     return {
         "final_answer": salvaged,
         "is_valid": False,
