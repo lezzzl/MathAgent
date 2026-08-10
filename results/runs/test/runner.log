@@ -50,3 +50,55 @@ KeyError: 'getpwuid(): uid not found: 534217'
 >>> Останавливаю sglang...
 No managed SGLang server is running.
 === 2026-08-10T18:04:12.090807+00:00 status=failed exit_code=1 duration=8.3s
+=== 2026-08-10T18:17:05.288475+00:00 run_id=test branch=yeahrmek/test@e56706d58fe2 gpus=1 devices=1 isolation=bwrap
+=== command: ENGINE=sglang PORT=8137 SERVED_MODEL_NAME=qwen35-9b SELECT=[aime26] CONCURRENCY=16 GPU_MEMORY_UTILIZATION=0.90 scripts/run_benchmarks.sh
+>>> Стартую sglang: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 1, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 725543
+Log: /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/bench-server.log)
+sglang упал на старте. Хвост лога:
+  raw_cnt = _raw_device_count_nvml()
+/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:1061: UserWarning: Can't initialize NVML
+  raw_cnt = _raw_device_count_nvml()
+/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/kernels/ops/attention/fla/utils.py:223: UserWarning: Triton is not supported on current platform, roll back to CPU.
+  warnings.warn(
+/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/launch_server.py:56: UserWarning: 'python -m sglang.launch_server' is still supported, but 'sglang serve' is the recommended entrypoint.
+  Example: sglang serve --model-path <model> [options]
+  warnings.warn(
+[1;33m'--cuda-graph-max-bs' is deprecated and will be removed in a future release. Use '--cuda-graph-max-bs-decode' instead.[0m
+Traceback (most recent call last):
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/utils/common.py", line 913, in get_device
+    return current_platform.get_device(device_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/platforms/device_mixin.py", line 176, in get_device
+    raise NotImplementedError
+NotImplementedError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/launch_server.py", line 68, in <module>
+    server_args = prepare_server_args(sys.argv[1:])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/server_args.py", line 9380, in prepare_server_args
+    return ServerArgs.from_cli_args(raw_args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/server_args.py", line 8470, in from_cli_args
+    return cls(**{attr: getattr(args, attr) for attr in attrs})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 461, in __init__
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/server_args.py", line 3492, in __post_init__
+    self._handle_missing_default_values()
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/server_args.py", line 4066, in _handle_missing_default_values
+    self.device = get_device()
+                  ^^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/utils/common.py", line 915, in get_device
+    raise RuntimeError(
+RuntimeError: No accelerator (CUDA, XPU, HPU, NPU, MUSA, MPS) or platform plugin is available.
+>>> Останавливаю sglang...
+No managed SGLang server is running.
+=== 2026-08-10T18:17:20.240042+00:00 status=failed exit_code=1 duration=15.0s
