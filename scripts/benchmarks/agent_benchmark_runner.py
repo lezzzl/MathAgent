@@ -1186,7 +1186,19 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     run_console.configure_color(args.color)
     # Подробный вывод узлов глушим ЗДЕСЬ, после всех сообщений конфигурации:
     # предупреждения про контекст, зерно и промпты должны остаться видимыми.
-    run_console.install([solver_mod, sys.modules.get("tools")], quiet=not args.verbose)
+    # Глушить надо КАЖДЫЙ модуль, который печатает: подмена работает через
+    # globals модуля, и незаявленный модуль продолжает писать в терминал мимо
+    # тихого режима. У qwen4b цикл инструментов написан внутри самого солвера,
+    # поэтому хватало solver_mod; у 9B он вынесен в tool_generator_subgraph —
+    # без него в терминал шли ровно и только логи tool-вызовов.
+    run_console.install(
+        [
+            solver_mod,
+            sys.modules.get("tools"),
+            sys.modules.get("tool_generator_subgraph"),
+        ],
+        quiet=not args.verbose,
+    )
     if not args.verbose and trajectory_path is None:
         print("[config] ⚠️  Тихий вывод без --trajectory: сырые генерации и вердикты "
               "никуда не сохранятся. Для разбора прогона добавьте --trajectory "
