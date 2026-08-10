@@ -106,7 +106,7 @@
         "tasks_per_second": 0.027
       }
     },
-    "IMOAnswer": {
+    "IMOAnswerBench": {
       "dataset": "OpenEvals/IMO-AnswerBench",
       "split": "train",
       "total_tasks": 400,
