@@ -1,0 +1,52 @@
+=== 2026-08-10T18:04:03.826795+00:00 run_id=test branch=yeahrmek/test@91a02d036c05 gpus=1 devices=1 isolation=bwrap
+=== command: ENGINE=sglang PORT=8137 SERVED_MODEL_NAME=qwen35-9b SELECT=[aime26] CONCURRENCY=16 GPU_MEMORY_UTILIZATION=0.90 scripts/run_benchmarks.sh
+>>> Стартую sglang: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 1, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 710266
+Log: /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/bench-server.log)
+sglang упал на старте. Хвост лога:
+  File "<frozen runpy>", line 112, in _get_module_details
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/__init__.py", line 29, in <module>
+    from sglang.srt.utils.hf_transformers_patches import apply_all as _apply_hf_patches
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/utils/__init__.py", line 2, in <module>
+    from sglang.srt.utils.common import *
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/sglang/srt/utils/common.py", line 94, in <module>
+    from torchvision.io import decode_jpeg
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchvision/__init__.py", line 8, in <module>
+    from torchvision import _meta_registrations, datasets, io, models, ops, transforms, utils  # usort:skip
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchvision/models/__init__.py", line 2, in <module>
+    from .convnext import *
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchvision/models/convnext.py", line 9, in <module>
+    from ..ops.misc import Conv2dNormActivation, Permute
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchvision/ops/__init__.py", line 23, in <module>
+    from .poolers import MultiScaleRoIAlign
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchvision/ops/poolers.py", line 10, in <module>
+    from .roi_align import roi_align
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchvision/ops/roi_align.py", line 7, in <module>
+    from torch._dynamo.utils import is_compile_supported
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_dynamo/__init__.py", line 13, in <module>
+    from . import (
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_dynamo/aot_compile.py", line 17, in <module>
+    from torch._dynamo.package import SystemInfo
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_dynamo/package.py", line 1173, in <module>
+    DynamoCache = DiskDynamoCache(os.path.join(cache_dir(), "dynamo"))
+                                               ^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_dynamo/package.py", line 1170, in cache_dir
+    return cache_dir()
+           ^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_inductor/runtime/cache_dir_utils.py", line 17, in cache_dir
+    os.environ["TORCHINDUCTOR_CACHE_DIR"] = cache_dir = default_cache_dir()
+                                                        ^^^^^^^^^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/work/test/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_inductor/runtime/cache_dir_utils.py", line 23, in default_cache_dir
+    sanitized_username = re.sub(r'[\\/:*?"<>|]', "_", getpass.getuser())
+                                                      ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/getpass.py", line 169, in getuser
+    return pwd.getpwuid(os.getuid())[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'getpwuid(): uid not found: 534217'
+>>> Останавливаю sglang...
+No managed SGLang server is running.
+=== 2026-08-10T18:04:12.090807+00:00 status=failed exit_code=1 duration=8.3s
