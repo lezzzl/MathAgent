@@ -6,7 +6,6 @@
 #
 # Ветка — Ilya/agentic_loop: только на ней есть kedro-пайплайн benchmarks,
 # который поднимает run_benchmarks.sh (в main и yeahrmek/job_runner его нет).
-branch: yeahrmek/test
 command: >-
   ENGINE=sglang PORT=8137 SERVED_MODEL_NAME=qwen35-9b SELECT=[aime26]
   CONCURRENCY=16 GPU_MEMORY_UTILIZATION=0.90
