@@ -1,0 +1,15 @@
+# Имя файла — это run_id: результаты лягут в results/runs/aime26-yeahrmek/.
+#
+# Проверочный прогон: один бенчмарк на одной карте. Обвязку (движок, ожидание
+# готовности, остановку, публикацию) несут run_benchmarks.sh и диспетчер, поэтому
+# здесь только настройки: GPU, RUN_ID и PUSH_RESULTS задавать нельзя.
+#
+# Ветка — Ilya/agentic_loop: только на ней есть kedro-пайплайн benchmarks,
+# который поднимает run_benchmarks.sh (в main и yeahrmek/job_runner его нет).
+branch: yeahrmek/test
+command: >-
+  ENGINE=sglang PORT=8137 SERVED_MODEL_NAME=qwen35-9b SELECT=[aime26]
+  CONCURRENCY=16 GPU_MEMORY_UTILIZATION=0.90
+  scripts/run_benchmarks.sh
+gpus: 1
+timeout_minutes: 120
