@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "run_id": "nikita-qwen35-4b-step-v11",
+  "model": "Qwen/Qwen3.5-4B",
+  "pipeline": "qwen4b",
+  "prompt": "conf/base/prompts/agent-step-qwen4b-v11.yml",
+  "prompt_version": "agent-step-qwen4b-v11",
+  "role": "solver",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": null,
+    "top_k": null,
+    "min_p": null,
+    "presence_penalty": null,
+    "repetition_penalty": null,
+    "seed": null,
+    "max_tokens": 800000
+  },
+  "runtime": {
+    "concurrency": 32,
+    "timeout": 1200.0,
+    "max_retries": 1
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3"
+  },
+  "agent": {
+    "branch_mode": "single",
+    "k_branches": 3,
+    "score_threshold": 0.5,
+    "use_tools": true,
+    "token_budget": 800000,
+    "generator_num_predict": 40000,
+    "seed": 42,
+    "samples": 3,
+    "resample_token_threshold": 250000,
+    "finish_at": 0.85,
+    "max_recoveries": 15,
+    "max_step_attempts": 3,
+    "verifier_enabled": false,
+    "roles": null
+  },
+  "status": "partial",
+  "created_at": "2026-08-06T05:14:47.418966+00:00",
+  "updated_at": "2026-08-10T13:25:30.156085+00:00",
+  "benchmarks": {
+    "AIME25": {
+      "dataset": "Sunny8781/AIME2025_w_solution",
+      "split": "test",
+      "total_tasks": 30,
+      "output": "C:/Users/Nikita Yevdokimov/Practice/MathAgent/results/runs/nikita-qwen35-4b-step-v11/aime25.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-10T13:25:28.882990+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 27,
+        "failed_tasks": 3,
+        "remaining_tasks": 0,
+        "input_tokens": 5709155,
+        "output_tokens": 13305615,
+        "total_tokens": 19060581,
+        "wall_time_seconds": 173374.681,
+        "tasks_per_second": 0.0002
+      }
+    },
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "C:/Users/Nikita Yevdokimov/Practice/MathAgent/results/runs/nikita-qwen35-4b-step-v11/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-10T13:25:29.277456+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 30,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 3559999,
+        "output_tokens": 8831244,
+        "total_tokens": 12407566,
+        "wall_time_seconds": 109110.59,
+        "tasks_per_second": 0.0003
+      }
+    },
+    "HMMT_Feb2025": {
+      "dataset": "MathArena/hmmt_feb_2025",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "C:/Users/Nikita Yevdokimov/Practice/MathAgent/results/runs/nikita-qwen35-4b-step-v11/hmmt25.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-10T13:25:30.092785+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 28,
+        "failed_tasks": 2,
+        "remaining_tasks": 0,
+        "input_tokens": 7142264,
+        "output_tokens": 16065790,
+        "total_tokens": 23258342,
+        "wall_time_seconds": 214464.242,
+        "tasks_per_second": 0.0001
+      }
+    },
+    "IMOAnswerBench": {
+      "dataset": "OpenEvals/IMO-AnswerBench",
+      "split": "train",
+      "total_tasks": 400,
+      "output": "C:/Users/Nikita Yevdokimov/Practice/MathAgent/results/runs/nikita-qwen35-4b-step-v11/imo_answerbench.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-10T13:25:30.140217+00:00",
+      "summary": {
+        "total_tasks": 400,
+        "successful_tasks": 383,
+        "failed_tasks": 17,
+        "remaining_tasks": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 400874625,
+        "wall_time_seconds": 5664147.753,
+        "tasks_per_second": 0.0001
+      },
+      "_note": "экспорт из JSONL: траектория недоступна"
+    }
+  },
+  "summary": {
+    "total_tasks": 490,
+    "successful_tasks": 468,
+    "failed_tasks": 22,
+    "remaining_tasks": 0,
+    "input_tokens": 16411418,
+    "output_tokens": 38202649,
+    "total_tokens": 455601114,
+    "wall_time_seconds": 6161097.266,
+    "tasks_per_second": 0.0001
+  }
+}
