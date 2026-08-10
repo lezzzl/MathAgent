@@ -13,8 +13,10 @@ from langchain_openai import ChatOpenAI
 
 
 from tools import python_exec
+from symbolic_tools import SYMBOLIC_TOOLS
 
-TOOLS = [python_exec]
+# python_exec (их калькулятор-песочница) + наши символьные тулы MathAgent
+TOOLS = [python_exec, *SYMBOLIC_TOOLS]
 tool_node = ToolNode(TOOLS)
 
 
