@@ -4,7 +4,10 @@
 # Движок и пайплайн поднимает scripts/run_benchmarks.sh; после `--` команды нет
 # → он сам зовёт kedro-пайплайн benchmarks с дефолтами
 # (pipeline=react, react.tester=true, prompt=react-tools.yml).
-# SELECT сужаем до одного бенча, чтобы первый прогон был короче.
-command: SELECT=[aime26] scripts/run_benchmarks.sh
+#
+# MAX_MODEL_LEN=131072 — расширяем контекст (Qwen3.5-9B тянет нативно): при 73728
+# длинное reasoning + растущий ReAct-диалог упирались в потолок и обрывались.
+# MAX_NUM_SEQS=16 — снижаем, т.к. длинный контекст ест KV-кэш.
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 SELECT=[aime26] scripts/run_benchmarks.sh
 gpus: 1
 timeout_minutes: 120

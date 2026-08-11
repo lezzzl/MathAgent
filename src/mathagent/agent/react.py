@@ -21,16 +21,21 @@ from mathagent.agent.tools import TOOLS, Tool, render_tools_block
 # Огороженный блок ```<имя_инструмента>\n<тело>``` — тело уходит инструменту
 _FENCE = re.compile(r"```([A-Za-z_][A-Za-z0-9_]*)[ \t]*\n(.*?)```", re.S)
 
+# Модель по привычке пишет ```python вместо ```run_python — принимаем как алиас,
+# иначе код «утекает» в финальный ответ и не исполняется.
+_FENCE_ALIASES = {"python": "run_python", "py": "run_python"}
+
 TOOL_PROTOCOL = """\
 У тебя есть инструменты (перечислены ниже как JSON). Чтобы вызвать инструмент,
 ответь ОДНИМ огороженным блоком, где после ``` стоит имя инструмента, а внутри —
 его аргумент:
 
-```run_python
+```python
 # твой код: проверь утверждение на примерах
 print(...)
 ```
 
+Для исполнения кода подойдёт и ```python, и ```run_python (это один инструмент).
 После вызова ты получишь строку `Observation (<tool>): ...` с выводом инструмента —
 используй её и продолжай. Не выдумывай Observation сам.
 
@@ -57,7 +62,7 @@ def parse_tool_call(text: str, tools: dict[str, Tool]) -> tuple[str, str] | None
     """Вернуть (имя_инструмента, тело) для ПОСЛЕДНЕГО валидного блока или None."""
     found: tuple[str, str] | None = None
     for match in _FENCE.finditer(text or ""):
-        name = match.group(1)
+        name = _FENCE_ALIASES.get(match.group(1), match.group(1))
         if name in tools:
             found = (name, match.group(2))
     return found
