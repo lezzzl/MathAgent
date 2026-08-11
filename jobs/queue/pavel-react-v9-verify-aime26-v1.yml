@@ -17,7 +17,7 @@ command: >-
   --max-tool-calls 20
   --max-tool-repairs 5
   --max-verification-rounds 2
-  --execution-timeout 10
+  --execution-timeout 20
   --timeout 7200
   --reasoning-parser qwen3
   --vllm-max-num-seqs 45
