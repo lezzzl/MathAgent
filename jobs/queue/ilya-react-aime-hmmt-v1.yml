@@ -1,0 +1,18 @@
+# Прогон react-агента (react + tester + наши тулы) на aime26 + hmmt26 — 60 задач.
+# Имя файла = run_id → результаты лягут в results/runs/ilya-react-aime-hmmt-v1/
+# (aime26.jsonl + hmmt26.jsonl). ~68 wall-с/задача × 60 ≈ 73 мин + старт → в 120 мин влезает.
+#
+# Движок и пайплайн поднимает scripts/run_benchmarks.sh; после `--` команды нет
+# → он сам зовёт kedro-пайплайн benchmarks с дефолтами
+# (pipeline=react, react.tester=true, react.max_steps=8, prompt=react-tools.yml).
+#
+# Правки относительно v2 (aime26=90%):
+#   • react.max_steps 6→8 + узел finalize: при исчерпании шагов агент теперь
+#     принудительно выдаёт \boxed, а не обрывается пустышкой (чинит id=21);
+#   • промпт: обязательная само-проверка финального числа через run_python
+#     (в v2 12/30 задач шли без тула — id=12/15 из-за этого упали).
+#
+# MAX_MODEL_LEN=131072 → max_tokens=90112 (скрипт считает сам). MAX_NUM_SEQS=16.
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 SELECT=[aime26;hmmt26] scripts/run_benchmarks.sh
+gpus: 1
+timeout_minutes: 120

@@ -78,7 +78,7 @@ benchmarks:
   pipeline: react                   # react (агент с тулами) | solver (голый reasoning)
   # параметры ReAct-агента (только при pipeline=react)
   react:
-    max_steps: 6                    # лимит вызовов инструментов на задачу
+    max_steps: 8                    # лимит вызовов инструментов на задачу (при исчерпании — принудительный финал в \boxed)
     tester: true                    # солверу дан инструмент test_claim (вложенный тестировщик)
   run_id: null                      # null → сгенерируется; задать тот же для resume
   resume: false                     # продолжить прерванный run (нужен явный run_id)

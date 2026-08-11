@@ -85,11 +85,24 @@ def build_react_loop(
         return {"messages": [response]}
 
     def route(state: ReactState) -> str:
-        """Решить: исполнять инструмент или завершать."""
-        if state.get("steps", 0) >= max_steps:
-            return "end"
+        """Решить: исполнять инструмент, дожать финал или завершать."""
         last = state["messages"][-1]
-        return "tools" if parse_tool_call(last.content, tools) else "end"
+        wants_tool = parse_tool_call(last.content, tools) is not None
+        if state.get("steps", 0) >= max_steps:
+            # Шаги кончились. Если модель всё ещё зовёт инструмент (значит финала в
+            # \boxed нет) — принудительно дожимаем ответ, а не обрываем пустышкой.
+            return "finalize" if wants_tool else "end"
+        return "tools" if wants_tool else "end"
+
+    def finalize(state: ReactState) -> dict[str, Any]:
+        """Последний шаг: заставить модель выдать \\boxed без вызова инструмента."""
+        force = (
+            "Лимит вызовов инструментов исчерпан. Больше инструменты недоступны. "
+            "Сейчас же дай ОКОНЧАТЕЛЬНЫЙ ответ, оформи его в \\boxed{...}. "
+            "Если полностью не уверен — дай лучшую текущую оценку, но \\boxed обязателен."
+        )
+        response = model.invoke(state["messages"] + [("human", force)])
+        return {"messages": [response]}
 
     def tool_node(state: ReactState) -> dict[str, Any]:
         """Исполнить запрошенный инструмент и вернуть Observation в историю."""
@@ -106,9 +119,13 @@ def build_react_loop(
     graph = StateGraph(ReactState)
     graph.add_node("agent", agent)
     graph.add_node("tools", tool_node)
+    graph.add_node("finalize", finalize)
     graph.add_edge(START, "agent")
-    graph.add_conditional_edges("agent", route, {"tools": "tools", "end": END})
+    graph.add_conditional_edges(
+        "agent", route, {"tools": "tools", "finalize": "finalize", "end": END}
+    )
     graph.add_edge("tools", "agent")  # вот здесь луп замыкается
+    graph.add_edge("finalize", END)  # дожатый финал — сразу в конец, без новых тулов
     return graph.compile()
 
 
