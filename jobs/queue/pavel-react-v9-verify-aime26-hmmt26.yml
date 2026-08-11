@@ -6,7 +6,8 @@ command: >-
   MAX_NUM_BATCHED_TOKENS=8192
   GPU_MEMORY_UTILIZATION=0.39
   scripts/run_benchmarks.sh --
-  python3 scripts/benchmarks/pavel/run_aime26.py
+  python3 scripts/benchmarks/pavel/run_all_benchmarks.py
+  --benchmarks aime26 hmmt26
   --pipeline react_agent
   --prompt conf/base/prompts/pavel/react-agent-v9.yml
   --model Qwen/Qwen3.5-9B
@@ -16,7 +17,6 @@ command: >-
   --concurrency 30
   --max-tool-calls 20
   --max-tool-repairs 5
-  --limit 1
   --max-verification-rounds 2
   --execution-timeout 20
   --timeout 7200

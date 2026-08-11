@@ -482,27 +482,29 @@ def create_react_agent_graph(
         stepwise_node_name = str(verification_config["stepwise_role"])
         finalize_node_name = str(verification_config["finalize_role"])
         generation[stepwise_node_name] = {
-            "thinking": model_config.thinking,
-            "max_tokens": 10000,
+            "thinking": False,
+            "max_tokens": 20000,
             "temperature": 0.1,
         }
         generation[finalize_node_name] = {
-            "thinking": model_config.thinking,
-            "max_tokens": 2048,
+            "thinking": False,
+            "max_tokens": 4096,
             "temperature": 0.1,
         }
         verifier_stepwise_model = create_model(
             replace(
                 model_config,
+                thinking=False,
                 temperature=0.1,
-                max_tokens=10000,
+                max_tokens=20000,
             )
         )
         verifier_finalize_model = create_model(
             replace(
                 model_config,
+                thinking=False,
                 temperature=0.1,
-                max_tokens=2048,
+                max_tokens=4096,
             )
         )
     review_tool = None
