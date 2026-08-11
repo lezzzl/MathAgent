@@ -85,6 +85,11 @@ CONCURRENCY="${CONCURRENCY:-32}"
 # --- параметры сервинга ----------------------------------------------------
 # Префиксный кэш включён: react-луп переотправляет растущий диалог.
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-73728}"
+# MAX_TOKENS — лимит ВЫХОДА одного вызова (benchmarks.generation.max_tokens).
+# Отдельно от MAX_MODEL_LEN: длинное reasoning упирается именно в него. При
+# большом MAX_MODEL_LEN можно поднять (напр. 90112), чтобы трудные задачи
+# дорешивались. Дефолт совпадает с parameters.yml, поэтому старые джобы не меняются.
+MAX_TOKENS="${MAX_TOKENS:-57344}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONCURRENCY * 3 / 2 ))}"
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
 KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8_e4m3}"
@@ -262,7 +267,7 @@ fi
 if [[ ${#BENCH_CMD[@]} -eq 0 ]]; then
   BENCH_CMD=(
     "${ROOT}/.venv/bin/kedro" run --pipeline benchmarks --params
-    "benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name=${SERVED_MODEL_NAME},benchmarks.model.base_url=${BASE_URL},benchmarks.select=${SELECT},benchmarks.runtime.concurrency=${CONCURRENCY},benchmarks.serving.vllm_max_num_seqs=${MAX_NUM_SEQS},benchmarks.serving.vllm_max_model_len=${MAX_MODEL_LEN},benchmarks.run_id=${RUN_ID}"
+    "benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name=${SERVED_MODEL_NAME},benchmarks.model.base_url=${BASE_URL},benchmarks.select=${SELECT},benchmarks.generation.max_tokens=${MAX_TOKENS},benchmarks.runtime.concurrency=${CONCURRENCY},benchmarks.serving.vllm_max_num_seqs=${MAX_NUM_SEQS},benchmarks.serving.vllm_max_model_len=${MAX_MODEL_LEN},benchmarks.run_id=${RUN_ID}"
   )
 fi
 
