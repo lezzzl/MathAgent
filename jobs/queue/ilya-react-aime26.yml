@@ -7,9 +7,9 @@
 #
 # MAX_MODEL_LEN=131072 — расширяем контекст (Qwen3.5-9B тянет нативно): при 73728
 # длинное reasoning + растущий ReAct-диалог упирались в потолок и обрывались.
+# Из MAX_MODEL_LEN скрипт сам считает лимит выхода (max_tokens = 131072-40960 =
+# 90112), чтобы трудные задачи дорешивались, а выход не переполнял контекст.
 # MAX_NUM_SEQS=16 — снижаем, т.к. длинный контекст ест KV-кэш.
-# MAX_TOKENS=90112 — лимит выхода одного вызова; поднят, чтобы длинное reasoning
-# на трудных задачах дорешивалось (в окне 131072 влезает вместе с входом).
-command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 MAX_TOKENS=90112 SELECT=[aime26] scripts/run_benchmarks.sh
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 SELECT=[aime26] scripts/run_benchmarks.sh
 gpus: 1
-timeout_minutes: 120
+timeout_minutes: 180
