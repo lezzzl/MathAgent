@@ -13,6 +13,5 @@ command: >-
   --concurrency 1
   --timeout 7200
   --limit 1
-  --run-id pavel-sglang-smoke-aime24-v1
 gpus: 1
 timeout_minutes: 60

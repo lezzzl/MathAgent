@@ -139,7 +139,11 @@ def parse_benchmark_args(
     if include_output:
         parser.add_argument("--output", type=Path)
 
-    parser.add_argument("--run-id") # задаёт явный идентификатор запуска, чтобы можно было продолжить прерванный запуск с тем же run_id
+    # Dispatcher передаёт имя job-файла через окружение
+    parser.add_argument(
+        "--run-id",
+        default=os.getenv("MATHAGENT_RUN_ID") or os.getenv("RUN_ID"),
+    )
     parser.add_argument("--resume", action="store_true") # добавляет возможность продолжить прерванный запуск с тем же run_id
     return parser.parse_args()
 
