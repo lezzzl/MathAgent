@@ -14,6 +14,7 @@ from mathagent.pavel.nodes import (
     create_solver_node,
     load_prompt_tools,
     load_prompt_role,
+    load_verification_config,
     prompt_has_role,
 )
 from mathagent.pavel.nodes_code import (
@@ -35,7 +36,14 @@ from mathagent.pavel.nodes_react import (
     route_after_react_precheck,
     route_after_react_repair,
 )
-from mathagent.tools.final_answer import create_final_answer_tool
+from mathagent.pavel.nodes_verifier import (
+    create_react_verifier_node,
+    route_after_react_verification,
+)
+from mathagent.tools.final_answer import (
+    create_final_answer_tool,
+    create_final_solution_tool,
+)
 from mathagent.tools.cot import create_cot_tool
 from mathagent.tools.python_tools import (
     create_notebook_python_tool,
@@ -67,7 +75,7 @@ class ModelConfig:
     max_retries: int = 1
 
 
-NodeGeneration = dict[str, dict[str, bool | int]]
+NodeGeneration = dict[str, dict[str, bool | int | float]]
 
 
 class SolverState(TypedDict):
@@ -124,6 +132,11 @@ class ReactAgentState(TypedDict):
     precheck_history: NotRequired[list[dict[str, Any]]]
     precheck_rejection_count: NotRequired[int]
     force_final_reason: NotRequired[str]
+    proposed_answer: NotRequired[str]
+    proposed_solution: NotRequired[str]
+    proposed_tool_call_id: NotRequired[str]
+    solution_attempts: NotRequired[list[dict[str, Any]]]
+    verification_round: NotRequired[int]
     format_retry_count: NotRequired[int]
     had_format_recovery: NotRequired[bool]
     finish_reason: NotRequired[str]
@@ -363,6 +376,7 @@ def create_react_agent_graph(
     max_tool_calls: int = 8,
     max_tool_repairs: int = 5,
     max_precheck_rejections: int = 3,
+    max_verification_rounds: int = 2,
     execution_timeout: float = 10.0,
     node_generation: NodeGeneration | None = None,
 ) -> Any:
@@ -373,6 +387,8 @@ def create_react_agent_graph(
         raise ValueError("max_tool_repairs must be non-negative")
     if max_precheck_rejections < 1:
         raise ValueError("max_precheck_rejections must be positive")
+    if max_verification_rounds < 1:
+        raise ValueError("max_verification_rounds must be positive")
     if execution_timeout <= 0:
         raise ValueError("execution_timeout must be positive")
 
@@ -386,6 +402,8 @@ def create_react_agent_graph(
     cot_enabled = prompt_has_role(prompt_path, "cot")
     precheck_enabled = prompt_has_role(prompt_path, "tool_checker")
     planner_enabled = prompt_has_role(prompt_path, "planner")
+    verification_config = load_verification_config(prompt_path)
+    verification_enabled = verification_config is not None
     structured_repair_configured = cot_enabled and prompt_has_role(
         prompt_path,
         "repair",
@@ -451,7 +469,42 @@ def create_react_agent_graph(
         execution_tools = [python_tool]
         repair_tool = create_repair_tool(execution_timeout)
         executable_tools = [python_tool, repair_tool]
-    final_answer_tool = create_final_answer_tool()
+    terminal_tool = (
+        create_final_solution_tool()
+        if verification_enabled
+        else create_final_answer_tool()
+    )
+    verifier_stepwise_model = None
+    verifier_finalize_model = None
+    if verification_enabled:
+        if verification_config is None:
+            raise ValueError("Verification config is missing")
+        stepwise_node_name = str(verification_config["stepwise_role"])
+        finalize_node_name = str(verification_config["finalize_role"])
+        generation[stepwise_node_name] = {
+            "thinking": model_config.thinking,
+            "max_tokens": 10000,
+            "temperature": 0.1,
+        }
+        generation[finalize_node_name] = {
+            "thinking": model_config.thinking,
+            "max_tokens": 2048,
+            "temperature": 0.1,
+        }
+        verifier_stepwise_model = create_model(
+            replace(
+                model_config,
+                temperature=0.1,
+                max_tokens=10000,
+            )
+        )
+        verifier_finalize_model = create_model(
+            replace(
+                model_config,
+                temperature=0.1,
+                max_tokens=2048,
+            )
+        )
     review_tool = None
     precheck_model = None
     if precheck_enabled:
@@ -469,7 +522,7 @@ def create_react_agent_graph(
         create_react_agent_node(
             agent_model,
             execution_tools,
-            final_answer_tool,
+            terminal_tool,
             prompt_path,
             max_tool_calls,
             repair_tool=repair_tool,
@@ -477,6 +530,7 @@ def create_react_agent_graph(
             precheck_enabled=precheck_enabled,
             planner_enabled=planner_enabled,
             structured_repair_enabled=structured_repair_enabled,
+            verification_enabled=verification_enabled,
         ),
     )
     if planner_model is not None:
@@ -523,20 +577,47 @@ def create_react_agent_graph(
                 max_tool_repairs,
             ),
         )
+    if verifier_stepwise_model is not None and verifier_finalize_model is not None:
+        if verification_config is None:
+            raise ValueError("Verification config is missing")
+        graph.add_node(
+            "verifier",
+            create_react_verifier_node(
+                verifier_stepwise_model,
+                verifier_finalize_model,
+                prompt_path,
+                Path(verification_config["prompt_path"]),
+                str(verification_config["stepwise_role"]),
+                str(verification_config["finalize_role"]),
+                max_verification_rounds,
+            ),
+        )
     if planner_enabled:
         graph.add_edge(START, "planner")
         graph.add_edge("planner", "agent")
     else:
         graph.add_edge(START, "agent")
+    agent_routes = {
+        "tools": "precheck" if precheck_enabled else "tools",
+        "agent": "agent",
+        "finished": END,
+    }
+    if verification_enabled:
+        agent_routes["verify"] = "verifier"
     graph.add_conditional_edges(
         "agent",
         route_after_react_agent,
-        {
-            "tools": "precheck" if precheck_enabled else "tools",
-            "agent": "agent",
-            "finished": END,
-        },
+        agent_routes,
     )
+    if verification_enabled:
+        graph.add_conditional_edges(
+            "verifier",
+            route_after_react_verification,
+            {
+                "agent": "agent",
+                "finished": END,
+            },
+        )
     if precheck_enabled:
         graph.add_conditional_edges(
             "precheck",
@@ -572,6 +653,7 @@ def create_react_agent_graph(
         + 2 * max_tool_calls * max_tool_repairs
         + 2 * max_precheck_rejections
         + (1 if planner_enabled else 0)
+        + 2 * max_verification_rounds
         + 6
     )
     compiled_graph = graph.compile().with_config({"recursion_limit": recursion_limit})
