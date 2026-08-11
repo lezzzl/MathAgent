@@ -1,0 +1,10 @@
+# Прогон react-агента (react + tester + наши тулы) на AIME26.
+# Имя файла = run_id → результаты лягут в results/runs/ilya-react-aime26/.
+#
+# Движок и пайплайн поднимает scripts/run_benchmarks.sh; после `--` команды нет
+# → он сам зовёт kedro-пайплайн benchmarks с дефолтами
+# (pipeline=react, react.tester=true, prompt=react-tools.yml).
+# SELECT сужаем до одного бенча, чтобы первый прогон был короче.
+command: SELECT=[aime26] scripts/run_benchmarks.sh
+gpus: 1
+timeout_minutes: 180
