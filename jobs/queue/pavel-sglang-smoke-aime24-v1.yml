@@ -1,7 +1,6 @@
 command: >-
   ENGINE=sglang PORT=8333
   SERVED_MODEL_NAME=Qwen/Qwen3.5-9B
-  RUN_ID=pavel-sglang-smoke-aime24-v1
   MAX_NUM_SEQS=8
   GPU_MEMORY_UTILIZATION=0.92
   scripts/run_benchmarks.sh --
