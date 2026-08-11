@@ -4,7 +4,7 @@ command: >-
   MAX_NUM_SEQS=8
   GPU_MEMORY_UTILIZATION=0.92
   scripts/run_benchmarks.sh --
-  .venv/bin/python scripts/benchmarks/pavel/run_aime24.py
+  python3 scripts/benchmarks/pavel/run_aime24.py
   --pipeline solver
   --model Qwen/Qwen3.5-9B
   --base-url http://127.0.0.1:8333/v1
