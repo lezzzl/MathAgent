@@ -12,4 +12,4 @@
 # MAX_NUM_SEQS=16 — снижаем, т.к. длинный контекст ест KV-кэш.
 command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 SELECT=[aime26] scripts/run_benchmarks.sh
 gpus: 1
-timeout_minutes: 180
+timeout_minutes: 120
