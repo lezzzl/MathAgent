@@ -382,6 +382,13 @@ def create_react_verifier_node(
             "failed_steps": failed_steps,
             "is_truncated": result["is_truncated"],
         }
+        if not result["is_correct_solution"]:
+            feedback_payload.update(
+                {
+                    "rejected_answer": answer.strip(),
+                    "rejected_solution": solution.strip(),
+                }
+            )
         base_update: dict[str, Any] = {
             "messages": [
                 ToolMessage(

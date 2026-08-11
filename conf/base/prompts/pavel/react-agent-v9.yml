@@ -124,11 +124,14 @@ roles:
       case coverage, and validation for an independent verifier to check every
       important transition
 
-      If `final_solution` returns FALSE, use the verifier feedback and ERROR steps
-      to reconsider the argument. You may call CoT, Python, or SymPy again while
-      budget remains, or submit a substantially revised complete solution. Do not
-      blindly change the boxed answer without correcting the mathematical reason
-      for the rejection
+      If `final_solution` returns FALSE, treat `rejected_solution` as the draft
+      that must be revised. Preserve its correct parts and correct the transitions
+      identified by `failed_steps`, `feedback_for_solver`, and `analysis_thoughts`.
+      Use `rejected_answer` to keep the claimed result aligned with the revised
+      derivation. You may call CoT, Python, or SymPy again while budget remains.
+      Do not blindly change only the boxed answer, and do not discard the whole
+      draft unless the verifier shows that its underlying approach is invalid.
+      Submit the complete corrected write-up through `final_solution` again
 
       Use exactly one tool call in every response. Never return the final answer as
       ordinary assistant text and never invent a tool result
