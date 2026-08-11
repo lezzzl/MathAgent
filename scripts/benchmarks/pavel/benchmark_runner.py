@@ -84,6 +84,7 @@ def parse_benchmark_args(
     description: str,
     *,
     include_output: bool = True,
+    benchmark_choices: tuple[str, ...] | None = None,
 ) -> argparse.Namespace:
     """Создаёт общий CLI всех benchmark-скриптов и возвращает выбранные параметры.
 
@@ -140,6 +141,13 @@ def parse_benchmark_args(
     parser.add_argument("--vllm-max-num-seqs", type=int, default=8)
     parser.add_argument("--vllm-max-model-len", type=int, default=73728)
 
+    if benchmark_choices is not None:
+        parser.add_argument(
+            "--benchmarks",
+            nargs="+",
+            choices=benchmark_choices,
+            default=list(benchmark_choices),
+        )
 
     if include_output:
         parser.add_argument("--output", type=Path)

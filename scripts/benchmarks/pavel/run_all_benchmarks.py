@@ -26,6 +26,9 @@ BENCHMARK_SCRIPTS = (
     ROOT / "scripts/benchmarks/pavel/run_imo_answerbench.py",
     # ROOT / "scripts/benchmarks/pavel/run_math500.py",
 )
+BENCHMARKS_BY_NAME = {
+    script.stem.removeprefix("run_"): script for script in BENCHMARK_SCRIPTS
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     return parse_benchmark_args(
         __doc__ or "",
         include_output=False,
+        benchmark_choices=tuple(BENCHMARKS_BY_NAME),
     )
 
 
@@ -119,16 +123,17 @@ def main() -> int:
     args.run_id = (
         validate_run_id(args.run_id) if args.run_id else generate_run_id(args.model)
     )
+    selected_scripts = tuple(BENCHMARKS_BY_NAME[name] for name in args.benchmarks)
     logger = configure_run_logger(args.run_id)
     logger.info(
         "run_all_started run_id=%s model=%s benchmarks=%s",
         args.run_id,
         args.model,
-        ",".join(script.stem for script in BENCHMARK_SCRIPTS),
+        ",".join(script.stem for script in selected_scripts),
     )
     failed: list[str] = []
     interrupted = False
-    for script in BENCHMARK_SCRIPTS:
+    for script in selected_scripts:
         logger.info("benchmark_process_started script=%s", script.stem)
         result = subprocess.run(build_command(script, args), cwd=ROOT, check=False)
         if result.returncode:
