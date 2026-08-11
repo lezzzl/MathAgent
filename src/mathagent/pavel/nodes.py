@@ -60,7 +60,7 @@ def create_solver_node(
     return solve
 
 
-def load_prompt_role(prompt_path: Path, role_name: str) -> tuple[str, dict[str, str]]:
+def load_prompt_role(prompt_path: Path, role_name: str) -> tuple[str, dict[str, Any]]:
     """Загружает нужную роль из YAML-конфига промпта."""
     with prompt_path.open(encoding="utf-8") as stream:
         prompt_config = yaml.safe_load(stream)
@@ -72,6 +72,43 @@ def load_prompt_role(prompt_path: Path, role_name: str) -> tuple[str, dict[str, 
             f"Invalid prompt config or role '{role_name}': {prompt_path}"
         ) from exc
     return prompt_version, role
+
+
+def prompt_has_role(prompt_path: Path, role_name: str) -> bool:
+    """Проверяет наличие роли в корректном YAML-конфиге промпта."""
+    with prompt_path.open(encoding="utf-8") as stream:
+        prompt_config = yaml.safe_load(stream)
+    try:
+        roles = prompt_config["roles"]
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"Invalid prompt config: {prompt_path}") from exc
+    if not isinstance(roles, dict):
+        raise ValueError(f"Invalid prompt roles: {prompt_path}")
+    return role_name in roles
+
+
+def load_prompt_tools(prompt_path: Path) -> dict[str, dict[str, Any]]:
+    """Загружает необязательные versioned-описания tools из prompt-конфига."""
+    with prompt_path.open(encoding="utf-8") as stream:
+        prompt_config = yaml.safe_load(stream)
+    if not isinstance(prompt_config, dict):
+        raise ValueError(f"Invalid prompt config: {prompt_path}")
+
+    tools = prompt_config.get("tools", {})
+    if not isinstance(tools, dict):
+        raise ValueError(f"Invalid prompt tools: {prompt_path}")
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for tool_name, tool_config in tools.items():
+        if not isinstance(tool_name, str) or not isinstance(tool_config, dict):
+            raise ValueError(f"Invalid prompt tool config: {prompt_path}")
+        description = tool_config.get("description")
+        if not isinstance(description, str) or not description.strip():
+            raise ValueError(
+                f"Prompt tool '{tool_name}' has no description: {prompt_path}"
+            )
+        normalized[tool_name] = {**tool_config, "description": description.strip()}
+    return normalized
 
 
 def add_usage(

@@ -7,11 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from scripts.benchmarks.benchmark_runner import parse_benchmark_args
-from scripts.benchmarks.run_artifacts import (
+from scripts.benchmarks.pavel.benchmark_runner import parse_benchmark_args
+from scripts.benchmarks.pavel.run_artifacts import (
     configure_run_logger,
     finalize_run_manifest,
     generate_run_id,
@@ -20,11 +20,11 @@ from scripts.benchmarks.run_artifacts import (
 )
 
 BENCHMARK_SCRIPTS = (
-    # ROOT / "scripts/benchmarks/run_aime25.py",
-    ROOT / "scripts/benchmarks/run_aime26.py",
-    ROOT / "scripts/benchmarks/run_hmmt26.py",
-    ROOT / "scripts/benchmarks/run_imo_answerbench.py",
-    # ROOT / "scripts/benchmarks/run_math500.py",
+    # ROOT / "scripts/benchmarks/pavel/run_aime25.py",
+    ROOT / "scripts/benchmarks/pavel/run_aime26.py",
+    ROOT / "scripts/benchmarks/pavel/run_hmmt26.py",
+    ROOT / "scripts/benchmarks/pavel/run_imo_answerbench.py",
+    # ROOT / "scripts/benchmarks/pavel/run_math500.py",
 )
 
 
@@ -85,6 +85,16 @@ def build_command(script: Path, args: argparse.Namespace) -> list[str]:
         str(args.vllm_max_model_len),
         "--pipeline",
         args.pipeline,
+        "--max-repairs",
+        str(args.max_repairs),
+        "--max-tool-calls",
+        str(args.max_tool_calls),
+        "--max-tool-repairs",
+        str(args.max_tool_repairs),
+        "--max-precheck-rejections",
+        str(args.max_precheck_rejections),
+        "--execution-timeout",
+        str(args.execution_timeout),
     ]
     command.append("--thinking" if args.thinking else "--no-thinking")
     if args.prompt is not None:

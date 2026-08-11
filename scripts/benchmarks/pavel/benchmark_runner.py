@@ -12,15 +12,21 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(ROOT / ".env")
 sys.path.insert(0, str(ROOT / "src"))
 
-from mathagent.agent.graph import (
+from mathagent.pavel.graph import (
     ModelConfig,
+    NodeGeneration,
+    create_code_agent_graph,
+    create_react_agent_graph,
     create_solver_graph,
 )
-from scripts.benchmarks.run_artifacts import (
+from mathagent.pavel.nodes import load_prompt_tools, prompt_has_role
+from scripts.benchmarks.pavel.run_artifacts import (
     append_jsonl_record,
     configure_run_logger,
     ensure_manifest,
@@ -34,7 +40,9 @@ from scripts.benchmarks.run_artifacts import (
     validate_run_id,
 )
 
-DEFAULT_SOLVER_PROMPT = ROOT / "conf/base/prompts/solver-v0.yml"
+DEFAULT_SOLVER_PROMPT = ROOT / "conf/base/prompts/pavel/solver-v0.yml"
+DEFAULT_CODE_AGENT_PROMPT = ROOT / "conf/base/prompts/pavel/code-agent-v1.yml"
+DEFAULT_REACT_AGENT_PROMPT = ROOT / "conf/base/prompts/pavel/react-agent-v0.yml"
 DEFAULT_MODEL = "Qwen/Qwen3.5-4B"
 
 
@@ -58,6 +66,14 @@ class TaskOutcome:
 
     record: dict[str, Any]
     error_category: str | None
+
+
+@dataclass(frozen=True)
+class GraphBuild:
+    """Хранит скомпилированный граф и параметры его активных LLM-нод"""
+
+    graph: Any
+    node_generation: NodeGeneration
 
 
 def parse_benchmark_args(
@@ -98,8 +114,17 @@ def parse_benchmark_args(
     parser.add_argument("--timeout", type=float, default=1800.0)
     parser.add_argument("--max-retries", type=int, default=1)
 
-    parser.add_argument("--pipeline", choices=("solver",), default="solver")
+    parser.add_argument(
+        "--pipeline",
+        choices=("solver", "code_agent", "react_agent"),
+        default="solver",
+    )
     parser.add_argument("--prompt", type=Path)
+    parser.add_argument("--max-repairs", type=int, default=2)
+    parser.add_argument("--max-tool-calls", type=int, default=8)
+    parser.add_argument("--max-tool-repairs", type=int, default=5)
+    parser.add_argument("--max-precheck-rejections", type=int, default=3)
+    parser.add_argument("--execution-timeout", type=float, default=10.0)
     parser.add_argument("--limit", type=int) # ограничивает число задач из датасета, чтобы быстро проверить работу runner
 
     parser.add_argument("--concurrency", type=int, default=8) # количество параллельных запросов к модели
@@ -182,6 +207,16 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-consecutive-api-errors must be positive")
     if args.max_retries < 0:
         raise ValueError("--max-retries must be non-negative")
+    if args.max_repairs < 0:
+        raise ValueError("--max-repairs must be non-negative")
+    if args.max_tool_calls < 1:
+        raise ValueError("--max-tool-calls must be positive")
+    if args.max_tool_repairs < 0:
+        raise ValueError("--max-tool-repairs must be non-negative")
+    if args.max_precheck_rejections < 1:
+        raise ValueError("--max-precheck-rejections must be positive")
+    if args.execution_timeout <= 0:
+        raise ValueError("--execution-timeout must be positive")
     if args.vllm_max_num_seqs < 1:
         raise ValueError("--vllm-max-num-seqs must be positive")
     if args.vllm_max_model_len < 1:
@@ -195,12 +230,27 @@ def create_manifest_config(
     args: argparse.Namespace,
     prompt_path: Path,
     prompt_version: str,
+    node_generation: NodeGeneration,
 ) -> dict[str, Any]:
     """Формирует конфигурацию эксперимента, которая будет сохранена в manifest.
 
     В неё входят параметры, влияющие на результат и производительность, но не
     попадают API-ключ и URL сервера, которые не нужны для сравнения запусков.
     """
+    prompt_tools = load_prompt_tools(prompt_path) if prompt_path.exists() else {}
+    execution_tools = [
+        tool_name
+        for tool_name in prompt_tools
+        if tool_name in {"python", "sympy"}
+    ]
+    structured_repair_configured = (
+        args.pipeline == "react_agent"
+        and prompt_path.exists()
+        and prompt_has_role(prompt_path, "repair")
+    )
+    repair_candidate_validation_configured = (
+        structured_repair_configured and prompt_version == "react-agent-v8"
+    )
     return {
         "run_id": run_id,
         "model": args.model,
@@ -218,6 +268,7 @@ def create_manifest_config(
             "seed": args.seed,
             "max_tokens": args.max_tokens,
         },
+        "node_generation": node_generation,
         "runtime": {
             "concurrency": args.concurrency,
             "timeout": args.timeout,
@@ -230,14 +281,77 @@ def create_manifest_config(
             "max_num_seqs": args.vllm_max_num_seqs,
             "max_model_len": args.vllm_max_model_len,
         },
+        **(
+            {
+                "pipeline_config": {
+                    **(
+                        {
+                            "max_tool_calls": args.max_tool_calls,
+                            **(
+                                {
+                                    "max_tool_repairs": args.max_tool_repairs,
+                                    "execution_diagnostics": "structured-v1",
+                                    "repair_mode": (
+                                        "separate-node-v2"
+                                        if repair_candidate_validation_configured
+                                        else "separate-node-v1"
+                                    ),
+                                    **(
+                                        {
+                                            "repair_candidate_validation": (
+                                                "compile-deduplicate-v1"
+                                            )
+                                        }
+                                        if repair_candidate_validation_configured
+                                        else {}
+                                    ),
+                                }
+                                if structured_repair_configured
+                                else {}
+                            ),
+                            **(
+                                {
+                                    "python_mode": "notebook",
+                                    "cot_parser": "tolerant-v1",
+                                }
+                                if "cot" in node_generation
+                                else {}
+                            ),
+                            **(
+                                {
+                                    "execution_tools": execution_tools,
+                                    "notebook_isolation": "shared",
+                                }
+                                if "sympy" in execution_tools
+                                else {}
+                            ),
+                            **(
+                                {
+                                    "max_precheck_rejections": (
+                                        args.max_precheck_rejections
+                                    )
+                                }
+                                if "tool_checker" in node_generation
+                                else {}
+                            ),
+                        }
+                        if args.pipeline == "react_agent"
+                        else {"max_repairs": args.max_repairs}
+                    ),
+                    "execution_timeout": args.execution_timeout,
+                }
+            }
+            if args.pipeline in ("code_agent", "react_agent")
+            else {}
+        ),
     }
 
 
 def create_graph(
     args: argparse.Namespace,
     prompt_path: Path,
-) -> Any:
-    """Собирает solver-граф с параметрами текущего запуска."""
+) -> GraphBuild:
+    """Собирает выбранный граф с параметрами текущего запуска."""
     model_config = ModelConfig(
         name=args.model,
         base_url=args.base_url,
@@ -254,7 +368,35 @@ def create_graph(
         timeout=args.timeout,
         max_retries=args.max_retries,
     )
-    return create_solver_graph(model_config, prompt_path)
+    node_generation: NodeGeneration = {}
+    if args.pipeline == "solver":
+        graph = create_solver_graph(
+            model_config,
+            prompt_path,
+            node_generation=node_generation,
+        )
+        return GraphBuild(graph, node_generation)
+    if args.pipeline == "code_agent":
+        graph = create_code_agent_graph(
+            model_config,
+            prompt_path,
+            max_repairs=args.max_repairs,
+            execution_timeout=args.execution_timeout,
+            node_generation=node_generation,
+        )
+        return GraphBuild(graph, node_generation)
+    if args.pipeline == "react_agent":
+        graph = create_react_agent_graph(
+            model_config,
+            prompt_path,
+            max_tool_calls=args.max_tool_calls,
+            max_tool_repairs=args.max_tool_repairs,
+            max_precheck_rejections=args.max_precheck_rejections,
+            execution_timeout=args.execution_timeout,
+            node_generation=node_generation,
+        )
+        return GraphBuild(graph, node_generation)
+    raise ValueError(f"Unknown pipeline: {args.pipeline}")
 
 
 def exception_names(exception: Exception) -> set[str]:
@@ -326,7 +468,26 @@ def solve_item(
     trace: dict[str, Any] | None = None
 
     try:
-        state = graph.invoke({"problem": item[config.problem_field]})
+        state = graph.invoke(
+            {"problem": item[config.problem_field]},
+            config={
+                "run_name": f"{config.name}:{task_id}",
+                "tags": [
+                    f"benchmark:{config.name}",
+                    f"pipeline:{args.pipeline}",
+                    f"model:{args.model}",
+                ],
+                "metadata": {
+                    "thread_id": f"{run_id}:{config.name}",
+                    "experiment_run_id": run_id,
+                    "benchmark_name": config.name,
+                    "task_id": task_id,
+                    "model_name": args.model,
+                    "pipeline": args.pipeline,
+                    "prompt_version": prompt_version,
+                },
+            },
+        )
         solution = state["solution"]
         reasoning = state.get("reasoning")
         usage = state["usage"]
@@ -576,7 +737,12 @@ def _run_benchmark(
     from datasets import load_dataset
 
     # Определяем prompt и JSONL-файл до запуска, чтобы заранее проверить конфигурацию
-    prompt_path = args.prompt or DEFAULT_SOLVER_PROMPT
+    default_prompts = {
+        "solver": DEFAULT_SOLVER_PROMPT,
+        "code_agent": DEFAULT_CODE_AGENT_PROMPT,
+        "react_agent": DEFAULT_REACT_AGENT_PROMPT,
+    }
+    prompt_path = args.prompt or default_prompts[args.pipeline]
     prompt_path = prompt_path.resolve()
     prompt_version = load_prompt_version(prompt_path)
     output_path = resolve_output_path(config, getattr(args, "output", None), run_id)
@@ -591,6 +757,9 @@ def _run_benchmark(
         dataset = dataset.select(range(min(args.limit, len(dataset))))
     items = [dict(item) for item in dataset]
 
+    # Собираем граф до manifest чтобы сохранить параметры его активных LLM-нод
+    graph_build = create_graph(args, prompt_path)
+
     # Создаём новый manifest или проверяем совместимость параметров при resume
     manifest_path = get_manifest_path(run_id)
     manifest_config = create_manifest_config(
@@ -598,6 +767,7 @@ def _run_benchmark(
         args,
         prompt_path,
         prompt_version,
+        graph_build.node_generation,
     )
     manifest = ensure_manifest(
         manifest_path,
@@ -636,10 +806,9 @@ def _run_benchmark(
     for task_id in existing_records:
         logger.info("resume_skipped benchmark=%s task_id=%s", config.name, task_id)
 
-    # Собираем solver-граф и передаём задачи диспетчеру параллельных запросов
-    graph = create_graph(args, prompt_path)
+    # Передаём скомпилированный граф диспетчеру параллельных запросов
     status, records, wall_time = run_concurrent_tasks(
-        graph=graph,
+        graph=graph_build.graph,
         config=config,
         items=items,
         args=args,
