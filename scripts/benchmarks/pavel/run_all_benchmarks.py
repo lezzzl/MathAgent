@@ -93,6 +93,8 @@ def build_command(script: Path, args: argparse.Namespace) -> list[str]:
         str(args.max_tool_repairs),
         "--max-precheck-rejections",
         str(args.max_precheck_rejections),
+        "--max-verification-rounds",
+        str(args.max_verification_rounds),
         "--execution-timeout",
         str(args.execution_timeout),
     ]

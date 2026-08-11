@@ -87,6 +87,50 @@ def prompt_has_role(prompt_path: Path, role_name: str) -> bool:
     return role_name in roles
 
 
+def load_verification_config(prompt_path: Path) -> dict[str, Any] | None:
+    """Загружает ссылку ReAct-промпта на внешний verifier из другой ветки"""
+    with prompt_path.open(encoding="utf-8") as stream:
+        prompt_config = yaml.safe_load(stream)
+    if not isinstance(prompt_config, dict):
+        raise ValueError(f"Invalid prompt config: {prompt_path}")
+
+    verification = prompt_config.get("verification")
+    if verification is None:
+        return None
+    if not isinstance(verification, dict):
+        raise ValueError(f"Invalid verification config: {prompt_path}")
+
+    prompt_name = verification.get("prompt")
+    stepwise_role = verification.get("stepwise_role")
+    finalize_role = verification.get("finalize_role")
+    if not all(
+        isinstance(value, str) and value.strip()
+        for value in (prompt_name, stepwise_role, finalize_role)
+    ):
+        raise ValueError(f"Incomplete verification config: {prompt_path}")
+
+    verifier_prompt_path = prompt_path.parent / prompt_name
+    if not verifier_prompt_path.is_file():
+        raise ValueError(f"Verifier prompt does not exist: {verifier_prompt_path}")
+
+    with verifier_prompt_path.open(encoding="utf-8") as stream:
+        verifier_prompt = yaml.safe_load(stream)
+    if not isinstance(verifier_prompt, dict):
+        raise ValueError(f"Invalid verifier prompt: {verifier_prompt_path}")
+    for role_name in (stepwise_role, finalize_role):
+        role = verifier_prompt.get(role_name)
+        if not isinstance(role, dict):
+            raise ValueError(
+                f"Verifier role '{role_name}' is missing: {verifier_prompt_path}"
+            )
+
+    return {
+        "prompt_path": verifier_prompt_path,
+        "stepwise_role": stepwise_role,
+        "finalize_role": finalize_role,
+    }
+
+
 def load_prompt_tools(prompt_path: Path) -> dict[str, dict[str, Any]]:
     """Загружает необязательные versioned-описания tools из prompt-конфига."""
     with prompt_path.open(encoding="utf-8") as stream:

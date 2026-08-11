@@ -40,6 +40,8 @@ def build_react_trace(
     precheck_history: list[dict[str, Any]] | None = None,
     planner_trace: dict[str, Any] | None = None,
     repair_history: list[dict[str, Any]] | None = None,
+    solution_attempts: list[dict[str, Any]] | None = None,
+    selected_attempt: int | None = None,
 ) -> dict[str, Any]:
     """Собирает компактную траекторию без messages и hidden reasoning."""
     trace = {
@@ -54,6 +56,10 @@ def build_react_trace(
         trace["planner"] = planner_trace
     if repair_history is not None:
         trace["repairs"] = repair_history
+    if solution_attempts is not None:
+        trace["solution_attempts"] = solution_attempts
+    if selected_attempt is not None:
+        trace["selected_attempt"] = selected_attempt
     return trace
 
 
@@ -90,7 +96,10 @@ def format_retry_messages(
         choices = ", ".join(available_tool_names)
         allowed_tools = f"Use exactly one of these tools: {choices}."
     else:
-        allowed_tools = "The tool budget is exhausted, so use final_answer."
+        allowed_tools = (
+            "The tool budget is exhausted, so use "
+            f"{available_tool_names[-1]}."
+        )
     retry_messages.append(
         HumanMessage(
             content=(
@@ -150,7 +159,7 @@ def create_react_planner_node(
 def create_react_agent_node(
     model: Any,
     execution_tools: list[BaseTool],
-    final_answer_tool: BaseTool,
+    terminal_tool: BaseTool,
     prompt_path: Path,
     max_tool_calls: int,
     repair_tool: BaseTool | None = None,
@@ -158,6 +167,7 @@ def create_react_agent_node(
     precheck_enabled: bool = False,
     planner_enabled: bool = False,
     structured_repair_enabled: bool = False,
+    verification_enabled: bool = False,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Вызывает ReAct-модель и обрабатывает tools выбранной версии промпта."""
     if repair_tool is not None and cot_tool is not None:
@@ -180,7 +190,7 @@ def create_react_agent_node(
         budgeted_tools.insert(0, cot_tool)
     if repair_tool is not None:
         budgeted_tools.append(repair_tool)
-    available_tools = [*budgeted_tools, final_answer_tool]
+    available_tools = [*budgeted_tools, terminal_tool]
     available_tool_names = [tool.name for tool in available_tools]
     model_with_tools = model.bind_tools(
         available_tools,
@@ -188,9 +198,9 @@ def create_react_agent_node(
         strict=False,
         parallel_tool_calls=False,
     )
-    model_with_final_answer = model.bind_tools(
-        [final_answer_tool],
-        tool_choice=final_answer_tool.name,
+    model_with_terminal = model.bind_tools(
+        [terminal_tool],
+        tool_choice=terminal_tool.name,
         strict=True,
         parallel_tool_calls=False,
     )
@@ -238,7 +248,7 @@ def create_react_agent_node(
                     content=(
                         f"{reason}. Do not call any "
                         "reasoning or execution tool. Submit the best supported "
-                        "answer using final_answer."
+                        f"answer using {terminal_tool.name}."
                     ),
                     id="react:forced_final",
                 )
@@ -256,7 +266,7 @@ def create_react_agent_node(
         iteration = len(state.get("agent_history", []))
         started = time.perf_counter()
         message = (
-            model_with_final_answer.invoke(invocation_messages)
+            model_with_terminal.invoke(invocation_messages)
             if forced_final
             else model_with_tools.invoke(invocation_messages)
         )
@@ -366,10 +376,31 @@ def create_react_agent_node(
                         "status": "tool_requested",
                     }
 
-            elif tool_name == final_answer_tool.name:
+            elif tool_name == terminal_tool.name:
                 answer = arguments.get("answer")
+                solution = arguments.get("solution")
                 if not isinstance(answer, str) or not answer.strip():
-                    format_error = "final_answer must contain a non-empty answer"
+                    format_error = (
+                        f"{terminal_tool.name} must contain a non-empty answer"
+                    )
+                elif verification_enabled and (
+                    not isinstance(solution, str) or not solution.strip()
+                ):
+                    format_error = (
+                        "final_solution must contain a non-empty complete solution"
+                    )
+                elif verification_enabled:
+                    history_entry["action"] = "final_solution"
+                    return {
+                        **base_update,
+                        "messages": [*new_messages, clean_message],
+                        "agent_history": [*agent_history, history_entry],
+                        "proposed_answer": answer.strip(),
+                        "proposed_solution": solution.strip(),
+                        "proposed_tool_call_id": tool_call["id"],
+                        "format_retry_count": 0,
+                        "status": "verification_requested",
+                    }
                 else:
                     finish_reason = (
                         str(force_final_reason)
@@ -616,10 +647,12 @@ def route_after_react_precheck(state: dict[str, Any]) -> str:
 
 
 def route_after_react_agent(state: dict[str, Any]) -> str:
-    """Направляет execution в ToolNode, format retry обратно в agent, ответ в END."""
+    """Направляет tool, verification, format retry или завершённый ответ."""
     status = state["status"]
     if status == "tool_requested":
         return "tools"
+    if status == "verification_requested":
+        return "verify"
     if status == "format_retry":
         return "agent"
     if status == "completed":

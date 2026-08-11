@@ -25,7 +25,11 @@ from mathagent.pavel.graph import (
     create_react_agent_graph,
     create_solver_graph,
 )
-from mathagent.pavel.nodes import load_prompt_tools, prompt_has_role
+from mathagent.pavel.nodes import (
+    load_prompt_tools,
+    load_verification_config,
+    prompt_has_role,
+)
 from scripts.benchmarks.pavel.run_artifacts import (
     append_jsonl_record,
     configure_run_logger,
@@ -124,6 +128,7 @@ def parse_benchmark_args(
     parser.add_argument("--max-tool-calls", type=int, default=8)
     parser.add_argument("--max-tool-repairs", type=int, default=5)
     parser.add_argument("--max-precheck-rejections", type=int, default=3)
+    parser.add_argument("--max-verification-rounds", type=int, default=2)
     parser.add_argument("--execution-timeout", type=float, default=10.0)
     parser.add_argument("--limit", type=int) # ограничивает число задач из датасета, чтобы быстро проверить работу runner
 
@@ -219,6 +224,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-tool-repairs must be non-negative")
     if args.max_precheck_rejections < 1:
         raise ValueError("--max-precheck-rejections must be positive")
+    if args.max_verification_rounds < 1:
+        raise ValueError("--max-verification-rounds must be positive")
     if args.execution_timeout <= 0:
         raise ValueError("--execution-timeout must be positive")
     if args.vllm_max_num_seqs < 1:
@@ -252,8 +259,15 @@ def create_manifest_config(
         and prompt_path.exists()
         and prompt_has_role(prompt_path, "repair")
     )
+    verification = (
+        load_verification_config(prompt_path)
+        if args.pipeline == "react_agent" and prompt_path.exists()
+        else None
+    )
+    verification_configured = verification is not None
     repair_candidate_validation_configured = (
-        structured_repair_configured and prompt_version == "react-agent-v8"
+        structured_repair_configured
+        and prompt_version in {"react-agent-v8", "react-agent-v9"}
     )
     return {
         "run_id": run_id,
@@ -338,6 +352,21 @@ def create_manifest_config(
                                 if "tool_checker" in node_generation
                                 else {}
                             ),
+                            **(
+                                {
+                                    "max_verification_rounds": (
+                                        args.max_verification_rounds
+                                    ),
+                                    "verification_mode": "stas-stepwise-v1",
+                                    "verification_aggregation": "llm-finalize-v1",
+                                    "verification_prompt": str(
+                                        verification["prompt_path"].name
+                                    ),
+                                    "terminal_tool": "final_solution",
+                                }
+                                if verification_configured
+                                else {}
+                            ),
                         }
                         if args.pipeline == "react_agent"
                         else {"max_repairs": args.max_repairs}
@@ -396,6 +425,7 @@ def create_graph(
             max_tool_calls=args.max_tool_calls,
             max_tool_repairs=args.max_tool_repairs,
             max_precheck_rejections=args.max_precheck_rejections,
+            max_verification_rounds=args.max_verification_rounds,
             execution_timeout=args.execution_timeout,
             node_generation=node_generation,
         )
