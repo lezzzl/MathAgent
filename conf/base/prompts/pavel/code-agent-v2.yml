@@ -2,6 +2,8 @@ version: "code-agent-v2"
 
 roles:
   planner:
+    thinking: true
+    max_tokens: 16384
     system: |-
       You are the planner for a code-based mathematical agent.
       Your output will be passed to a separate coder that writes and executes Python/SymPy code.
@@ -19,6 +21,8 @@ roles:
       Stop before performing any computation or giving the answer.
 
   coder:
+    thinking: true
+    max_tokens: 32768
     system: |-
       You are an expert mathematical reasoner.
       Your output must be only one Python code block fenced as ```python ... ```.
@@ -42,6 +46,8 @@ roles:
       {plan}
 
   finalizer:
+    thinking: false
+    max_tokens: 512
     system: |-
       You extract the final mathematical answer from executed Python output.
       Return only the final answer in the form \boxed{...}.
@@ -57,6 +63,8 @@ roles:
       Extract the final answer.
 
   repair:
+    thinking: true
+    max_tokens: 16384
     system: |-
       You repair a Python/SymPy script that failed during execution.
       Return only one Python code block fenced as ```python ... ```.

@@ -8,7 +8,7 @@ from typing import Any
 
 
 # Стандартные каталоги артефактов относительно корня проекта
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 RUNS_ROOT = ROOT / "results" / "runs"
 LOGS_ROOT = ROOT / "logs"
 
@@ -141,6 +141,34 @@ def ensure_manifest(
                 raise ValueError(
                     f"Cannot continue run: manifest field '{field}' does not match"
                 )
+
+        # Старые manifest не содержали node_generation, потому что все LLM-ноды
+        # использовали общие thinking и max_tokens из generation
+        expected_node_generation = expected.get("node_generation")
+        manifest_node_generation = manifest.get("node_generation")
+        if expected_node_generation is not None and manifest_node_generation is None:
+            legacy_generation = manifest.get("generation") or {}
+            legacy_defaults = {
+                "thinking": legacy_generation.get("thinking"),
+                "max_tokens": legacy_generation.get("max_tokens"),
+            }
+            manifest_node_generation = {
+                node_name: dict(legacy_defaults)
+                for node_name in expected_node_generation
+            }
+        if manifest_node_generation != expected_node_generation:
+            raise ValueError(
+                "Cannot continue run: manifest field 'node_generation' does not match"
+            )
+        if expected_node_generation is not None:
+            manifest["node_generation"] = expected_node_generation
+
+        if (
+            "pipeline_config" in manifest or "pipeline_config" in expected
+        ) and manifest.get("pipeline_config") != expected.get("pipeline_config"):
+            raise ValueError(
+                "Cannot continue run: manifest field 'pipeline_config' does not match"
+            )
 
         # Технические параметры разрешено менять между сегментами resume
         manifest["runtime"] = expected["runtime"]

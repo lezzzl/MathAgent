@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Callable
 
-from mathagent.pipelines.agent_eval.nodes import (
+from mathagent.pavel.nodes import (
     add_reasoning,
     add_usage,
     load_prompt_role,
