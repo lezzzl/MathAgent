@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "run_id": "pavel-react-v9-verify-aime26-v1",
+  "model": "Qwen/Qwen3.5-9B",
+  "pipeline": "react_agent",
+  "prompt": "/home/ykapushev/mathagent/work/pavel-react-v9-verify-aime26-v1/conf/base/prompts/pavel/react-agent-v9.yml",
+  "prompt_version": "react-agent-v9",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 65536
+  },
+  "node_generation": {
+    "agent": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "planner": {
+      "thinking": false,
+      "max_tokens": 10000
+    },
+    "repair": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "cot": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "verifier_stepwise_check": {
+      "thinking": true,
+      "max_tokens": 10000,
+      "temperature": 0.1
+    },
+    "verifier_finalize": {
+      "thinking": true,
+      "max_tokens": 2048,
+      "temperature": 0.1
+    }
+  },
+  "runtime": {
+    "concurrency": 30,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 45,
+    "max_model_len": 131072
+  },
+  "pipeline_config": {
+    "max_tool_calls": 20,
+    "max_tool_repairs": 5,
+    "execution_diagnostics": "structured-v1",
+    "repair_mode": "separate-node-v2",
+    "repair_candidate_validation": "compile-deduplicate-v1",
+    "python_mode": "notebook",
+    "cot_parser": "tolerant-v1",
+    "execution_tools": [
+      "python",
+      "sympy"
+    ],
+    "notebook_isolation": "shared",
+    "max_verification_rounds": 2,
+    "verification_mode": "stas-stepwise-v1",
+    "verification_aggregation": "llm-finalize-v1",
+    "verification_prompt": "verificator-stepwise.yml",
+    "terminal_tool": "final_solution",
+    "execution_timeout": 20.0
+  },
+  "status": "completed_with_errors",
+  "created_at": "2026-08-11T18:52:01.026787+00:00",
+  "updated_at": "2026-08-11T18:54:43.169910+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/pavel-react-v9-verify-aime26-v1/results/runs/pavel-react-v9-verify-aime26-v1/aime26.jsonl",
+      "status": "completed_with_errors",
+      "updated_at": "2026-08-11T18:54:43.165233+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 0,
+        "failed_tasks": 30,
+        "remaining_tasks": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "wall_time_seconds": 162.125,
+        "tasks_per_second": 0.185
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 162.125,
+          "tasks_per_second": 0.185,
+          "status": "completed_with_errors",
+          "updated_at": "2026-08-11T18:54:43.165201+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 30,
+    "successful_tasks": 0,
+    "failed_tasks": 30,
+    "remaining_tasks": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "wall_time_seconds": 162.125,
+    "tasks_per_second": 0.185
+  }
+}
