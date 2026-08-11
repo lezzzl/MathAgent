@@ -7,4 +7,4 @@
 # SELECT сужаем до одного бенча, чтобы первый прогон был короче.
 command: SELECT=[aime26] scripts/run_benchmarks.sh
 gpus: 1
-timeout_minutes: 180
+timeout_minutes: 120
