@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "run_id": "ilya-react-aime26-2",
+  "model": "qwen35-9b",
+  "pipeline": "react",
+  "prompt": "/home/ykapushev/mathagent/work/ilya-react-aime26-2/conf/base/prompts/react-tools.yml",
+  "prompt_version": "react-tools-v1",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 57344
+  },
+  "runtime": {
+    "concurrency": 32,
+    "timeout": 3000.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 48,
+    "max_model_len": 73728
+  },
+  "status": "interrupted",
+  "created_at": "2026-08-11T16:02:39.564721+00:00",
+  "updated_at": "2026-08-11T16:41:55.727741+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-aime26-2/results/runs/ilya-react-aime26-2/aime26.jsonl",
+      "status": "failed",
+      "updated_at": "2026-08-11T16:41:54.217856+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 29,
+        "failed_tasks": 1,
+        "remaining_tasks": 0,
+        "input_tokens": 70953,
+        "output_tokens": 774654,
+        "total_tokens": 845607,
+        "wall_time_seconds": 2354.357,
+        "tasks_per_second": 0.0127
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 2354.357,
+          "tasks_per_second": 0.0127,
+          "status": "failed",
+          "updated_at": "2026-08-11T16:41:54.217834+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 30,
+    "successful_tasks": 29,
+    "failed_tasks": 1,
+    "remaining_tasks": 0,
+    "input_tokens": 70953,
+    "output_tokens": 774654,
+    "total_tokens": 845607,
+    "wall_time_seconds": 2354.357,
+    "tasks_per_second": 0.0127
+  }
+}
