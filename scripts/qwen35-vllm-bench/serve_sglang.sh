@@ -33,6 +33,7 @@ KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-auto}"
 ENABLE_PREFIX_CACHING="${ENABLE_PREFIX_CACHING:-0}"
 ENABLE_ASYNC_SCHEDULING="${ENABLE_ASYNC_SCHEDULING:-1}"
 SPECULATIVE_CONFIG="${SPECULATIVE_CONFIG:-}"
+TOOL_CALL_PARSER="${TOOL_CALL_PARSER:-qwen3_coder}"
 
 export CUDA_VISIBLE_DEVICES
 
@@ -83,6 +84,7 @@ args=(
   --mem-fraction-static "${GPU_MEMORY_UTILIZATION}"
   --cuda-graph-max-bs "${MAX_CUDAGRAPH_CAPTURE_SIZE}"
   --reasoning-parser qwen3
+  --tool-call-parser "${TOOL_CALL_PARSER}"
 )
 # Аналога vLLM --language-model-only здесь нет: --enable-multimodal объявлен как
 # store_true без парной --no-* формы, так что визуальную башню (~1.3 ГБ) SGLang
