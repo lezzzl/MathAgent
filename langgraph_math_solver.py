@@ -91,6 +91,11 @@ ROLES: Dict[str, Role] = {
 }
 
 
+# Роли без дефолта в коде: есть в yaml — включены, нет — выключены. Так старые
+# промпты (v1-v3) продолжают работать без сегментации и без правок.
+_OPTIONAL_ROLES = ("segmenter",)
+
+
 def load_prompts_from_yaml(yaml_path: "Path | str") -> None:
     try:
         with open(yaml_path, "r", encoding="utf-8") as f:
@@ -102,8 +107,27 @@ def load_prompts_from_yaml(yaml_path: "Path | str") -> None:
             return
 
         for role_name, role_cfg in roles_cfg.items():
-            if role_name not in _DEFAULT_ROLE_DEFS:
+            if role_name not in _DEFAULT_ROLE_DEFS and role_name not in _OPTIONAL_ROLES:
                 print(f"[Prompts] Warning: unknown role '{role_name}' in {yaml_path}, ignoring.")
+                continue
+            # Опциональная роль задаётся yaml целиком: дефолта в коде у неё нет,
+            # и её отсутствие — рабочая конфигурация (для segmenter это значит
+            # «не сегментировать»), поэтому обязательные поля требуем явно.
+            if role_name in _OPTIONAL_ROLES:
+                missing = [k for k in ("system", "user_template") if k not in role_cfg]
+                if missing:
+                    print(f"[Prompts] Warning: role '{role_name}' in {yaml_path} is missing "
+                          f"{missing}, ignoring it.")
+                    continue
+                ROLES[role_name] = Role(
+                    name=role_name,
+                    system_prompt=role_cfg["system"],
+                    user_template=role_cfg["user_template"],
+                    temperature=float(role_cfg.get("temperature", 0.2)),
+                    json_format=bool(role_cfg.get("json_format", False)),
+                    num_predict=role_cfg.get("num_predict", 4000),
+                    enable_thinking=role_cfg.get("enable_thinking", False),
+                )
                 continue
             defaults = _DEFAULT_ROLE_DEFS[role_name]
             ROLES[role_name] = Role(
@@ -139,6 +163,21 @@ MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "40000"))
 # работающие решения. У 4B лимит 1500, но там шаг реально короткий — переносить
 # это число на 9B нельзя.
 MAX_STEP_CHARS = int(os.getenv("MAX_STEP_CHARS", "32000"))
+# Порог, выше которого шаг считается не шагом, а свалкой всего решения, и
+# отправляется сегментатору. Замер прогонов 0810/0811: у ВЕРНО решённых задач
+# медиана первого шага 2 557 (aime24) и 2 962 (hmmt) символов, у провалившихся —
+# 13 616 и 22 828. При этом 96–100% первых шагов уже содержат финальный \boxed,
+# то есть модель игнорирует запрет отвечать на первом шаге и пайплайн
+# вырождается в обычный CoT.
+#
+# 6000 отделяет «настоящий шаг» от «полного решения» по этим данным. Ручка
+# обратима: SEGMENT_ABOVE_CHARS=999999 полностью отключает сегментацию и
+# возвращает поведение прогонов 0810/0811 в точности, 0 — сегментирует всегда.
+SEGMENT_ABOVE_CHARS = int(os.getenv("SEGMENT_ABOVE_CHARS", "6000"))
+# Сколько символов черновика отдавать сегментатору. Начало черновика (перебор
+# гипотез, самокритика) ему не нужно: на 4B обрезка снизила медиану входа
+# 37 366 -> 3 250 символов и долю стадии с 21.1% до 2.6% бюджета.
+SEGMENTER_INPUT_CHARS = int(os.getenv("SEGMENTER_INPUT_CHARS", "8000"))
 
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "600"))
 
@@ -273,6 +312,121 @@ def _extract_step_content(raw: str) -> str:
                 step = f"Final answer: {clean_tail}"
 
     return step
+
+
+_STEP_ANY_TAG_RE = re.compile(r"</?step\s*>", re.IGNORECASE)
+_THINK_CLOSE_RE = re.compile(r"</think\s*>", re.IGNORECASE)
+_TRIM_NOTE = "[... ранние размышления опущены ...]\n"
+_SEG_STEP_RE = re.compile(r"###STEP###\s*(.*?)\s*(?:###ANSWER###|###END###|$)",
+                          re.DOTALL | re.IGNORECASE)
+_SEG_ANSWER_RE = re.compile(r"###ANSWER###\s*(.*?)\s*(?:###END###|$)",
+                            re.DOTALL | re.IGNORECASE)
+
+
+def _needs_segmentation(step: str) -> bool:
+    """Шаг ли это или свалка всего решения.
+
+    Единственный критерий — длина. Проверять теги смысла нет: 9B ставит <step>
+    практически всегда (0 задач из 590 без шага), проблема не в разметке, а в
+    том, ЧТО внутри тега — обычно решение целиком вместе с финальным ответом.
+    """
+    return bool(step) and len(step) > SEGMENT_ABOVE_CHARS
+
+
+def _trim_for_segmenter(raw: str) -> str:
+    """Оставляет тот хвост черновика, в котором реально лежит шаг.
+
+    Стратегии от надёжной к запасной: после последнего </think> (там «чистовик»
+    модели), затем от последнего <step>, затем просто хвост нужной длины.
+    """
+    raw = raw or ""
+    if len(raw) <= SEGMENTER_INPUT_CHARS:
+        return raw
+    closes = list(_THINK_CLOSE_RE.finditer(raw))
+    if closes:
+        tail = raw[closes[-1].end():].strip()
+        if tail:
+            return _TRIM_NOTE + (tail[-SEGMENTER_INPUT_CHARS:] if len(tail) > SEGMENTER_INPUT_CHARS else tail)
+    opens = list(_STEP_OPEN_TAG_RE.finditer(raw))
+    if opens:
+        tail = raw[opens[-1].start():]
+        if len(tail) <= SEGMENTER_INPUT_CHARS:
+            return _TRIM_NOTE + tail
+    return _TRIM_NOTE + raw[-SEGMENTER_INPUT_CHARS:]
+
+
+def _parse_segmenter_response(content: str, raw_fallback: str,
+                              allow_answer: bool = True):
+    """Разбирает ответ сегментатора формата ###STEP### / ###ANSWER###.
+
+    Разделители, а не JSON: вывод сегментатора — сплошной LaTeX (\\frac, \\sqrt,
+    \\boxed), и незаэкранированные бэкслэши ломают JSON-парсинг.
+
+    allow_answer=False запрещает приклеивать финальный ответ к шагу. Это и есть
+    рычаг против вырождения в CoT: сегментатор исправно возвращает первый шаг,
+    но заодно рапортует найденный в черновике \\boxed — и задача заканчивается
+    на первом же шаге.
+
+    Возвращает (step, answer|None, reliable).
+    """
+    if not content:
+        return _extract_step_content(raw_fallback), None, False
+    text = _THINK_BLOCK_RE.sub("", content)
+    m = _SEG_STEP_RE.search(text)
+    if not m:
+        fallback = _extract_step_content(text) or _extract_step_content(raw_fallback)
+        return fallback, (extract_answer(fallback) if allow_answer else None), False
+    step = _STEP_ANY_TAG_RE.sub("", m.group(1)).strip()
+    answer = None
+    a = _SEG_ANSWER_RE.search(text)
+    if a:
+        cand = a.group(1).strip()
+        if cand and cand.upper() != "NONE":
+            answer = extract_answer(cand) or cand
+    if not allow_answer:
+        return step, None, True
+    if answer and not extract_answer(step):
+        boxed = answer if "\\boxed" in answer else f"\\boxed{{{answer}}}"
+        step = f"{step}\n\nFinal answer: {boxed}".strip() if step else f"Final answer: {boxed}"
+    return step, answer, True
+
+
+def _segment_one(raw: str, step_text: str, context: str, depth: int, branch: int,
+                 allow_answer: bool):
+    """Вырезает из черновика ровно один шаг. Возвращает (step, tokens, called, unreliable).
+
+    Быстрый путь: короткий шаг уже является шагом — модель не зовём.
+    """
+    if "segmenter" not in ROLES:
+        return step_text, 0, False, False
+    if not _needs_segmentation(step_text):
+        return step_text, 0, False, False
+
+    role = ROLES["segmenter"]
+    trimmed = _trim_for_segmenter(raw)
+    print(f"      [SEGMENT] Шаг {len(step_text)} симв. > {SEGMENT_ABOVE_CHARS} — "
+          f"это решение целиком, вырезаю один шаг (черновик {len(raw)} -> {len(trimmed)} симв.)")
+    messages = [
+        {"role": "system", "content": role.system_prompt},
+        {"role": "user", "content": role.user_template.format(context=context, raw=trimmed)},
+    ]
+    content, tks = _chat(messages, temperature=role.temperature,
+                         num_predict=role.num_predict, json_format=role.json_format,
+                         enable_thinking=role.enable_thinking, seed=_next_seed())
+    step, answer, reliable = _parse_segmenter_response(content, raw, allow_answer=allow_answer)
+    if not step.strip():
+        # Сегментатор не дал ничего пригодного — лучше исходный шаг, чем пустой.
+        print("      ⚠️  [СЕГМЕНТАТОР] пустой результат, оставляю исходный шаг.")
+        return step_text, tks, True, True
+    RECORDER.record(stage="segment", depth=depth, branch=branch,
+                    system=role.system_prompt, user=trimmed, content=content,
+                    tokens={"total": tks}, model=MODEL_NAME,
+                    temperature=role.temperature, num_predict=role.num_predict,
+                    enable_thinking=role.enable_thinking)
+    tag = "" if reliable else " ⚠️ [маркеры не распознаны, фоллбек]"
+    ans = f" | answer={answer}" if answer else ""
+    print(f"      [SEGMENT] -> {len(step)} симв. ({tks} ток.){ans}{tag}")
+    return _clamp_step(step), tks, True, (not reliable)
 
 
 def _clamp_step(step: str) -> str:
@@ -548,6 +702,13 @@ class AgentState(TypedDict):
     # «сервер отвалился», и остаток прогона пропускается. Ровно так 9 упавших
     # задач превратились в 19 на прогоне 0810T211145Z.
     api_errors: Annotated[int, operator.add]
+    # Сколько раз звался сегментатор и сколько раз его разметка не разобралась.
+    # Метрика показывает, часто ли генератор вываливает решение целиком вместо
+    # одного шага — то есть насколько пайплайн вырождается в CoT.
+    segmenter_calls: Annotated[int, operator.add]
+    segmenter_unreliable: Annotated[int, operator.add]
+    # Глубина, начиная с которой шагу разрешено содержать финальный ответ.
+    min_steps_before_answer: int
     # Верификатор наблюдательный: его вердикт не меняет ответ, но стоит ~5%
     # бюджета и на верных решениях ошибается в 41% случаев. На замерах его
     # отключают (--no-verify-step), диагностику оставляют по умолчанию.
@@ -642,6 +803,7 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
 
     result, err = call(role.enable_thinking)
     if err:
+        result["_thinking_used"] = role.enable_thinking
         return result, False, 1
     last = result["messages"][-1]
     truncated_empty = (
@@ -655,10 +817,16 @@ def _generate_one(role: Role, context: str, temp: float, use_tools: bool):
         # Возврат `call(False), True` возвращал бы ((result, error), True), и
         # вызывающий код падал на result["messages"] с TypeError.
         retry, retry_err = call(False)
+        # Пишем ФАКТИЧЕСКИ использованное значение: до этой правки в трассу шёл
+        # role.enable_thinking, поэтому откаты без размышлений выглядели в
+        # записи как обычные вызовы с размышлениями, и их влияние на качество
+        # ответа нельзя было измерить вообще.
+        retry["_thinking_used"] = False
         return retry, True, (1 if retry_err else 0)
     if truncated_empty:
         print(f"      [TRUNCATED] Ответ пуст, finish_reason=length при лимите "
               f"{role.num_predict}. Поднимите num_predict генератора в yaml.")
+    result["_thinking_used"] = role.enable_thinking
     return result, False, 0
 
 
@@ -676,6 +844,8 @@ def generate_step(state: AgentState):
     total_tokens = 0
     overruns = 0
     api_errors = 0
+    segmenter_calls = 0
+    segmenter_unreliable = 0
     context = _build_context(state['problem'], state.get('steps', []))
     
     use_tools = state.get("use_tools", True)
@@ -695,6 +865,15 @@ def generate_step(state: AgentState):
         final_msg = result["messages"][-1]
         raw_text = _message_text(final_msg)
         step_text = _clamp_step(_extract_step_content(raw_text))
+        # Ответ на нулевой глубине запрещаем, иначе сегментатор рапортует
+        # найденный в черновике \boxed и задача снова схлопывается в один шаг.
+        seg_step, seg_tks, seg_called, seg_bad = _segment_one(
+            raw_text, step_text, context, current_depth, i + 1,
+            allow_answer=current_depth >= state.get('min_steps_before_answer', 1))
+        step_text = seg_step
+        total_tokens += seg_tks
+        segmenter_calls += int(seg_called)
+        segmenter_unreliable += int(seg_bad)
         candidates.append(step_text)
 
         tks = count_chain_tokens(result["messages"])
@@ -712,7 +891,7 @@ def generate_step(state: AgentState):
             content=raw_text, finish_reason=fr,
             tokens={"total": tks}, temperature=temp, model=MODEL_NAME,
             tool_calls=n_tool_calls, num_predict=role.num_predict,
-            enable_thinking=role.enable_thinking,
+            enable_thinking=result.get("_thinking_used", role.enable_thinking),
         )
         # Шаг после экстракции тегов — ровно то, что уйдёт оценщику.
         RECORDER.record(stage="segment_result", depth=current_depth, branch=i + 1,
@@ -722,7 +901,9 @@ def generate_step(state: AgentState):
         print(f"      Step:\n{step_text}\n")
 
     return {"candidate_steps": candidates, "tokens_used": total_tokens,
-            "thinking_overruns": overruns, "api_errors": api_errors}
+            "thinking_overruns": overruns, "api_errors": api_errors,
+            "segmenter_calls": segmenter_calls,
+            "segmenter_unreliable": segmenter_unreliable}
 
 
 def evaluate_steps(state: AgentState):
