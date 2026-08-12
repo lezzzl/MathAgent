@@ -12,7 +12,7 @@ command: >-
         --max-tool-calls 20 --max-tool-repairs 5 --max-verification-rounds 2 \
         --execution-timeout 20 --timeout 7200 --reasoning-parser qwen3 \
         --vllm-max-model-len 131072 \
-        --run-id "react-v11-35b-planner-9b-agent-aime26-hmmt26-seed${SEED}-v1" \
+        --run-id "react-v11-35b-planner-9b-agent-aime26-hmmt26-seed${SEED}-v1-2-models" \
     || exit 1
   done
 gpus: 2
