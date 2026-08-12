@@ -169,6 +169,7 @@ def create_react_agent_node(
     structured_repair_enabled: bool = False,
     verification_enabled: bool = False,
     solution_writer_enabled: bool = False,
+    solution_context_required: bool = False,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Вызывает ReAct-модель и обрабатывает tools выбранной версии промпта."""
     if repair_tool is not None and cot_tool is not None:
@@ -380,13 +381,21 @@ def create_react_agent_node(
             elif tool_name == terminal_tool.name:
                 answer = arguments.get("answer")
                 solution = arguments.get("solution")
+                solution_context = arguments.get("solution_context")
                 if not isinstance(answer, str) or not answer.strip():
                     format_error = (
                         f"{terminal_tool.name} must contain a non-empty answer"
                     )
+                elif solution_context_required and (
+                    not isinstance(solution_context, str)
+                    or not solution_context.strip()
+                ):
+                    format_error = (
+                        "final_answer must contain a non-empty solution_context"
+                    )
                 elif solution_writer_enabled:
                     history_entry["action"] = "final_answer"
-                    return {
+                    writer_update = {
                         **base_update,
                         "messages": [*new_messages, clean_message],
                         "agent_history": [*agent_history, history_entry],
@@ -395,6 +404,11 @@ def create_react_agent_node(
                         "format_retry_count": 0,
                         "status": "solution_writing",
                     }
+                    if solution_context_required:
+                        writer_update["proposed_solution_context"] = (
+                            solution_context.strip()
+                        )
+                    return writer_update
                 elif verification_enabled and (
                     not isinstance(solution, str) or not solution.strip()
                 ):

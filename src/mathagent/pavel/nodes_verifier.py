@@ -211,7 +211,7 @@ def _load_verifier_role(prompt_path: Path, role_name: str) -> dict[str, Any]:
     }
 
 
-def _build_messages(role: dict[str, Any], **values: str) -> list[Any]:
+def _build_messages(role: dict[str, Any], **values: Any) -> list[Any]:
     """Собирает system, user и исходный assistant-prefill как в исходной ветке"""
     messages: list[Any] = [
         SystemMessage(content=role["system_prompt"]),
@@ -227,11 +227,21 @@ def _run_stepwise_check(
     role: dict[str, Any],
     question: str,
     model_answer: str,
+    proposed_answer: str = "",
+    derived_answer: str | None = None,
 ) -> tuple[list[dict[str, Any]], bool, dict[str, Any], Any]:
     """Вызывает первый этап исходного verifier и парсит OK/ERROR шаги"""
     started = time.perf_counter()
     message = model.invoke(
-        _build_messages(role, question=question, model_answer=model_answer),
+        _build_messages(
+            role,
+            question=question,
+            model_answer=model_answer,
+            proposed_answer=proposed_answer,
+            derived_answer=(
+                derived_answer if derived_answer is not None else "null"
+            ),
+        ),
         stop=role["stop"],
     )
     latency = round(time.perf_counter() - started, 3)
@@ -265,6 +275,8 @@ def _run_finalize(
     question: str,
     model_answer: str,
     steps_block: str,
+    proposed_answer: str = "",
+    derived_answer: str | None = None,
     *,
     steps_present: bool,
     steps_truncated: bool,
@@ -277,6 +289,10 @@ def _run_finalize(
             question=question,
             model_answer=model_answer,
             steps_block=steps_block,
+            proposed_answer=proposed_answer,
+            derived_answer=(
+                derived_answer if derived_answer is not None else "null"
+            ),
         ),
         stop=role["stop"],
     )
@@ -308,6 +324,7 @@ def create_react_verifier_node(
     finalize_role_name: str,
     max_verification_rounds: int,
     terminal_tool_name: str = "final_solution",
+    independent_writer_enabled: bool = False,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Адаптирует двухэтапный verifier из ветки Стаса к ReAct-loop"""
     with agent_prompt_path.open(encoding="utf-8") as stream:
@@ -320,11 +337,22 @@ def create_react_verifier_node(
         round_index = state.get("verification_round", 0)
         answer = state.get("proposed_answer")
         solution = state.get("proposed_solution")
+        solution_context = state.get("proposed_solution_context")
+        derived_answer = state.get("derived_answer")
         tool_call_id = state.get("proposed_tool_call_id")
         if not isinstance(answer, str) or not answer.strip():
             raise ValueError("Verifier requires a non-empty proposed answer")
         if not isinstance(solution, str) or not solution.strip():
             raise ValueError("Verifier requires a non-empty proposed solution")
+        if independent_writer_enabled:
+            if "derived_answer" not in state:
+                raise ValueError(
+                    "Independent writer must return derived_answer or null"
+                )
+            if derived_answer is not None and not isinstance(derived_answer, str):
+                raise ValueError("Verifier received an invalid derived_answer")
+            if not isinstance(solution_context, str) or not solution_context.strip():
+                raise ValueError("Verifier requires a non-empty solution_context")
         if not isinstance(tool_call_id, str) or not tool_call_id:
             raise ValueError(
                 f"Verifier requires the {terminal_tool_name} tool call id"
@@ -336,6 +364,8 @@ def create_react_verifier_node(
                 stepwise_role,
                 state["problem"],
                 solution,
+                answer,
+                derived_answer if isinstance(derived_answer, str) else None,
             )
         )
         result, finalize_trace, finalize_message = _run_finalize(
@@ -344,6 +374,8 @@ def create_react_verifier_node(
             state["problem"],
             solution,
             _render_steps_block(steps, steps_truncated),
+            answer,
+            derived_answer if isinstance(derived_answer, str) else None,
             steps_present=bool(steps),
             steps_truncated=steps_truncated,
         )
@@ -355,12 +387,26 @@ def create_react_verifier_node(
         }
 
         attempts = list(state.get("solution_attempts", []))
-        attempt = {
-            "index": round_index,
-            "answer": answer.strip(),
-            "solution": solution.strip(),
-            "verification": verification,
-        }
+        if independent_writer_enabled:
+            attempt = {
+                "index": round_index,
+                "proposed_answer": answer.strip(),
+                "solution_context": solution_context.strip(),
+                "derived_answer": (
+                    derived_answer.strip()
+                    if isinstance(derived_answer, str)
+                    else None
+                ),
+                "solution": solution.strip(),
+                "verification": verification,
+            }
+        else:
+            attempt = {
+                "index": round_index,
+                "answer": answer.strip(),
+                "solution": solution.strip(),
+                "verification": verification,
+            }
         writer_history = state.get("solution_writer_history", [])
         if writer_history:
             attempt["writer"] = {
@@ -398,6 +444,12 @@ def create_react_verifier_node(
                     "rejected_solution": solution.strip(),
                 }
             )
+            if independent_writer_enabled:
+                feedback_payload["derived_answer"] = (
+                    derived_answer.strip()
+                    if isinstance(derived_answer, str)
+                    else None
+                )
         base_update: dict[str, Any] = {
             "messages": [
                 ToolMessage(

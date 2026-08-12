@@ -26,6 +26,7 @@ from mathagent.pavel.graph import (
     create_solver_graph,
 )
 from mathagent.pavel.nodes import (
+    load_prompt_role,
     load_prompt_tools,
     load_verification_config,
     prompt_has_role,
@@ -278,9 +279,22 @@ def create_manifest_config(
         and prompt_path.exists()
         and prompt_has_role(prompt_path, "solution_writer")
     )
+    solution_writer_protocol = None
+    if solution_writer_configured:
+        _, solution_writer_role = load_prompt_role(prompt_path, "solution_writer")
+        solution_writer_protocol = solution_writer_role.get("protocol")
+    independent_writer_configured = (
+        solution_writer_protocol == "independent-structured-v2"
+    )
     repair_candidate_validation_configured = (
         structured_repair_configured
-        and prompt_version in {"react-agent-v8", "react-agent-v9", "react-agent-v10"}
+        and prompt_version
+        in {
+            "react-agent-v8",
+            "react-agent-v9",
+            "react-agent-v10",
+            "react-agent-v11",
+        }
     )
     return {
         "run_id": run_id,
@@ -382,6 +396,20 @@ def create_manifest_config(
                                     ),
                                     **(
                                         {
+                                            "terminal_tool_schema": (
+                                                "answer-context-v1"
+                                            ),
+                                            "solution_generation_mode": (
+                                                "independent-structured-v2"
+                                            ),
+                                            "solution_writer_output": (
+                                                "strict-tool-v1"
+                                            ),
+                                            "solution_writer_evidence": "compact-v2",
+                                            "verification_consistency": "stepwise-v2",
+                                        }
+                                        if independent_writer_configured
+                                        else {
                                             "solution_generation_mode": (
                                                 "separate-node-v1"
                                             ),
