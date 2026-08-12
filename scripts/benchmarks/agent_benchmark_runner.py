@@ -748,6 +748,53 @@ def _vote(answers: list[str]) -> tuple[str | None, dict]:
     }
 
 
+# Счётчики: описывают РАСХОД и ПОВЕДЕНИЕ всей задачи, поэтому складываются по
+# сэмплам. До 2026-08-12 суммировался только tokens_used, а остальное молча
+# бралось из первого сэмпла: в прогоне v4 это показало segmenter_calls=5 при
+# фактических 15, то есть диагностика занижалась во столько раз, сколько было
+# сэмплов.
+_ADDITIVE_METRICS = (
+    "tokens_used", "eval_rounds", "eval_candidates", "eval_rejected",
+    "eval_unreliable_rounds", "recovery_rounds", "thinking_overruns",
+    "segmenter_calls", "segmenter_unreliable", "premature_answers",
+    "answers_not_in_step_text", "api_errors", "tool_calls", "tool_salvaged",
+)
+
+
+def _merge_sample_metrics(metrics_all: list[dict], answers: list[str],
+                          final: "str | None") -> dict:
+    """Сводит метрики сэмплов в одну запись.
+
+    Счётчики складываются, а описательные поля (steps_count, is_valid,
+    verifier_rationale, answer_depth, eval_history) берутся у ТОГО сэмпла, чей
+    ответ победил в голосовании: они характеризуют возвращённый ответ, и брать
+    их у первого сэмпла неверно, когда победил третий.
+    """
+    if not metrics_all:
+        return {}
+    from answer_utils import normalize_answer
+
+    winner = 0
+    if final:
+        key = normalize_answer(final) or final
+        for idx, a in enumerate(answers):
+            if a and (normalize_answer(a) or a) == key:
+                winner = idx
+                break
+    merged = dict(metrics_all[winner])
+    for name in _ADDITIVE_METRICS:
+        vals = [m.get(name) for m in metrics_all
+                if isinstance(m.get(name), (int, float)) and not isinstance(m.get(name), bool)]
+        if vals:
+            merged[name] = sum(vals)
+    # Раскладка по сэмплам: без неё из суммы не видно, был ли расход ровным или
+    # его создал один тяжёлый сэмпл.
+    merged["winning_sample"] = winner
+    merged["steps_per_sample"] = [m.get("steps_count") for m in metrics_all]
+    merged["tokens_per_sample"] = [m.get("tokens_used") for m in metrics_all]
+    return merged
+
+
 def _solve_once(graph, problem: str, args: argparse.Namespace,
                 task_id: Any = None) -> tuple[str | None, dict]:
     """Одно независимое решение задачи."""
@@ -917,8 +964,7 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace,
         answers.append(answer or "")
         metrics_all.append(m)
         final, vote_info = _vote(answers)
-    merged = dict(metrics_all[0])
-    merged["tokens_used"] = sum(m.get("tokens_used", 0) for m in metrics_all)
+    merged = _merge_sample_metrics(metrics_all, answers, final)
     merged["gave_up"] = final is None
     merged["samples"] = len(metrics_all)
     merged["sample_answers"] = answers
