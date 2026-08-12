@@ -273,9 +273,14 @@ def create_manifest_config(
         else None
     )
     verification_configured = verification is not None
+    solution_writer_configured = (
+        args.pipeline == "react_agent"
+        and prompt_path.exists()
+        and prompt_has_role(prompt_path, "solution_writer")
+    )
     repair_candidate_validation_configured = (
         structured_repair_configured
-        and prompt_version in {"react-agent-v8", "react-agent-v9"}
+        and prompt_version in {"react-agent-v8", "react-agent-v9", "react-agent-v10"}
     )
     return {
         "run_id": run_id,
@@ -370,7 +375,21 @@ def create_manifest_config(
                                     "verification_prompt": str(
                                         verification["prompt_path"].name
                                     ),
-                                    "terminal_tool": "final_solution",
+                                    "terminal_tool": (
+                                        "final_answer"
+                                        if solution_writer_configured
+                                        else "final_solution"
+                                    ),
+                                    **(
+                                        {
+                                            "solution_generation_mode": (
+                                                "separate-node-v1"
+                                            ),
+                                            "solution_writer_evidence": "compact-v1",
+                                        }
+                                        if solution_writer_configured
+                                        else {}
+                                    ),
                                 }
                                 if verification_configured
                                 else {}
