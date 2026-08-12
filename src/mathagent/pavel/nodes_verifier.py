@@ -307,6 +307,7 @@ def create_react_verifier_node(
     stepwise_role_name: str,
     finalize_role_name: str,
     max_verification_rounds: int,
+    terminal_tool_name: str = "final_solution",
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Адаптирует двухэтапный verifier из ветки Стаса к ReAct-loop"""
     with agent_prompt_path.open(encoding="utf-8") as stream:
@@ -325,7 +326,9 @@ def create_react_verifier_node(
         if not isinstance(solution, str) or not solution.strip():
             raise ValueError("Verifier requires a non-empty proposed solution")
         if not isinstance(tool_call_id, str) or not tool_call_id:
-            raise ValueError("Verifier requires the final_solution tool call id")
+            raise ValueError(
+                f"Verifier requires the {terminal_tool_name} tool call id"
+            )
 
         steps, steps_truncated, stepwise_trace, stepwise_message = (
             _run_stepwise_check(
@@ -352,14 +355,20 @@ def create_react_verifier_node(
         }
 
         attempts = list(state.get("solution_attempts", []))
-        attempts.append(
-            {
-                "index": round_index,
-                "answer": answer.strip(),
-                "solution": solution.strip(),
-                "verification": verification,
+        attempt = {
+            "index": round_index,
+            "answer": answer.strip(),
+            "solution": solution.strip(),
+            "verification": verification,
+        }
+        writer_history = state.get("solution_writer_history", [])
+        if writer_history:
+            attempt["writer"] = {
+                key: value
+                for key, value in writer_history[-1].items()
+                if key != "index"
             }
-        )
+        attempts.append(attempt)
         next_round = round_index + 1
         stepwise_key = f"verifier_stepwise_{round_index}"
         finalize_key = f"verifier_finalize_{round_index}"
@@ -394,7 +403,7 @@ def create_react_verifier_node(
                 ToolMessage(
                     content=json.dumps(feedback_payload, ensure_ascii=False),
                     tool_call_id=tool_call_id,
-                    name="final_solution",
+                    name=terminal_tool_name,
                     id=f"react:verification:{round_index}",
                 )
             ],

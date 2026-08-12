@@ -168,6 +168,7 @@ def create_react_agent_node(
     planner_enabled: bool = False,
     structured_repair_enabled: bool = False,
     verification_enabled: bool = False,
+    solution_writer_enabled: bool = False,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Вызывает ReAct-модель и обрабатывает tools выбранной версии промпта."""
     if repair_tool is not None and cot_tool is not None:
@@ -383,6 +384,17 @@ def create_react_agent_node(
                     format_error = (
                         f"{terminal_tool.name} must contain a non-empty answer"
                     )
+                elif solution_writer_enabled:
+                    history_entry["action"] = "final_answer"
+                    return {
+                        **base_update,
+                        "messages": [*new_messages, clean_message],
+                        "agent_history": [*agent_history, history_entry],
+                        "proposed_answer": answer.strip(),
+                        "proposed_tool_call_id": tool_call["id"],
+                        "format_retry_count": 0,
+                        "status": "solution_writing",
+                    }
                 elif verification_enabled and (
                     not isinstance(solution, str) or not solution.strip()
                 ):
@@ -651,6 +663,8 @@ def route_after_react_agent(state: dict[str, Any]) -> str:
     status = state["status"]
     if status == "tool_requested":
         return "tools"
+    if status == "solution_writing":
+        return "write_solution"
     if status == "verification_requested":
         return "verify"
     if status == "format_retry":

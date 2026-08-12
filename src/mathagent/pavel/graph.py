@@ -36,6 +36,7 @@ from mathagent.pavel.nodes_react import (
     route_after_react_precheck,
     route_after_react_repair,
 )
+from mathagent.pavel.nodes_solution_writer import create_solution_writer_node
 from mathagent.pavel.nodes_verifier import (
     create_react_verifier_node,
     route_after_react_verification,
@@ -135,6 +136,7 @@ class ReactAgentState(TypedDict):
     proposed_answer: NotRequired[str]
     proposed_solution: NotRequired[str]
     proposed_tool_call_id: NotRequired[str]
+    solution_writer_history: NotRequired[list[dict[str, Any]]]
     solution_attempts: NotRequired[list[dict[str, Any]]]
     verification_round: NotRequired[int]
     format_retry_count: NotRequired[int]
@@ -402,8 +404,11 @@ def create_react_agent_graph(
     cot_enabled = prompt_has_role(prompt_path, "cot")
     precheck_enabled = prompt_has_role(prompt_path, "tool_checker")
     planner_enabled = prompt_has_role(prompt_path, "planner")
+    solution_writer_enabled = prompt_has_role(prompt_path, "solution_writer")
     verification_config = load_verification_config(prompt_path)
     verification_enabled = verification_config is not None
+    if solution_writer_enabled and not verification_enabled:
+        raise ValueError("Solution writer requires verification configuration")
     structured_repair_configured = cot_enabled and prompt_has_role(
         prompt_path,
         "repair",
@@ -470,10 +475,18 @@ def create_react_agent_graph(
         repair_tool = create_repair_tool(execution_timeout)
         executable_tools = [python_tool, repair_tool]
     terminal_tool = (
-        create_final_solution_tool()
-        if verification_enabled
-        else create_final_answer_tool()
+        create_final_answer_tool()
+        if solution_writer_enabled or not verification_enabled
+        else create_final_solution_tool()
     )
+    solution_writer_model = None
+    if solution_writer_enabled:
+        solution_writer_model = create_node_model(
+            model_config,
+            prompt_path,
+            "solution_writer",
+            generation,
+        )
     verifier_stepwise_model = None
     verifier_finalize_model = None
     if verification_enabled:
@@ -533,6 +546,7 @@ def create_react_agent_graph(
             planner_enabled=planner_enabled,
             structured_repair_enabled=structured_repair_enabled,
             verification_enabled=verification_enabled,
+            solution_writer_enabled=solution_writer_enabled,
         ),
     )
     if planner_model is not None:
@@ -592,8 +606,15 @@ def create_react_agent_graph(
                 str(verification_config["stepwise_role"]),
                 str(verification_config["finalize_role"]),
                 max_verification_rounds,
+                terminal_tool_name=terminal_tool.name,
             ),
         )
+    if solution_writer_model is not None:
+        graph.add_node(
+            "solution_writer",
+            create_solution_writer_node(solution_writer_model, prompt_path),
+        )
+        graph.add_edge("solution_writer", "verifier")
     if planner_enabled:
         graph.add_edge(START, "planner")
         graph.add_edge("planner", "agent")
@@ -606,6 +627,8 @@ def create_react_agent_graph(
     }
     if verification_enabled:
         agent_routes["verify"] = "verifier"
+    if solution_writer_enabled:
+        agent_routes["write_solution"] = "solution_writer"
     graph.add_conditional_edges(
         "agent",
         route_after_react_agent,
@@ -655,7 +678,7 @@ def create_react_agent_graph(
         + 2 * max_tool_calls * max_tool_repairs
         + 2 * max_precheck_rejections
         + (1 if planner_enabled else 0)
-        + 2 * max_verification_rounds
+        + (3 if solution_writer_enabled else 2) * max_verification_rounds
         + 6
     )
     compiled_graph = graph.compile().with_config({"recursion_limit": recursion_limit})
