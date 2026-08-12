@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "run_id": "ilya-react-hmmt-v1",
+  "model": "qwen35-9b",
+  "pipeline": "react",
+  "prompt": "/home/ykapushev/mathagent/work/ilya-react-hmmt-v1/conf/base/prompts/react-tools.yml",
+  "prompt_version": "react-tools-v1",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 49152
+  },
+  "runtime": {
+    "concurrency": 32,
+    "timeout": 4000.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 8
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 16,
+    "max_model_len": 131072
+  },
+  "status": "completed",
+  "created_at": "2026-08-12T08:36:06.920462+00:00",
+  "updated_at": "2026-08-12T09:33:48.278940+00:00",
+  "benchmarks": {
+    "HMMT26": {
+      "dataset": "MathArena/hmmt_feb_2026",
+      "split": "train",
+      "total_tasks": 33,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-hmmt-v1/results/runs/ilya-react-hmmt-v1/hmmt26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-12T09:33:46.342210+00:00",
+      "summary": {
+        "total_tasks": 33,
+        "successful_tasks": 33,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 257419,
+        "output_tokens": 1012316,
+        "total_tokens": 1269735,
+        "wall_time_seconds": 3459.113,
+        "tasks_per_second": 0.0095
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 33,
+          "wall_time_seconds": 3459.113,
+          "tasks_per_second": 0.0095,
+          "status": "completed",
+          "updated_at": "2026-08-12T09:33:46.342168+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 33,
+    "successful_tasks": 33,
+    "failed_tasks": 0,
+    "remaining_tasks": 0,
+    "input_tokens": 257419,
+    "output_tokens": 1012316,
+    "total_tokens": 1269735,
+    "wall_time_seconds": 3459.113,
+    "tasks_per_second": 0.0095
+  }
+}
