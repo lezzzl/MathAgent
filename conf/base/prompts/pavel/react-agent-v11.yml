@@ -29,8 +29,8 @@ tools:
 
 roles:
   planner:
-    thinking: false
-    max_tokens: 10000
+    thinking: true
+    max_tokens: 50000
     system: |-
       You are the planning stage of a tool-using mathematical agent
       Describe how the downstream agent could solve the problem, but do not solve
@@ -96,7 +96,7 @@ roles:
   solution_writer:
     protocol: "independent-structured-v2"
     thinking: false
-    max_tokens: 30000
+    max_tokens: 50000
     system: |-
       You are an independent mathematical solution writer
 
