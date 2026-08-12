@@ -7,7 +7,7 @@ import os
 import sys
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from mathagent.pavel.graph import (
     ModelConfig,
     NodeGeneration,
+    NodeModels,
     create_code_agent_graph,
     create_react_agent_graph,
     create_solver_graph,
@@ -79,6 +80,7 @@ class GraphBuild:
 
     graph: Any
     node_generation: NodeGeneration
+    node_models: NodeModels
 
 
 def parse_benchmark_args(
@@ -101,6 +103,15 @@ def parse_benchmark_args(
 
     # Дефолтные параметры взял из MathArena
     parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", "EMPTY"))
+    parser.add_argument("--planner-model", default=os.getenv("PLANNER_MODEL"))
+    parser.add_argument(
+        "--planner-base-url",
+        default=os.getenv("PLANNER_OPENAI_BASE_URL"),
+    )
+    parser.add_argument(
+        "--planner-api-key",
+        default=os.getenv("PLANNER_OPENAI_API_KEY"),
+    )
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top-p", type=float, default=0.95)
     parser.add_argument("--top-k", type=int, default=20)
@@ -251,11 +262,12 @@ def create_manifest_config(
     prompt_path: Path,
     prompt_version: str,
     node_generation: NodeGeneration,
+    node_models: NodeModels | None = None,
 ) -> dict[str, Any]:
     """Формирует конфигурацию эксперимента, которая будет сохранена в manifest.
 
-    В неё входят параметры, влияющие на результат и производительность, но не
-    попадают API-ключ и URL сервера, которые не нужны для сравнения запусков.
+    В неё входят параметры, влияющие на результат и производительность. API-ключи
+    и URL серверов в manifest не сохраняются.
     """
     prompt_tools = load_prompt_tools(prompt_path) if prompt_path.exists() else {}
     execution_tools = [
@@ -314,6 +326,7 @@ def create_manifest_config(
             "max_tokens": args.max_tokens,
         },
         "node_generation": node_generation,
+        **({"node_models": node_models} if node_models else {}),
         "runtime": {
             "concurrency": args.concurrency,
             "timeout": args.timeout,
@@ -456,15 +469,46 @@ def create_graph(
         timeout=args.timeout,
         max_retries=args.max_retries,
     )
+    planner_overrides_requested = any(
+        value is not None
+        for value in (
+            args.planner_model,
+            args.planner_base_url,
+            args.planner_api_key,
+        )
+    )
+    planner_model_config = (
+        replace(
+            model_config,
+            name=args.planner_model or model_config.name,
+            base_url=args.planner_base_url or model_config.base_url,
+            api_key=(
+                args.planner_api_key
+                if args.planner_api_key is not None
+                else model_config.api_key
+            ),
+        )
+        if planner_overrides_requested
+        else None
+    )
     node_generation: NodeGeneration = {}
+    node_models: NodeModels = {}
     if args.pipeline == "solver":
+        if planner_overrides_requested:
+            raise ValueError(
+                "Planner model overrides require react_agent with a planner role"
+            )
         graph = create_solver_graph(
             model_config,
             prompt_path,
             node_generation=node_generation,
         )
-        return GraphBuild(graph, node_generation)
+        return GraphBuild(graph, node_generation, node_models)
     if args.pipeline == "code_agent":
+        if planner_overrides_requested:
+            raise ValueError(
+                "Planner model overrides require react_agent with a planner role"
+            )
         graph = create_code_agent_graph(
             model_config,
             prompt_path,
@@ -472,7 +516,7 @@ def create_graph(
             execution_timeout=args.execution_timeout,
             node_generation=node_generation,
         )
-        return GraphBuild(graph, node_generation)
+        return GraphBuild(graph, node_generation, node_models)
     if args.pipeline == "react_agent":
         graph = create_react_agent_graph(
             model_config,
@@ -483,8 +527,10 @@ def create_graph(
             max_verification_rounds=args.max_verification_rounds,
             execution_timeout=args.execution_timeout,
             node_generation=node_generation,
+            planner_model_config=planner_model_config,
+            node_models=node_models,
         )
-        return GraphBuild(graph, node_generation)
+        return GraphBuild(graph, node_generation, node_models)
     raise ValueError(f"Unknown pipeline: {args.pipeline}")
 
 
@@ -857,6 +903,7 @@ def _run_benchmark(
         prompt_path,
         prompt_version,
         graph_build.node_generation,
+        graph_build.node_models,
     )
     manifest = ensure_manifest(
         manifest_path,
