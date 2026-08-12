@@ -92,11 +92,10 @@ MAX_MODEL_LEN="${MAX_MODEL_LEN:-73728}"
 # Отдельный env MAX_TOKENS диспетчер не пропускает (нет в его белом списке),
 # поэтому масштабируемся через уже разрешённый MAX_MODEL_LEN.
 MAX_TOKENS="${MAX_TOKENS:-$(( MAX_MODEL_LEN - 40960 ))}"
-# Потолок выхода. Контекст держим широким (вход react растёт), но генерации по
-# 75k токенов = задача на ~50 мин, что бьёт per-task timeout и валит circuit
-# breaker. Медиана ~24k, p90 ~45k — 49152 режет только патологический хвост.
-MAX_TOKENS_CAP="${MAX_TOKENS_CAP:-49152}"
-(( MAX_TOKENS > MAX_TOKENS_CAP )) && MAX_TOKENS="${MAX_TOKENS_CAP}"
+# Потолок выхода НЕ ставим: кап 49152 обрезал длинное рассуждение на трудных
+# задачах hmmt (4 задачи упёрлись ровно в лимит без \boxed → -3 к точности).
+# Долгие задачи вместо этого держит timeout=4000с + circuit_breaker=8 (в
+# некапнутом прогоне макс латентность была 3166с < 4000).
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONCURRENCY * 3 / 2 ))}"
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
 KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8_e4m3}"
