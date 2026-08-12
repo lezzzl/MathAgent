@@ -1,0 +1,19 @@
+# Прогон react-агента на imo_answerbench (400 задач) — v3.
+# v2 (MAX_NUM_SEQS=96) упал на инициализации engine core: 96 последовательностей
+# при контексте 131072 не влезли в память GPU (веса грузились ~2.5 мин, потом OOM
+# на KV-кэше / захвате CUDA-графов на батч 192). При 16 движок поднимался штатно.
+# Здесь параллель снижена до 48 — вдвое меньше KV-давление и граф-батч (96), при
+# этом всё равно ~3x к throughput относительно 16. Вход/выход не трогаем.
+# Имя файла = run_id → results/runs/ilya-react-imo-v3/imo_answerbench.jsonl.
+#
+# Пайплайн — дефолтный kedro benchmarks (react + tester + max_steps=8 + finalize),
+# конфиг: max_tokens=90112 (без капа), timeout=4000, cb=8.
+#
+# Если и 48 ловит OOM на старте — шаг вниз до 32 (нужен реальный root-cause лог:
+# ошибка подпроцесса EngineCore выше «Engine core initialization failed»).
+#
+# timeout 600 мин с запасом: при 48-параллели 400 задач ≈ 8-9 «волн».
+# Если не успеет — диспетчер коммитит частичное, добьём resume-джобом.
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=48 CONCURRENCY=48 SELECT=[imo_answerbench] scripts/run_benchmarks.sh
+gpus: 1
+timeout_minutes: 600
