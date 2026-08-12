@@ -1,0 +1,52 @@
+=== 2026-08-12T11:25:48.880365+00:00 run_id=ilya-react-imo-v3 branch=Ilya/agentic_loop@c3fa2f528553 gpus=1 devices=1 isolation=bwrap
+=== command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=48 CONCURRENCY=48 SELECT=[imo_answerbench] scripts/run_benchmarks.sh
+>>> Стартую vllm: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 1, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/ilya-react-imo-v3/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/ilya-react-imo-v3/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started vLLM supervisor PID 429050
+Log: /home/ykapushev/mathagent/work/ilya-react-imo-v3/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/ilya-react-imo-v3/scripts/qwen35-vllm-bench/serve_vllm.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/ilya-react-imo-v3/scripts/qwen35-vllm-bench/bench-server.log)
+vllm упал на старте. Хвост лога:
+(APIServer pid=429060)     return func(*args, **kwargs)
+(APIServer pid=429060)   File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/vllm/v1/engine/core_client.py", line 132, in make_async_mp_client
+(APIServer pid=429060)     return AsyncMPClient(*client_args)
+(APIServer pid=429060)   File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(APIServer pid=429060)     return func(*args, **kwargs)
+(APIServer pid=429060)   File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/vllm/v1/engine/core_client.py", line 963, in __init__
+(APIServer pid=429060)     super().__init__(
+(APIServer pid=429060)     ~~~~~~~~~~~~~~~~^
+(APIServer pid=429060)         asyncio_mode=True,
+(APIServer pid=429060)         ^^^^^^^^^^^^^^^^^^
+(APIServer pid=429060)     ...<3 lines>...
+(APIServer pid=429060)         client_addresses=client_addresses,
+(APIServer pid=429060)         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=429060)     )
+(APIServer pid=429060)     ^
+(APIServer pid=429060)   File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/vllm/v1/engine/core_client.py", line 573, in __init__
+(APIServer pid=429060)     with launch_core_engines(
+(APIServer pid=429060)          ~~~~~~~~~~~~~~~~~~~^
+(APIServer pid=429060)         vllm_config, executor_class, log_stats, addresses
+(APIServer pid=429060)         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=429060)     ) as (engine_manager, coordinator, addresses, tensor_queue):
+(APIServer pid=429060)     ^
+(APIServer pid=429060)   File "/home/ykapushev/miniconda3/lib/python3.13/contextlib.py", line 148, in __exit__
+(APIServer pid=429060)     next(self.gen)
+(APIServer pid=429060)     ~~~~^^^^^^^^^^
+(APIServer pid=429060)   File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/vllm/v1/engine/utils.py", line 1213, in launch_core_engines
+(APIServer pid=429060)     wait_for_engine_startup(
+(APIServer pid=429060)     ~~~~~~~~~~~~~~~~~~~~~~~^
+(APIServer pid=429060)         handshake_socket,
+(APIServer pid=429060)         ^^^^^^^^^^^^^^^^^
+(APIServer pid=429060)     ...<6 lines>...
+(APIServer pid=429060)         coordinator.proc if coordinator else None,
+(APIServer pid=429060)         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=429060)     )
+(APIServer pid=429060)     ^
+(APIServer pid=429060)   File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/vllm/v1/engine/utils.py", line 1272, in wait_for_engine_startup
+(APIServer pid=429060)     raise RuntimeError(
+(APIServer pid=429060)     ...<3 lines>...
+(APIServer pid=429060)     )
+(APIServer pid=429060) RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+>>> Останавливаю vllm...
+No managed vLLM server is running.
+=== 2026-08-12T11:28:46.592851+00:00 status=failed exit_code=1 duration=177.7s
