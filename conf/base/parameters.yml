@@ -62,9 +62,9 @@ benchmarks:
 
   runtime:
     concurrency: 32                 # параллельных запросов к модели
-    timeout: 3000.0                 # таймаут на задачу, сек
+    timeout: 4000.0                 # таймаут на задачу, сек (с запасом над max_tokens-капом 49152 ≈ 50 мин)
     max_retries: 1
-    max_consecutive_api_errors: 3   # circuit breaker: подряд ошибок API до стопа
+    max_consecutive_api_errors: 8   # circuit breaker: подряд ошибок API до стопа (было 3 — одиночные долгие задачи роняли весь бенч)
 
   serving:                          # только для записи в manifest (инфо о vLLM)
     reasoning_parser: qwen3
