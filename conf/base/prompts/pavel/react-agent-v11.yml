@@ -95,8 +95,8 @@ roles:
 
   solution_writer:
     protocol: "independent-structured-v2"
-    thinking: true
-    max_tokens: 50000
+    thinking: false
+    max_tokens: 30000
     system: |-
       You are an independent mathematical solution writer
 
