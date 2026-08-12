@@ -1,0 +1,17 @@
+# Прогон react-агента на imo_answerbench (400 задач). Имя файла = run_id →
+# results/runs/ilya-react-imo-v1/imo_answerbench.jsonl.
+#
+# Пайплайн — дефолтный kedro benchmarks (react + tester + max_steps=8 + finalize),
+# конфиг как у чистого hmmt-v1-2: max_tokens=90112 (без капа), timeout=4000, cb=8.
+#
+# CONCURRENCY=96 + MAX_NUM_SEQS=96 — распараллеливаем 400 задач, чтобы уложиться
+# в разумное время (при 16 было бы ~10 ч). ВНИМАНИЕ: 96 последовательностей при
+# контексте 131072 сильно грузят KV-кэш; vLLM при нехватке вытесняет/пересчитывает
+# (не падает), но throughput может проседать. Если движок ловит OOM на старте —
+# снизить MAX_NUM_SEQS/CONCURRENCY (напр. 48).
+#
+# timeout 600 мин с большим запасом: при 96-параллели 400 задач ≈ 4-5 «волн».
+# Если не успеет — диспетчер коммитит частичное, добьём resume-джобом.
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=96 CONCURRENCY=96 SELECT=[imo_answerbench] scripts/run_benchmarks.sh
+gpus: 1
+timeout_minutes: 600
