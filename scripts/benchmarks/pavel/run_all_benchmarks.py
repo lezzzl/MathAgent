@@ -103,6 +103,12 @@ def build_command(script: Path, args: argparse.Namespace) -> list[str]:
         str(args.execution_timeout),
     ]
     command.append("--thinking" if args.thinking else "--no-thinking")
+    if args.planner_model is not None:
+        command.extend(["--planner-model", args.planner_model])
+    if args.planner_base_url is not None:
+        command.extend(["--planner-base-url", args.planner_base_url])
+    if args.planner_api_key is not None:
+        command.extend(["--planner-api-key", args.planner_api_key])
     if args.prompt is not None:
         command.extend(["--prompt", str(args.prompt)])
     if args.limit is not None:

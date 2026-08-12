@@ -78,6 +78,12 @@ class ModelConfig:
 
 
 NodeGeneration = dict[str, dict[str, bool | int | float]]
+NodeModels = dict[str, dict[str, str | bool]]
+
+
+def normalize_base_url(base_url: str) -> str:
+    """Нормализует endpoint перед сравнением и вычислением безопасного hash."""
+    return base_url.strip().rstrip("/")
 
 
 class SolverState(TypedDict):
@@ -384,8 +390,10 @@ def create_react_agent_graph(
     max_verification_rounds: int = 2,
     execution_timeout: float = 10.0,
     node_generation: NodeGeneration | None = None,
+    planner_model_config: ModelConfig | None = None,
+    node_models: NodeModels | None = None,
 ) -> Any:
-    """Создаёт ReAct-граф с набором tools из выбранной версии промпта."""
+    """Создаёт ReAct-граф с tools и необязательной отдельной моделью planner."""
     if max_tool_calls < 1:
         raise ValueError("max_tool_calls must be positive")
     if max_tool_repairs < 0:
@@ -398,6 +406,7 @@ def create_react_agent_graph(
         raise ValueError("execution_timeout must be positive")
 
     generation = node_generation if node_generation is not None else {}
+    models = node_models if node_models is not None else {}
     agent_model = create_node_model(
         model_config,
         prompt_path,
@@ -433,11 +442,23 @@ def create_react_agent_graph(
         raise ValueError(f"Unsupported ReAct execution tools: {names}")
     planner_model = None
     if planner_enabled:
+        effective_planner_config = planner_model_config or model_config
+        models["planner"] = {
+            "model": effective_planner_config.name,
+            "uses_primary_endpoint": (
+                normalize_base_url(effective_planner_config.base_url)
+                == normalize_base_url(model_config.base_url)
+            ),
+        }
         planner_model = create_node_model(
-            model_config,
+            effective_planner_config,
             prompt_path,
             "planner",
             generation,
+        )
+    elif planner_model_config is not None:
+        raise ValueError(
+            "Planner model overrides require a prompt with a planner role"
         )
     structured_repair_model = None
     if structured_repair_enabled:

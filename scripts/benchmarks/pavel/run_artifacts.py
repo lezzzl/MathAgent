@@ -163,6 +163,30 @@ def ensure_manifest(
         if expected_node_generation is not None:
             manifest["node_generation"] = expected_node_generation
 
+        # Старые manifest не знали про отдельную planner-модель. Их можно
+        # продолжить только когда planner фактически использует основную модель
+        # и основной endpoint, то есть поведение старого запуска не меняется.
+        expected_node_models = expected.get("node_models")
+        manifest_node_models = manifest.get("node_models")
+        if expected_node_models is not None and manifest_node_models is None:
+            legacy_compatible = all(
+                node_model.get("model") == expected.get("model")
+                and node_model.get("uses_primary_endpoint") is True
+                for node_model in expected_node_models.values()
+            )
+            if not legacy_compatible:
+                raise ValueError(
+                    "Cannot continue run: legacy manifest has no compatible "
+                    "'node_models' configuration"
+                )
+            manifest_node_models = expected_node_models
+        if manifest_node_models != expected_node_models:
+            raise ValueError(
+                "Cannot continue run: manifest field 'node_models' does not match"
+            )
+        if expected_node_models is not None:
+            manifest["node_models"] = expected_node_models
+
         if (
             "pipeline_config" in manifest or "pipeline_config" in expected
         ) and manifest.get("pipeline_config") != expected.get("pipeline_config"):
