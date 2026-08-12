@@ -9,7 +9,7 @@ command: >-
   python3 scripts/benchmarks/pavel/run_all_benchmarks.py
   --benchmarks aime26 hmmt26
   --pipeline react_agent
-  --prompt conf/base/prompts/pavel/react-agent-v10.yml
+  --prompt conf/base/prompts/pavel/react-agent-v11.yml
   --model Qwen/Qwen3.5-9B
   --base-url http://127.0.0.1:8333/v1
   --api-key EMPTY

@@ -42,6 +42,7 @@ from mathagent.pavel.nodes_verifier import (
     route_after_react_verification,
 )
 from mathagent.tools.final_answer import (
+    create_contextual_final_answer_tool,
     create_final_answer_tool,
     create_final_solution_tool,
 )
@@ -134,6 +135,8 @@ class ReactAgentState(TypedDict):
     precheck_rejection_count: NotRequired[int]
     force_final_reason: NotRequired[str]
     proposed_answer: NotRequired[str]
+    proposed_solution_context: NotRequired[str]
+    derived_answer: NotRequired[str | None]
     proposed_solution: NotRequired[str]
     proposed_tool_call_id: NotRequired[str]
     solution_writer_history: NotRequired[list[dict[str, Any]]]
@@ -405,6 +408,13 @@ def create_react_agent_graph(
     precheck_enabled = prompt_has_role(prompt_path, "tool_checker")
     planner_enabled = prompt_has_role(prompt_path, "planner")
     solution_writer_enabled = prompt_has_role(prompt_path, "solution_writer")
+    solution_writer_protocol = None
+    if solution_writer_enabled:
+        _, solution_writer_role = load_prompt_role(prompt_path, "solution_writer")
+        solution_writer_protocol = solution_writer_role.get("protocol")
+    independent_writer_enabled = (
+        solution_writer_protocol == "independent-structured-v2"
+    )
     verification_config = load_verification_config(prompt_path)
     verification_enabled = verification_config is not None
     if solution_writer_enabled and not verification_enabled:
@@ -474,11 +484,12 @@ def create_react_agent_graph(
         execution_tools = [python_tool]
         repair_tool = create_repair_tool(execution_timeout)
         executable_tools = [python_tool, repair_tool]
-    terminal_tool = (
-        create_final_answer_tool()
-        if solution_writer_enabled or not verification_enabled
-        else create_final_solution_tool()
-    )
+    if independent_writer_enabled:
+        terminal_tool = create_contextual_final_answer_tool()
+    elif solution_writer_enabled or not verification_enabled:
+        terminal_tool = create_final_answer_tool()
+    else:
+        terminal_tool = create_final_solution_tool()
     solution_writer_model = None
     if solution_writer_enabled:
         solution_writer_model = create_node_model(
@@ -547,6 +558,7 @@ def create_react_agent_graph(
             structured_repair_enabled=structured_repair_enabled,
             verification_enabled=verification_enabled,
             solution_writer_enabled=solution_writer_enabled,
+            solution_context_required=independent_writer_enabled,
         ),
     )
     if planner_model is not None:
@@ -607,6 +619,7 @@ def create_react_agent_graph(
                 str(verification_config["finalize_role"]),
                 max_verification_rounds,
                 terminal_tool_name=terminal_tool.name,
+                independent_writer_enabled=independent_writer_enabled,
             ),
         )
     if solution_writer_model is not None:
