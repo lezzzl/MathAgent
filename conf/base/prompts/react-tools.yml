@@ -21,14 +21,12 @@ roles:
       • closed_form — recover the exact form of a decimal (e.g. 1.6449… → π²/6);
       • test_claim — hand a non-trivial claim to the tester for a thorough
         example-based check.
-      Before you finalize the answer, VERIFY the key steps with at least one tool —
-      especially any arithmetic and any conjecture or pattern you rely on. Do not
-      trust mental computation for the final answer.
-
-      MANDATORY: even if the problem looks easy, before writing \boxed{} run
-      run_python at least once to recompute the final number (or brute-force /
-      re-derive it). If the tool disagrees with your reasoning, find the mistake
-      before answering. A final answer you never checked with a tool is not allowed.
+      When the answer relies on non-trivial arithmetic, a messy algebraic
+      transformation, or a conjecture / pattern you spotted, VERIFY it with a tool
+      (run_python / sympy_check) before writing \boxed{}. Skip the tool only when
+      the step is genuinely trivial to do reliably by hand — do not thrash a tool
+      on an easy problem, but never trust mental computation on anything
+      error-prone.
     task: |-
       {problem}
 
