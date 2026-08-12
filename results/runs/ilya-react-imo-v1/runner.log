@@ -1,0 +1,37 @@
+=== 2026-08-12T10:57:39.461096+00:00 run_id=ilya-react-imo-v1 branch=Ilya/agentic_loop@f11aa69a7649 gpus=1 devices=1 isolation=bwrap
+=== command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=96 CONCURRENCY=96 SELECT=[imo_answerbench] scripts/run_benchmarks.sh
+>>> Стартую vllm: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 1, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/ilya-react-imo-v1/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/ilya-react-imo-v1/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started vLLM supervisor PID 381006
+Log: /home/ykapushev/mathagent/work/ilya-react-imo-v1/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/ilya-react-imo-v1/scripts/qwen35-vllm-bench/serve_vllm.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/ilya-react-imo-v1/scripts/qwen35-vllm-bench/bench-server.log)
+vllm упал на старте. Хвост лога:
+vLLM child PID/process-group: 381037
+Traceback (most recent call last):
+  File "/home/ykapushev/mathagent/work/ilya-react-imo-v1/.venv/bin/vllm", line 4, in <module>
+    from vllm.entrypoints.cli.main import main
+  File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/vllm/__init__.py", line 14, in <module>
+    import vllm.env_override  # noqa: F401
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/vllm/env_override.py", line 567, in <module>
+    from torch._dynamo.convert_frame import GraphCaptureOutput
+  File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/torch/_dynamo/__init__.py", line 13, in <module>
+    from . import (
+    ...<6 lines>...
+    )
+  File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/torch/_dynamo/aot_compile.py", line 17, in <module>
+    from torch._dynamo.package import SystemInfo
+  File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/torch/_dynamo/package.py", line 1173, in <module>
+    DynamoCache = DiskDynamoCache(os.path.join(cache_dir(), "dynamo"))
+                                               ~~~~~~~~~^^
+  File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/torch/_dynamo/package.py", line 1170, in cache_dir
+    return cache_dir()
+  File "/home/ykapushev/mathagent/MathAgent/.venv/lib/python3.13/site-packages/torch/_inductor/runtime/cache_dir_utils.py", line 18, in cache_dir
+    os.makedirs(cache_dir, exist_ok=True)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen os>", line 228, in makedirs
+OSError: [Errno 28] No space left on device: '/home/ykapushev/mathagent/work/ilya-react-imo-v1/tmp/torchinductor_ykapushev'
+>>> Останавливаю vllm...
+No managed vLLM server is running.
+=== 2026-08-12T10:57:48.739736+00:00 status=failed exit_code=1 duration=9.3s
