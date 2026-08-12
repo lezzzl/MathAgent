@@ -13,8 +13,9 @@ command: >-
   --model Qwen/Qwen3.5-9B
   --base-url http://127.0.0.1:8333/v1
   --api-key EMPTY
+  --seed 43
   --max-tokens 65536
-  --concurrency 30
+  --concurrency 33
   --max-tool-calls 20
   --max-tool-repairs 5
   --max-verification-rounds 2
