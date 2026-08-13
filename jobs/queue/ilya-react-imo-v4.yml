@@ -1,17 +1,34 @@
-# Прогон react-агента на imo_answerbench (400 задач) — v4.
-# v2 (96 seqs) и v3 (48 seqs) упали на инициализации engine core: не влезли в
-# память GPU (веса грузились ~3 мин, потом OOM). Порог между 16 и 48.
-# Возвращаемся на ПРОВЕРЕННЫЙ MAX_NUM_SEQS=16 — ровно тот серверный конфиг, на
-# котором hmmt-v1-2 поднялся и отработал 33/33 штатно. Стартует гарантированно.
-# Имя файла = run_id → results/runs/ilya-react-imo-v4/imo_answerbench.jsonl.
+# Прогон react-агента на imo_answerbench (400 задач) — v4, попытка на SGLang.
 #
-# Пайплайн — дефолтный kedro benchmarks (react + tester + max_steps=8 + finalize),
-# конфиг: max_tokens=90112 (без капа), timeout=4000, cb=8.
+# Что было: попытки 1 и 2 шли на vLLM с CONCURRENCY=16 и упёрлись в timeout,
+# сделав 225/400 и 191/400. Причина не в очереди задач, а в сэмплере: при
+# presence_penalty=1.5 vLLM 0.26 каждый шаг декода пересобирает на CPU
+# паддед-тензор ВСЕЙ истории токенов (v1/sample/ops/penalties.py::
+# _convert_to_tensors) — ~50 мс на батч 16×34k токенов при ~10 мс полезной
+# работы GPU. Отсюда 250 ток/с на карту, 10% утилизации и деградация с ростом
+# ответа (в первые минуты было 709 ток/с). Цена растёт как batch×длина, поэтому
+# одним лишь повышением параллелизма это не лечится.
 #
-# ЦЕНА надёжности: при 16-параллели 400 задач ≈ 10 ч. timeout 600 мин — впритык;
-# если не успеет, диспетчер коммитит частичное → добьём resume-джобом. Ускорить
-# concurrency сможем позже, когда будет реальный root-cause OOM (строки выше
-# «Engine core initialization failed»: CUDA out of memory / KV cache / GiB).
-command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 CONCURRENCY=32 SELECT=[imo_answerbench] scripts/run_benchmarks.sh
+# Что меняем: движок SGLang (ENGINE=sglang — теперь дефолт run_benchmarks.sh).
+# Он держит накопитель (batch, vocab) и на шаге пишет туда только новый токен,
+# так что presence_penalty перестаёт быть квадратичным по длине.
+# MAX_NUM_SEQS больше не задаём руками: скрипт выводит его как CONCURRENCY*3/2
+# (32 → 48) и под то же число снимает CUDA-графы.
+#
+# Остальное — как в прошлых попытках: та же модель, MAX_MODEL_LEN=131072,
+# max_tokens=90112, react+tester, тот же промпт. Раньше max_tokens вычислялся
+# самодельной правкой run_benchmarks.sh (MAX_MODEL_LEN-40960); скрипт взят из
+# main, где такой строки нет, поэтому число стоит в самой команде.
+#
+# Команда бенчмарков пишется явно после `--`: дефолта у скрипта больше нет.
+# Адрес сервера и run_id известны только в момент запуска — {BASE_URL} и
+# {RUN_ID} подставит run_benchmarks.sh.
+#
+# Имя файла = run_id → results/runs/ilya-react-imo-v4-3/imo_answerbench.jsonl.
+command: >-
+  ENGINE=sglang MAX_MODEL_LEN=131072 CONCURRENCY=32
+  scripts/run_benchmarks.sh --
+  .venv/bin/kedro run --pipeline benchmarks --params
+  benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=32,benchmarks.serving.vllm_max_num_seqs=48,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}
 gpus: 1
 timeout_minutes: 2100
