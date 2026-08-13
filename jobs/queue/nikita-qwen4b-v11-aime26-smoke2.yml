@@ -1,0 +1,51 @@
+# ДЫМОВОЙ ПРОГОН №2: две задачи AIME26 в той форме спеки, которой пойдут зёрна.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-smoke2/.
+#
+# Первый дымовой прогон проверил, что запуск вообще состоится. Этот проверяет
+# конкретно те три вещи, которые в боевых спеках новые и которые нельзя
+# посмотреть локально:
+#
+#   1. Доезжает ли TOOL_CALL_PARSER. Переменная наша, в белом списке диспетчера
+#      её заведомо не было. Если не доехала — в логе пойдёт [TOOL SALVAGE], и это
+#      уже другая конфигурация, чем та, что дала 28/30 (§2.18).
+#   2. Переживает ли сервер CONCURRENCY=96 (MAX_NUM_SEQS=144) при контексте
+#      65536 — строка про размер KV-кэша печатается сразу после старта.
+#   3. Подставляется ли {BASE_URL}/{RUN_ID} в нашу команду и ложится ли JSONL
+#      в каталог с именем спеки.
+#
+# Если ваш первый дымовой прогон уже шёл ровно в этой форме — этот файл не нужен,
+# сразу берите зёрна.
+#
+# Что смотреть в логе:
+#   [TOOL SALVAGE]                     — парсер НЕ доехал (главный вопрос)
+#   [config] pipeline=qwen4b … v11.yml — подхватились пайплайн и промпт
+#   [preflight] … max_model_len=65536  — контекст сервера
+#   [verify] ИТОГ AIME26: N/2          — автосверка отработала
+command: >-
+  MODEL=Qwen/Qwen3.5-4B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-4B
+  CONCURRENCY=96
+  MAX_MODEL_LEN=65536
+  KV_CACHE_DTYPE=auto
+  MTP=0
+  TOOL_CALL_PARSER=qwen3_coder
+  scripts/run_benchmarks.sh --
+  .venv/bin/python -u scripts/benchmarks/run_aime26.py
+  --model {SERVED_MODEL_NAME}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --pipeline qwen4b
+  --prompt conf/base/prompts/agent-step-qwen4b-v11.yml
+  --branch-mode single
+  --seed 42
+  --samples 3
+  --resample-token-threshold 250000
+  --vote-tiebreak-samples 0
+  --no-verify-step
+  --token-budget 800000
+  --timeout 1200
+  --workers 30
+  --limit 2
+  --output results/runs/{RUN_ID}/aime26.jsonl
+gpus: 1
+timeout_minutes: 60
