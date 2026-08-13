@@ -12,6 +12,6 @@
 # если не успеет, диспетчер коммитит частичное → добьём resume-джобом. Ускорить
 # concurrency сможем позже, когда будет реальный root-cause OOM (строки выше
 # «Engine core initialization failed»: CUDA out of memory / KV cache / GiB).
-command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 CONCURRENCY=16 SELECT=[imo_answerbench] scripts/run_benchmarks.sh
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 CONCURRENCY=32 SELECT=[imo_answerbench] scripts/run_benchmarks.sh
 gpus: 1
-timeout_minutes: 600
+timeout_minutes: 2000
