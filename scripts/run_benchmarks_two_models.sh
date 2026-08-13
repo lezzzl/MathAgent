@@ -104,6 +104,9 @@ cd "${ROOT}"
 
 # --- подстановка плейсхолдеров --------------------------------------------
 raw_command="${BENCH_CMD[*]}"
+# Адрес, названный в команде явно, ведёт мимо наших серверов: порты выдаёт
+# диспетчер. Проверяем до подстановки — после в команде стоят наши же адреса.
+require_no_hardcoded_address
 substitute_placeholders \
   "BASE_URL=${BASE_URL}" \
   "SECOND_BASE_URL=${SECOND_BASE_URL}" \
@@ -214,6 +217,11 @@ SECOND_LOG="${ROOT}/scripts/qwen35-vllm-bench/bench-second.log"
 rotate_log "${FIRST_LOG}"
 rotate_log "${SECOND_LOG}"
 
+# Оба порта проверяются до старта: движок на занятом порту упадёт на bind, а
+# ожидание готовности примет за него чужой сервер, уже отвечающий по адресу.
+require_free_port "${PORT}" first
+require_free_port "${SECOND_PORT}" second
+
 # Оба сервера стартуют сразу: загрузка весов занимает минуты, и делать её
 # последовательно значит удвоить простой карт.
 start_server first "" "${FIRST_GPU}" "${PORT}" "${MODEL}" "${SERVED_MODEL_NAME}"
@@ -245,6 +253,11 @@ wait_ready() {
 
 wait_ready first "${BASE_URL}" "${FIRST_LOG}"
 wait_ready second "${SECOND_BASE_URL}" "${SECOND_LOG}"
+
+# Ответить мог и сосед: порт освобождается и занимается между проверкой и
+# стартом. Сверка имени отличает наш сервер от чужого.
+require_served_model "${BASE_URL}" "${SERVED_MODEL_NAME}" first
+require_served_model "${SECOND_BASE_URL}" "${SECOND_SERVED_MODEL_NAME}" second
 
 # --- прогон ----------------------------------------------------------------
 echo ">>> Запускаю бенчмарки (run_id=${RUN_ID})"
