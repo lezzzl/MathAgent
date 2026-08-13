@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Прогон пошагового агента qwen4b на одном бенчмарке с одним зерном.
 #
-#   scripts/bench_qwen4b.sh aime26 42
-#   MAX_NUM_SEQS=32 scripts/bench_qwen4b.sh hmmt_feb2025 43   # ручной прогон
-#   scripts/bench_qwen4b.sh aime26 42 --limit 2               # дымовой
+#   bash scripts/bench_qwen4b.sh aime26 42
+#   MAX_NUM_SEQS=32 bash scripts/bench_qwen4b.sh hmmt_feb2025 43   # ручной прогон
+#   bash scripts/bench_qwen4b.sh aime26 42 --limit 2               # дымовой
+#   bash scripts/bench_qwen4b.sh aime26 42 --run-id другое-имя
 #
-# Всё после зерна уходит в раннер как есть — так дымовой прогон отличается от
-# боевого одним аргументом в спеке, а не отдельной веткой в скрипте.
+# Всё после зерна уходит в раннер как есть (кроме нашего --run-id) — так дымовой
+# прогон отличается от боевого одним аргументом в спеке, а не веткой в скрипте.
+#
+# В спеке диспетчера команда обязана начинаться с python|python3|bash|uv, поэтому
+# там пишется `bash scripts/bench_qwen4b.sh ...`, а не путь к скрипту напрямую.
+# Сам файл при этом должен быть закоммичен: диспетчер проверяет, что скрипт
+# отслеживается git в том коммите, из которого запускается.
 #
 # Зачем отдельный скрипт, а не всё в спеке диспетчера. Диспетчер пропускает в
 # задачу только переменные из своего белого списка — на этом уже споткнулся
@@ -37,6 +43,20 @@ BENCH="${1:?первый аргумент — бенчмарк: aime24 | aime25 
 SEED="${2:?второй аргумент — зерно, например 42}"
 shift 2   # остаток — доп. флаги раннера
 
+# --run-id вынимаем из остатка: это НАШ флаг, раннер его не знает. Нужен, когда
+# имя спеки разошлось с шаблоном ниже — например после переименования из-за
+# занятого run_id. Ошибиться тут дорого: каталог результатов должен называться
+# ровно так же, как yml-файл, иначе диспетчер их не найдёт.
+EXPLICIT_RUN_ID=""
+PASSTHROUGH=()
+while (( $# )); do
+  case "$1" in
+    --run-id) EXPLICIT_RUN_ID="${2:?--run-id без значения}"; shift 2 ;;
+    *) PASSTHROUGH+=("$1"); shift ;;
+  esac
+done
+set -- "${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"}"
+
 RUNNER="${ROOT}/scripts/benchmarks/run_${BENCH}.py"
 [[ -f "${RUNNER}" ]] || { echo "Нет ${RUNNER}" >&2; exit 1; }
 
@@ -48,9 +68,11 @@ MODEL="${MODEL:-Qwen/Qwen3.5-4B}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-${MODEL}}"
 BASE_URL="http://127.0.0.1:${PORT}/v1"
 
-# run_id задаёт диспетчер (это имя yml-файла) — он же по нему забирает каталог
-# результатов. Своё значение подставляем только для ручных прогонов.
-RUN_ID="${RUN_ID:-nikita-qwen4b-v11-${BENCH}-s${SEED}}"
+# run_id — это имя yml-спеки, и по нему диспетчер забирает каталог результатов.
+# Он кладёт его в окружение, но под каким именем — снаружи не видно (в его тестах
+# переменная скрыта за константой RUN_ID_ENV), поэтому смотрим оба правдоподобных
+# имени. Явный --run-id старше всего: он не зависит от догадок.
+RUN_ID="${EXPLICIT_RUN_ID:-${RUN_ID:-${MATHAGENT_RUN_ID:-nikita-qwen4b-v11-${BENCH}-s${SEED}}}}"
 OUTPUT="${ROOT}/results/runs/${RUN_ID}/${BENCH}.jsonl"
 
 PROMPT="${PROMPT:-conf/base/prompts/agent-step-qwen4b-v11.yml}"
@@ -81,10 +103,14 @@ if (( ! INNER )); then
   export TOOL_CALL_PARSER="${TOOL_CALL_PARSER:-qwen3_coder}"
 
   echo ">>> ${BENCH}, зерно ${SEED}, run_id=${RUN_ID}"
+  echo ">>> результаты: ${OUTPUT}"
   # Путь абсолютный, а не $0: run_benchmarks.sh перед запуском команды делает
   # cd в корень, и относительный путь зависел бы от того, откуда позвали нас.
+  # run_id передаём явно: во внутреннем вызове он должен быть тем же, что здесь,
+  # независимо от того, что там окажется в окружении.
   exec "${ROOT}/scripts/run_benchmarks.sh" -- \
-    /usr/bin/env bash "${ROOT}/scripts/bench_qwen4b.sh" --inner "${BENCH}" "${SEED}" "$@"
+    /usr/bin/env bash "${ROOT}/scripts/bench_qwen4b.sh" --inner "${BENCH}" "${SEED}" \
+    --run-id "${RUN_ID}" "$@"
 fi
 
 # --- внутренний режим: сервер уже готов ------------------------------------
