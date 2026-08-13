@@ -1,0 +1,46 @@
+=== 2026-08-13T13:32:05.323789+00:00 run_id=nikita-qwen4b-v11-aime26-smoke branch=Nikita/ToT@70f7fedbc75f gpus=1 devices=4 isolation=bwrap
+=== command: bash scripts/bench_qwen4b.sh aime26 42 --limit 2
+>>> aime26, зерно 42, run_id=nikita-qwen4b-v11-aime26-smoke
+>>> результаты: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-smoke/results/runs/nikita-qwen4b-v11-aime26-smoke/aime26.jsonl
+>>> Стартую sglang: Qwen/Qwen3.5-4B как 'Qwen/Qwen3.5-4B' на GPU 4, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-smoke/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-smoke/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 172648
+Log: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-smoke/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-smoke/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-smoke/scripts/qwen35-vllm-bench/bench-server.log)
+>>> Движок (sglang) готов. Размер KV-кэша:
+>>> Спекуляция: <в логе не видно>
+>>> Запускаю бенчмарки (run_id=nikita-qwen4b-v11-aime26-smoke)
+    /usr/bin/env    bash    /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-smoke/scripts/bench_qwen4b.sh    --inner    aime26    42    --run-id    nikita-qwen4b-v11-aime26-smoke    --limit    2
+Traceback (most recent call last):
+  File "<stdin>", line 21, in <module>
+  File "<stdin>", line 16, in reasoning_len
+  File "/home/ykapushev/miniconda3/lib/python3.13/urllib/request.py", line 189, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/home/ykapushev/miniconda3/lib/python3.13/urllib/request.py", line 495, in open
+    response = meth(req, response)
+  File "/home/ykapushev/miniconda3/lib/python3.13/urllib/request.py", line 604, in http_response
+    response = self.parent.error(
+        'http', request, response, code, msg, hdrs)
+  File "/home/ykapushev/miniconda3/lib/python3.13/urllib/request.py", line 533, in error
+    return self._call_chain(*args)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/ykapushev/miniconda3/lib/python3.13/urllib/request.py", line 466, in _call_chain
+    result = func(*args)
+  File "/home/ykapushev/miniconda3/lib/python3.13/urllib/request.py", line 613, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 404: Not Found
+[probe] проверка не удалась — прогон продолжаю
+[config] pipeline=qwen4b (модуль langgraph_math_solver_qwen4b), промпты: conf/base/prompts/agent-step-qwen4b-v11.yml
+
+[preflight] Сервер на http://127.0.0.1:8137/v1 не отдаёт модель 'Qwen/Qwen3.5-4B'.
+  Доступны: qwen35-9b
+  Передайте правильное имя через --model.
+
+>>> kedro завершился с кодом 2
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю sglang...
+Requesting graceful shutdown of supervisor PID 172648...
+SGLang stopped.
+=== 2026-08-13T13:32:16.747010+00:00 status=failed exit_code=2 duration=11.4s
