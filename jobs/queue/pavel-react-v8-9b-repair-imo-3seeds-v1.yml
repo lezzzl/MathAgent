@@ -1,5 +1,4 @@
-# Три запуска проверенного ReAct v8 на одной 9B с seeds 43, 44, 45
-# Каждый запуск последовательно проходит AIME26, HMMT26 и IMOAnswerBench
+# Три запуска IMOAnswerBench через ReAct v8 на одной 9B с seeds 43, 44, 45
 #
 # SGLang поднимается один раз, а scripts/run_seeds.sh запускает три эксперимента
 # и добавляет каждому собственные --seed и --run-id
@@ -13,7 +12,7 @@ command: >-
   scripts/run_benchmarks.sh --
   scripts/run_seeds.sh
   .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py
-  --benchmarks aime26 hmmt26 imo_answerbench
+  --benchmarks imo_answerbench
   --pipeline react_agent
   --prompt conf/base/prompts/pavel/react-agent-v8.yml
   --model Qwen/Qwen3.5-9B
