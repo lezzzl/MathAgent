@@ -84,6 +84,12 @@ args=(
   --cuda-graph-max-bs "${MAX_CUDAGRAPH_CAPTURE_SIZE}"
   --reasoning-parser qwen3
 )
+
+# Серверный разбор вызовов инструментов, тот же смысл, что и в serve_vllm.sh.
+# Пусто (по умолчанию) — прежнее поведение: вызовы разбирает клиент.
+if [[ -n "${TOOL_CALL_PARSER:-}" ]]; then
+  args+=(--tool-call-parser "${TOOL_CALL_PARSER}")
+fi
 # Аналога vLLM --language-model-only здесь нет: --enable-multimodal объявлен как
 # store_true без парной --no-* формы, так что визуальную башню (~1.3 ГБ) SGLang
 # грузит всегда. На фоне ~137 ГБ пула это терпимо, но память не бесплатная.
