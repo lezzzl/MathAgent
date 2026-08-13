@@ -15,7 +15,7 @@
 set -euo pipefail
 
 SEEDS="43 44 45"
-RUN_ID_TEMPLATE="qwen35-9b-react-v8-repair-all-seed{SEED}-v1"
+RUN_ID_TEMPLATE="qwen35-9b-react-v8-repair-all-seed{SEED}-v2"
 
 for seed in ${SEEDS}; do
   run_id="${RUN_ID_TEMPLATE//\{SEED\}/${seed}}"
