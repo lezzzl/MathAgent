@@ -18,7 +18,7 @@ command: >-
   --base-url {BASE_URL}
   --api-key EMPTY
   --max-tokens 65536
-  --concurrency 30
+  --concurrency 80
   --max-tool-calls 20
   --max-tool-repairs 5
   --execution-timeout 20
