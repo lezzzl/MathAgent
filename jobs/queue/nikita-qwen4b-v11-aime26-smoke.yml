@@ -19,6 +19,6 @@
 #   [verify] ИТОГ AIME26: N/2          — автосверка отработала
 #
 # Перед боевыми зёрнами этот файл удалить, иначе он поедет вхолостую вместе с ними.
-command: scripts/bench_qwen4b.sh aime26 42 --limit 2
+command: bash scripts/bench_qwen4b.sh aime26 42 --limit 2
 gpus: 1
 timeout_minutes: 60
