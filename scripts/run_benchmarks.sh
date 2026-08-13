@@ -1,24 +1,33 @@
 #!/usr/bin/env bash
-# Поднимает локальный движок (vLLM или SGLang — см. ENGINE) с Qwen3.5-9B, гоняет
-# на нём пайплайн benchmarks и гарантированно гасит сервер на выходе (в том числе
-# по Ctrl+C или падению).
+# Поднимает локальный движок (SGLang или vLLM — см. ENGINE) с Qwen3.5-9B, гоняет
+# на нём вашу команду бенчмарков и гарантированно гасит сервер на выходе (в том
+# числе по Ctrl+C или падению).
 #
 # Прогон всегда идёт на коде текущей ветки — переключением занимается сам
 # пользователь до запуска.
 #
-# Использование:
-#   scripts/run_benchmarks.sh                 # дефолт: kedro-пайплайн benchmarks
-#   GPU=3 scripts/run_benchmarks.sh
-#   KEEP_SERVER=1 scripts/run_benchmarks.sh   # оставить сервер живым после прогона
+# Команда обязательна и пишется после `--`: дефолта у неё нет, потому что что
+# именно мерить и каким пайплайном, знает только она сама. Адрес поднятого
+# сервера она получает плейсхолдером {BASE_URL} — порт заранее не известен.
 #
-# Своя команда — всё после `--`; сервер, ожидание готовности, остановка и пуш
-# результатов работают так же. run_id берётся из `--run-id` этой команды:
-#   SERVED_MODEL_NAME=Qwen/Qwen3.5-9B PORT=8333 CONCURRENCY=30 \
+# Использование:
+#   scripts/run_benchmarks.sh -- \
+#     .venv/bin/kedro run --pipeline benchmarks \
+#     --params benchmarks.model.base_url={BASE_URL},benchmarks.run_id={RUN_ID}
+#
+#   SERVED_MODEL_NAME=Qwen/Qwen3.5-9B CONCURRENCY=30 PORT=8333 \
 #     scripts/run_benchmarks.sh -- \
-#     .venv/bin/python scripts/run_all_benchmarks.py --pipeline solver ...
+#     .venv/bin/python scripts/run_all_benchmarks.py --base-url {BASE_URL} ...
+#
+#   GPU=3 KEEP_SERVER=1 scripts/run_benchmarks.sh -- ...   # оставить сервер живым
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Чтение флагов команды, подстановка плейсхолдеров и публикация результатов —
+# общее с run_benchmarks_two_models.sh.
+# shellcheck source=scripts/bench_common.sh
+source "${ROOT}/scripts/bench_common.sh"
 
 die() { echo "$*" >&2; exit 1; }
 
@@ -30,14 +39,18 @@ die_log() { echo "$*" >&2; tail -n 40 "${VLLM_LOG_FILE}" >&2 || true; exit 1; }
 # убивает скрипт.
 log_tail() { grep -aE "$1" "${VLLM_LOG_FILE}" | tail -n "${2:-1}" || true; }
 
-# Команда бенчмарков: всё после необязательного `--`. Пусто → дефолтная kedro.
+# Команда бенчмарков: всё после `--`. Дефолта у неё нет — что именно мерить и
+# каким пайплайном, знает только сама команда, а молчаливый дефолт означал бы
+# прогон не того, что имели в виду (и час карты впустую).
 [[ "${1:-}" == "--" ]] && shift
 BENCH_CMD=("$@")
+[[ ${#BENCH_CMD[@]} -gt 0 ]] \
+  || die "Нет команды бенчмарков: напишите её после '--', а адрес сервера в ней — как {BASE_URL}"
 
 # ENGINE=vllm|sglang — оба бэкенда принимают один и тот же набор переменных.
 # SGLang нужен там, где важен ненулевой presence_penalty: в vLLM сэмплер на нём
 # пересобирает историю токенов каждый шаг, в SGLang — нет.
-ENGINE="${ENGINE:-vllm}"
+ENGINE="${ENGINE:-sglang}"
 case "${ENGINE}" in
   vllm)   SERVE_BASENAME="serve_vllm.sh" ;;
   sglang)
@@ -51,20 +64,9 @@ esac
 SERVE_SH="${ROOT}/scripts/qwen35-vllm-bench/${SERVE_BASENAME}"
 [[ -x "${SERVE_SH}" ]] || die "Нет исполняемого ${SERVE_SH}"
 
-# Своя команда сама несёт --concurrency и --run-id; вычитываем их оттуда, чтобы
-# не дублировать те же числа ещё и в env (и не разъехаться с ними).
-# Повторённый флаг: побеждает последний — так же его прочтёт argparse самой
-# команды. Раньше значения печатались подряд и склеивались в одно число.
-bench_cmd_opt() {
-  local flag="$1" value="" i
-  for ((i = 0; i < ${#BENCH_CMD[@]}; i++)); do
-    case "${BENCH_CMD[i]}" in
-      "${flag}") value="${BENCH_CMD[i + 1]:-}" ;;
-      "${flag}="*) value="${BENCH_CMD[i]#"${flag}"=}" ;;
-    esac
-  done
-  printf '%s' "${value}"
-}
+# Своя команда сама несёт --concurrency и --run-id; вычитываем их оттуда
+# (bench_cmd_opt из общей библиотеки), чтобы не дублировать те же числа ещё и в
+# env — и не разъехаться с ними.
 
 # --- что и на чём поднимаем ------------------------------------------------
 GPU="${GPU:-1}"                       # GPU 0 занята чужими процессами
@@ -85,17 +87,6 @@ CONCURRENCY="${CONCURRENCY:-32}"
 # --- параметры сервинга ----------------------------------------------------
 # Префиксный кэш включён: react-луп переотправляет растущий диалог.
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-73728}"
-# MAX_TOKENS — лимит ВЫХОДА одного вызова (benchmarks.generation.max_tokens).
-# Длинное reasoning упирается именно в него. Вычисляем из MAX_MODEL_LEN, оставляя
-# ~40k окна на растущий ReAct-вход (система+тулы+диалог+observations) — так выход
-# не переполняет контекст. MAX_MODEL_LEN=131072 → 90112; 73728 → 32768.
-# Отдельный env MAX_TOKENS диспетчер не пропускает (нет в его белом списке),
-# поэтому масштабируемся через уже разрешённый MAX_MODEL_LEN.
-MAX_TOKENS="${MAX_TOKENS:-$(( MAX_MODEL_LEN - 40960 ))}"
-# Потолок выхода НЕ ставим: кап 49152 обрезал длинное рассуждение на трудных
-# задачах hmmt (4 задачи упёрлись ровно в лимит без \boxed → -3 к точности).
-# Долгие задачи вместо этого держит timeout=4000с + circuit_breaker=8 (в
-# некапнутом прогоне макс латентность была 3166с < 4000).
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONCURRENCY * 3 / 2 ))}"
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
 KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8_e4m3}"
@@ -128,10 +119,6 @@ if (( MAX_CUDAGRAPH_CAPTURE_SIZE < DECODE_BATCH )); then
   echo ">>> самые крупные декод-батчи пойдут мимо CUDA-графов" >&2
 fi
 
-# Разделитель `;`, а не `,`: kedro режет значение --params по запятым без учёта
-# скобок (см. normalize_select в pipelines/benchmarks/nodes.py).
-SELECT="${SELECT:-[aime26;hmmt26;imo_answerbench]}"
-
 # run_id нужен заранее: только зная его, можно закоммитить РОВНО каталог этого
 # прогона и не задеть остальные правки. Допустимые символы — [A-Za-z0-9._-]
 # (run_artifacts.py::RUN_ID_PATTERN), поэтому слэши из имени модели вычищаем.
@@ -156,57 +143,8 @@ cd "${ROOT}"
 
 # SGLang поднимается своим интерпретатором (SGLANG_PY) и vllm-бинарь не трогает.
 [[ "${ENGINE}" != "vllm" || -x "${ROOT}/.venv/bin/vllm" ]] || die "Нет ${ROOT}/.venv/bin/vllm"
-[[ -x "${ROOT}/.venv/bin/kedro" ]] || die "Нет ${ROOT}/.venv/bin/kedro"
-
-# Коммитит РОВНО каталог этого прогона и пушит его в origin на текущую ветку.
-# Пути указаны явно (никаких `git add -A`): незакоммиченные правки в рабочем
-# дереве и уже проиндексированные чужие изменения не должны попасть в коммит,
-# поэтому и `git commit` вызывается с pathspec.
-publish_results() {
-  local kedro_status="$1" branch head
-
-  [[ "${PUSH_RESULTS}" == "none" ]] && { echo ">>> PUSH_RESULTS=none — результаты не коммичу"; return 0; }
-  if [[ ! -d "${RESULTS_DIR}" ]]; then
-    echo ">>> ${RESULTS_DIR} не создан — коммитить нечего" >&2
-    return 0
-  fi
-
-  branch="$(git symbolic-ref --quiet --short HEAD || true)"
-  if [[ -z "${branch}" ]]; then
-    echo ">>> HEAD отделён от ветки — результаты оставляю незакоммиченными" >&2
-    return 0
-  fi
-
-  git add -- "${RESULTS_DIR}"
-  if git diff --cached --quiet -- "${RESULTS_DIR}"; then
-    echo ">>> В ${RESULTS_DIR} нет изменений — коммит не нужен"
-    return 0
-  fi
-
-  git commit --quiet -m "bench: ${RUN_ID} (${SELECT}, kedro=${kedro_status})" -- "${RESULTS_DIR}"
-  head="$(git rev-parse --short HEAD)"
-  echo ">>> Закоммитил ${head}: ${RESULTS_DIR}"
-
-  [[ "${PUSH_RESULTS}" == "1" ]] || { echo ">>> PUSH_RESULTS=${PUSH_RESULTS} — пушить не буду"; return 0; }
-  if ! git remote get-url origin >/dev/null 2>&1; then
-    echo ">>> Нет remote origin — коммит остался локальным" >&2
-    return 0
-  fi
-
-  # Каждая попытка — в условии if: под set -e неудача последней команды в
-  # &&-цепочке убила бы скрипт, не дав напечатать подсказку про ручной пуш.
-  echo ">>> Пушу в origin/${branch}"
-  if git push origin "HEAD:${branch}"; then return 0; fi
-
-  # Ветка уехала вперёд: результаты лежат в каталоге с уникальным run_id,
-  # так что ребейз поверх origin конфликтовать не должен. Пробуем ровно раз.
-  echo ">>> Push отклонён, делаю rebase на origin/${branch} и пробую ещё раз" >&2
-  if git pull --rebase origin "${branch}" && git push origin "HEAD:${branch}"; then return 0; fi
-
-  echo ">>> Push не удался. Коммит ${head} остался локальным — запушь вручную:" >&2
-  echo "    git push origin HEAD:${branch}" >&2
-  return 0
-}
+# Проверки на kedro тут больше нет: чем гонять бенчмарки, решает сама команда, а
+# она может быть и обычным python-скриптом.
 
 server_started=0
 
@@ -228,6 +166,15 @@ trap stop_server EXIT INT TERM
 [[ -s "${VLLM_LOG_FILE}" ]] && mv -f -- "${VLLM_LOG_FILE}" "${VLLM_LOG_FILE}.prev"
 : > "${VLLM_LOG_FILE}"
 
+# Порт проверяется до старта: иначе движок упадёт на bind, а цикл ожидания ниже
+# примет за него чужой сервер, который на этом порту уже отвечает.
+require_free_port "${PORT}" "${ENGINE}"
+
+# Зашитый в команде адрес обесценил бы обе проверки порта: сервер мы поднимем
+# свой, а запросы уйдут мимо него. Проверяем до подстановки плейсхолдеров —
+# после неё в команде стоят наши же адреса.
+require_no_hardcoded_address
+
 echo ">>> Стартую ${ENGINE}: ${MODEL} как '${SERVED_MODEL_NAME}' на GPU ${GPU}, порт ${PORT}"
 echo ">>> Лог: ${VLLM_LOG_FILE} (предыдущий — ${VLLM_LOG_FILE}.prev)"
 export CUDA_VISIBLE_DEVICES="${GPU}" VLLM_BIN="${ROOT}/.venv/bin/vllm"
@@ -244,6 +191,10 @@ until curl -fsS --max-time 5 "${BASE_URL}/models" >/dev/null 2>&1; do
   (( SECONDS < deadline )) || die_log "${ENGINE} не поднялся за ${STARTUP_TIMEOUT}s. Хвост лога:"
   sleep 5
 done
+# Ответил кто-то на нашем порту — но наш ли это движок: порт мог освободиться и
+# достаться соседу между проверкой выше и стартом сервера.
+require_served_model "${BASE_URL}" "${SERVED_MODEL_NAME}" "${ENGINE}"
+
 echo ">>> Движок (${ENGINE}) готов. Размер KV-кэша:"
 log_tail 'GPU KV cache size|[Mm]aximum concurrency|max_total_num_tokens' 2
 
@@ -270,19 +221,20 @@ else
   fi
 fi
 
-if [[ ${#BENCH_CMD[@]} -eq 0 ]]; then
-  BENCH_CMD=(
-    "${ROOT}/.venv/bin/kedro" run --pipeline benchmarks --params
-    "benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name=${SERVED_MODEL_NAME},benchmarks.model.base_url=${BASE_URL},benchmarks.select=${SELECT},benchmarks.generation.max_tokens=${MAX_TOKENS},benchmarks.runtime.concurrency=${CONCURRENCY},benchmarks.serving.vllm_max_num_seqs=${MAX_NUM_SEQS},benchmarks.serving.vllm_max_model_len=${MAX_MODEL_LEN},benchmarks.run_id=${RUN_ID}"
-  )
-fi
+# Плейсхолдеры своей команды: адрес сервера и run_id она не может знать заранее
+# (в спеке диспетчера run_id — это имя файла, а `$(...)` запрещён вовсе).
+substitute_placeholders \
+  "BASE_URL=${BASE_URL}" \
+  "MODEL=${MODEL}" \
+  "SERVED_MODEL_NAME=${SERVED_MODEL_NAME}" \
+  "RUN_ID=${RUN_ID}"
 
 echo ">>> Запускаю бенчмарки (run_id=${RUN_ID})"
 printf '    %q' "${BENCH_CMD[@]}"; echo
 status=0
 "${BENCH_CMD[@]}" || status=$?
 
-echo ">>> kedro завершился с кодом ${status}"
-publish_results "${status}"
+echo ">>> Команда завершилась с кодом ${status}"
+publish_results "${RESULTS_DIR}" "${RUN_ID}" "${SERVED_MODEL_NAME}, status=${status}"
 # Претензии на GPU снимаются в trap stop_server.
 exit "${status}"
