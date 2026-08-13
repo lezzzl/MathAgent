@@ -1,0 +1,29 @@
+# Три запуска проверенного ReAct v8 на одной 9B с seeds 43, 44, 45
+# Каждый запуск последовательно проходит AIME26, HMMT26 и IMOAnswerBench
+#
+# SGLang поднимается один раз, а scripts/run_seeds.sh запускает три эксперимента
+# и добавляет каждому собственные --seed и --run-id
+command: >-
+  ENGINE=sglang
+  MODEL=Qwen/Qwen3.5-9B
+  MAX_MODEL_LEN=131072
+  MAX_NUM_SEQS=96
+  scripts/run_benchmarks.sh --
+  scripts/run_seeds.sh
+  .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py
+  --benchmarks aime26 hmmt26 imo_answerbench
+  --pipeline react_agent
+  --prompt conf/base/prompts/pavel/react-agent-v8.yml
+  --model Qwen/Qwen3.5-9B
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --max-tokens 65536
+  --concurrency 30
+  --max-tool-calls 20
+  --max-tool-repairs 5
+  --execution-timeout 20
+  --timeout 7200
+  --reasoning-parser qwen3
+  --vllm-max-model-len 131072
+gpus: 1
+timeout_minutes: 1440
