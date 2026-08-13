@@ -44,3 +44,377 @@ urllib.error.HTTPError: HTTP Error 404: Not Found
 Requesting graceful shutdown of supervisor PID 173686...
 SGLang stopped.
 === 2026-08-13T13:32:22.006477+00:00 status=failed exit_code=2 duration=12.6s
+=== 2026-08-13T18:38:48.563001+00:00 run_id=nikita-qwen4b-v11-aime26-s43 branch=Nikita/ToT@bc80aefc7a97 gpus=1 devices=6 isolation=bwrap
+=== command: scripts/bench_qwen4b.sh aime26 43
+>>> aime26, зерно 43, run_id=nikita-qwen4b-v11-aime26-s43
+>>> результаты: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/results/runs/nikita-qwen4b-v11-aime26-s43/aime26.jsonl
+>>> Стартую sglang: Qwen/Qwen3.5-4B как 'Qwen/Qwen3.5-4B' на GPU 6, порт 8112
+>>> Лог: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 3987436
+Log: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8112/v1 (лог: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/scripts/qwen35-vllm-bench/bench-server.log)
+>>> Движок (sglang) готов. Размер KV-кэша:
+[2026-08-13 21:41:14] max_total_num_tokens=2581956, chunked_prefill_size=8192, max_prefill_tokens=16384, max_running_requests=24, context_len=65536, available_gpu_mem=16.00 GB
+>>> Спекуляция: [2026-08-13 21:39:05] server_args=ServerArgs(model_path='Qwen/Qwen3.5-4B', tokenizer_path='Qwen/Qwen3.5-4B', tokenizer_mode='auto', tokenizer_backend='huggingface', tokenizer_worker_num=1, detokenizer_worker_num=1, skip_tokenizer_init=False, load_format='auto', model_loader_extra_config='{}', trust_remote_code=False, context_length=65536, is_embedding=False, enable_multimodal=None, revision=None, model_impl='auto', model_config_parser='auto', json_model_override_args='{}', dtype='bfloat16', quantization=None, quantization_param_path=None, kv_cache_dtype='auto', enable_fp32_lm_head=False, modelopt_quant=None, modelopt_checkpoint_restore_path=None, modelopt_checkpoint_save_path=None, modelopt_export_path=None, quantize_and_serve=False, rl_quant_profile=None, enable_tf32_matmul=False, mem_fraction_static=0.9, max_running_requests=24, max_queued_requests=None, max_total_tokens=None, chunked_prefill_size=8192, enable_dynamic_chunking=False, max_prefill_tokens=16384, prefill_max_requests=None, schedule_policy='fcfs', enable_priority_scheduling=False, disable_priority_preemption=False, default_priority_value=None, abort_on_priority_when_disabled=False, schedule_low_priority_values_first=False, priority_scheduling_preemption_threshold=10, retraction_policy='length', schedule_conservativeness=1.0, page_size=1, swa_full_tokens_ratio=0.8, disable_hybrid_swa_memory=False, radix_eviction_policy='lru', prefill_only_disable_kv_cache=False, disable_radix_cache=False, enable_page_major_kv_layout=False, enable_unified_memory=False, disable_chunked_prefix_cache=False, disable_overlap_schedule=False, num_continuous_decode_steps=1, scheduler_recv_interval=1, enable_mixed_chunk=False, nccl_port=None, dist_timeout=None, dist_init_addr=None, nnodes=1, node_rank=0, tp_size=1, dcp_size=1, pp_size=1, pp_max_micro_batch_size=None, pp_async_batch_depth=0, dp_size=1, load_balance_method='round_robin', attn_cp_size=1, moe_dp_size=1, dwdp_size=1, dcp_comm_backend='ag_rs', dcp_replicate_q_proj=None, enable_prefill_cp=False, cp_strategy=None, enable_dsa_cache_layer_split=False, enable_dsa_prefill_context_parallel=False, dsa_prefill_cp_mode='round-robin-split', enable_prefill_context_parallel=False, prefill_cp_mode='in-seq-split', enable_cp_decode_attn_tp=False, enable_dp_attention=False, enable_dp_attention_local_control_broadcast=False, enable_dp_lm_head=False, enable_attn_tp_input_scattered=False, disable_attn_tp_gather=False, enable_p2p_check=False, device='cuda', base_gpu_id=0, gpu_id_step=1, random_seed=281155794, watchdog_timeout=300, soft_watchdog_timeout=None, sleep_on_idle=False, use_ray=False, custom_sigquit_handler=None, numa_node=None, gc_threshold=None, host='0.0.0.0', port=8112, fastapi_root_path='', smg_grpc_mode=False, grpc_mode=False, grpc_port=None, sidecar=None, sidecar_args=None, skip_server_warmup=False, warmups=None, enable_http2=False, ssl_keyfile=None, ssl_certfile=None, ssl_ca_certs=None, ssl_keyfile_password=None, enable_ssl_refresh=False, api_key=None, admin_api_key=None, served_model_name='Qwen/Qwen3.5-4B', weight_version='default', chat_template=None, hf_chat_template_name=None, completion_template=None, file_storage_path='sglang_storage', enable_cache_report=False, reasoning_parser='qwen3', default_chat_template_kwargs=None, strip_thinking_cache=False, enable_strict_thinking=False, tool_call_parser='qwen3_coder', tool_server=None, sampling_defaults='model', asr_max_buffer_seconds=60, asr_max_concurrent_sessions=32, preferred_sampling_params=None, allow_auto_truncate=False, stream_interval=1, batch_notify_size=16, stream_response_default_include_usage=False, incremental_streaming_output=False, enable_streaming_session=False, enable_session_radix_cache=False, log_level='info', log_level_http=None, log_requests=False, log_requests_level=2, log_requests_format='text', log_requests_target=None, uvicorn_access_log_exclude_prefixes=[], crash_dump_folder=None, show_time_cost=False, enable_metrics=False, smg_http_sidecar_port=None, enable_mfu_metrics=False, enable_metrics_for_all_schedulers=False, load_snapshot_publish_interval=15, tokenizer_metrics_custom_labels_header='x-custom-labels', tokenizer_metrics_allowed_custom_labels=None, extra_metric_labels=None, bucket_time_to_first_token=None, bucket_inter_token_latency=None, bucket_e2e_request_latency=None, prompt_tokens_buckets=None, generation_tokens_buckets=None, gc_warning_threshold_secs=0.0, decode_log_interval=40, enable_request_time_stats_logging=False, kv_events_config=None, enable_forward_pass_metrics=False, forward_pass_metrics_worker_id='', forward_pass_metrics_ipc_name=None, enable_trace=False, trace_modules='request', otlp_traces_endpoint='localhost:4317', export_metrics_to_file=False, export_metrics_to_file_dir=None, stat_loggers=None, constrained_json_whitespace_pattern=None, constrained_json_disable_any_whitespace=False, attention_backend='triton', decode_attention_backend=None, prefill_attention_backend=None, sampling_backend='flashinfer', grammar_backend='xgrammar', radix_cache_backend=None, mm_attention_backend=None, fp8_gemm_runner_backend='auto', fp4_gemm_runner_backend='auto', bf16_gemm_backend='auto', dsa_prefill_backend=None, dsa_decode_backend=None, dsa_paged_mqa_logits_backend='auto', dsa_topk_backend='sgl-kernel', disable_flashinfer_autotune=False, flashinfer_autotune_skip_ops=None, mamba_backend='triton', cuda_graph_config=CudaGraphConfig(decode=PhaseConfig(backend='full', max_bs=24, bs=[1, 2, 4, 8, 12, 16, 24], tc_compiler='eager', full_prefill_max_req=None, full_prefill_prefix_chunk_tokens=None), prefill=PhaseConfig(backend='breakable', max_bs=8192, bs=[4, 8, 12, 16, 20, 24, 28, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 288, 320, 352, 384, 416, 448, 480, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840, 4096, 4608, 5120, 5632, 6144, 6656, 7168, 7680, 8192], tc_compiler='eager', full_prefill_max_req=None, full_prefill_prefix_chunk_tokens=None)), cuda_graph_backend_decode=None, cuda_graph_backend_prefill=None, cuda_graph_max_bs_decode=24, cuda_graph_max_bs_prefill=None, cuda_graph_bs_decode=None, cuda_graph_bs_prefill=None, cuda_graph_tc_compiler=None, disable_prefill_cuda_graph=False, disable_decode_cuda_graph=False, disable_cuda_graph=False, disable_cuda_graph_padding=False, enable_profile_cuda_graph=False, enable_cudagraph_gc=False, debug_cuda_graph=False, enable_layerwise_nvtx_marker=False, enable_nccl_nvls=False, enable_symm_mem=False, triton_attention_reduce_in_fp32=False, triton_attention_num_kv_splits=8, triton_attention_split_tile_size=None, flashinfer_mla_disable_ragged=False, enable_fused_qk_norm_rope=False, enable_precise_embedding_interpolation=False, enable_fused_moe_sum_all_reduce=False, enable_deepseek_v4_fp4_indexer=False, disable_custom_all_reduce=False, enable_mscclpp=False, enable_torch_symm_mem=False, enable_scattered_sconv=False, pre_warm_nccl=False, enable_quant_communications=False, enable_flashinfer_allreduce_fusion=False, enforce_disable_flashinfer_allreduce_fusion=False, flashinfer_allreduce_fusion_backend=None, enable_aiter_allreduce_fusion=False, enable_torch_compile=False, enable_torch_compile_debug_mode=False, torch_compile_max_bs=32, torchao_config='', speculative_algorithm=None, speculative_draft_model_path=None, speculative_draft_model_revision=None, speculative_draft_load_format=None, speculative_num_steps=None, speculative_eagle_topk=None, speculative_num_draft_tokens=None, speculative_dflash_block_size=None, speculative_dspark_block_size=None, speculative_dspark_sps_table_path=None, speculative_dspark_confidence_sts_path=None, speculative_dspark_align_verify_tokens_to_graph_tier=False, speculative_accept_threshold_single=1.0, speculative_accept_threshold_acc=1.0, speculative_use_rejection_sampling=False, speculative_token_map=None, speculative_attention_mode='prefill', speculative_draft_attention_backend=None, speculative_draft_window_size=None, speculative_moe_runner_backend='flashinfer_trtllm', speculative_moe_a2a_backend=None, speculative_draft_model_quantization=None, speculative_skip_dp_mlp_sync=False, enable_multi_layer_eagle=False, speculative_adaptive=False, speculative_adaptive_config=None, decoupled_spec_bind_endpoint=None, decoupled_spec_connect_endpoints=None, decoupled_spec_rank=None, decoupled_spec_role='null', spec_trace_dir=None, speculative_ngram_min_bfs_breadth=1, speculative_ngram_max_bfs_breadth=10, speculative_ngram_match_type='BFS', speculative_ngram_max_trie_depth=18, speculative_ngram_capacity=10000000, speculative_ngram_external_corpus_path=None, speculative_ngram_external_sam_budget=0, speculative_ngram_external_corpus_max_tokens=10000000, ep_size=1, moe_a2a_backend='none', moe_runner_backend='flashinfer_trtllm', flashinfer_mxfp4_moe_precision='default', deepep_mode='auto', fuseep_mode=2, deepep_dispatcher_output_dtype='auto', ep_num_redundant_experts=0, ep_dispatch_algorithm=None, init_expert_location='trivial', enable_eplb=False, eplb_algorithm='auto', eplb_rebalance_num_iterations=1000, eplb_rebalance_layers_per_chunk=None, eplb_min_rebalancing_utilization_threshold=1.0, expert_distribution_recorder_mode=None, expert_distribution_recorder_buffer_size=1000, enable_expert_distribution_metrics=False, deepep_config=None, moe_dense_tp_size=None, elastic_ep_backend=None, enable_elastic_expert_backup=False, mooncake_ib_device=None, enable_waterfill=False, ep_join_mode=None, ep_join_rank_offset=0, elastic_ep_initial_size=None, max_ep_size=None, elastic_ep_scale_timeout=600, elastic_ep_rejoin=False, disable_flashinfer_cutlass_moe_fp4_allgather=False, disable_shared_experts_fusion=True, enforce_shared_experts_fusion=False, max_mamba_cache_size=None, mamba_ssm_dtype=None, mamba_max_states_per_path=-1, enable_mamba_cache_stochastic_rounding=False, mamba_cache_philox_rounds=0, mamba_full_memory_ratio=0.9, mamba_radix_cache_strategy='extra_buffer', uses_mamba_radix_cache=True, mamba_track_interval=256, enable_int8_mamba_checkpoint=False, int8_mamba_ckpt_size=None, linear_attn_backend='triton', linear_attn_decode_backend=None, linear_attn_prefill_backend=None, linear_attn_verify_backend=None, enable_linear_replayssm=False, linear_replayssm_cache_len=16, enable_linear_replayssm_spec=False, enable_hierarchical_cache=False, hicache_ratio=2.0, hicache_size=0, hicache_write_policy='write_through', hicache_io_backend='kernel', hicache_mem_layout='page_first', hicache_storage_backend=None, hicache_storage_prefetch_policy='timeout', hicache_storage_backend_extra_config=None, enable_hisparse=False, hisparse_config=None, enable_broadcast_mm_inputs_process=False, enable_prefix_mm_cache=False, mm_enable_dp_encoder=False, mm_process_config={}, mm_processor_worker_num=0, mm_io_worker_num=0, limit_mm_data_per_request=None, enable_mm_global_cache=False, disable_fast_image_processor=False, mm_feature_transport='cuda_ipc', keep_mm_feature_on_device=False, enable_lora=None, enable_lora_overlap_loading=None, max_lora_rank=None, lora_target_modules=None, lora_paths=None, max_loaded_loras=None, max_loras_per_batch=8, lora_eviction_policy='lru', lora_backend='csgmv', max_lora_chunk_size=16, experts_shared_outer_loras=None, lora_use_virtual_experts=False, lora_strict_loading=False, lora_drain_wait_threshold=0.0, enable_two_batch_overlap=False, enable_single_batch_overlap=False, tbo_token_distribution_threshold=0.48, cpu_offload_gb=0, offload_group_size=-1, offload_num_in_group=1, offload_prefetch_step=1, offload_mode='cpu', enable_lmcache=False, lmcache_config_file=None, enable_flexkv=False, flexkv_config_file=None, kt_weight_path=None, kt_method='AMXINT4', kt_cpuinfer=None, kt_threadpool_count=2, kt_num_gpu_experts=None, kt_max_deferred_experts_per_token=None, dllm_algorithm=None, dllm_algorithm_config=None, dllm_fdfo=True, disaggregation_mode='null', disaggregation_transfer_backend='mooncake', disaggregation_bootstrap_port=8998, disaggregation_ib_device=None, disaggregation_decode_enable_radix_cache=False, disaggregation_decode_enable_offload_kvcache=False, num_reserved_decode_tokens=512, disaggregation_decode_extra_slots=None, disaggregation_decode_polling_interval=1, optimistic_prefill_attempts=0, encoder_only=False, language_only=False, encoder_transfer_backend='zmq_to_scheduler', encoder_urls=[], encoder_bootstrap_port=8997, encoder_register_urls=[], enable_adaptive_dispatch_to_encoder=False, enable_pdmux=False, pdmux_config_path=None, sm_group_num=8, custom_weight_loader=[], weight_loader_disable_mmap=False, weight_loader_prefetch_checkpoints=False, weight_loader_prefetch_num_threads=4, weight_loader_drop_cache_after_load=False, remote_instance_weight_loader_seed_instance_ip=None, remote_instance_weight_loader_seed_instance_service_port=None, remote_instance_weight_loader_send_weights_group_ports=None, remote_instance_weight_loader_backend='nccl', remote_instance_weight_loader_start_seed_via_transfer_engine=False, engine_info_bootstrap_port=6789, modelexpress_config=None, download_dir=None, model_checksum=None, delete_ckpt_after_loading=False, decrypted_config_file=None, decrypted_draft_config_file=None, checkpoint_engine_wait_weights_before_ready=False, enable_prefill_delayer=False, prefill_delayer_max_delay_passes=30, prefill_delayer_token_usage_low_watermark=None, prefill_delayer_forward_passes_buckets=None, prefill_delayer_wait_seconds_buckets=None, prefill_delayer_queue_min_ratio=None, prefill_delayer_max_delay_ms=None, min_free_slots_delay=None, enable_deterministic_inference=False, rl_on_policy_target=None, kv_canary='none', kv_canary_real_data='none', kv_canary_sweep_interval=0, enable_dynamic_batch_tokenizer=False, dynamic_batch_tokenizer_batch_size=32, dynamic_batch_tokenizer_batch_timeout=0.002, enable_tokenizer_batch_encode=False, disable_tokenizer_batch_decode=False, debug_tensor_dump_output_folder=None, debug_tensor_dump_layers=None, debug_tensor_dump_input_file=None, enable_memory_saver=False, enable_weights_cpu_backup=False, enable_draft_weights_cpu_backup=False, enable_custom_logit_processor=False, enable_return_hidden_states=False, return_hidden_states_mode=None, enable_return_routed_experts=False, enable_return_indexer_topk=False, disable_outlines_disk_cache=False, enable_mis=False, weight_cache_mode='off', weight_cache_socket=None, weight_cache_timeout=1800, forward_hooks=None, msprobe_dump_config=None)
+>>> Запускаю бенчмарки (run_id=nikita-qwen4b-v11-aime26-s43)
+    /usr/bin/env    bash    /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/scripts/bench_qwen4b.sh    --inner    aime26    43    --run-id    nikita-qwen4b-v11-aime26-s43
+[probe] enable_thinking УЧТЁН: reasoning_content off=0, on=316 симв.
+[config] pipeline=qwen4b (модуль langgraph_math_solver_qwen4b), промпты: conf/base/prompts/agent-step-qwen4b-v11.yml
+[preflight] Qwen/Qwen3.5-4B доступна, max_model_len=65536
+[budget] одновременных запросов к серверу: 16 (= workers)
+[budget] песочница: до 4 процессов, потолок 4.0 ГБ (SANDBOX_WORKERS x SANDBOX_MEMORY_MB)
+[budget] свободно RAM сейчас: 1789.4 ГБ
+[budget] KV-кэш сервера в пике: ~56.0 ГБ (16 посл. x 65536 токенов, худший случай). Должно помещаться в пул vLLM за вычетом весов; на A100-80GB это ~57 ГБ.
+[config] seed=43 — прогон воспроизводим (зерно вызова выводится из seed + task_id + номер вызова)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[Prompts] Successfully loaded prompts from conf/base/prompts/agent-step-qwen4b-v11.yml
+[config] ⚠️  Тихий вывод без --trajectory: сырые генерации и вердикты никуда не сохранятся. Для разбора прогона добавьте --trajectory или --verbose.
+Пайплайн: qwen4b | задач: 30 | параллельно: 16 | вывод: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/results/runs/nikita-qwen4b-v11-aime26-s43/aime26.jsonl
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'178': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'396': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'65': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'79': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'244': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'62': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] 2 сэмплов, голоса {'178': 2}, согласие 100%, кворум=True -> '178'
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'441': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] 2 сэмплов, голоса {'396': 2}, согласие 100%, кворум=True -> '396'
+  [samples] первый сэмпл ненадёжен (токенов 276,495 > 250,000) — добираю.
+  [samples] 2 сэмплов, голоса {'65': 2}, согласие 100%, кворум=True -> '65'
+  [samples] 2 сэмплов, голоса {'441': 2}, согласие 100%, кворум=True -> '441'
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'190': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл ненадёжен (сдался) — добираю.
+  [samples] первый сэмпл ненадёжен (токенов 320,540 > 250,000) — добираю.
+  [samples] 2 сэмплов, голоса {'62': 2}, согласие 100%, кворум=True -> '62'
+  [samples] 2 сэмплов, голоса {'190': 2}, согласие 100%, кворум=True -> '190'
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'50': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл ненадёжен (сдался) — добираю.
+  [samples] первый сэмпл уверенный — добор не нужен.
+  [samples] большинства нет (голоса {'503': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл ненадёжен (токенов 468,418 > 250,000) — добираю.
+  [samples] первый сэмпл ненадёжен (токенов 274,853 > 250,000) — добираю.
+  [samples] 2 сэмплов, голоса {'79': 2}, согласие 100%, кворум=True -> '79'
+  [samples] первый сэмпл ненадёжен (токенов 267,244 > 250,000) — добираю.
+  [samples] первый сэмпл ненадёжен (токенов 582,641 > 250,000) — добираю.
+  [samples] большинства нет (голоса {'71': 1, '70': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл ненадёжен (сдался) — добираю.
+  [samples] 3 сэмплов, голоса {'277': 3}, согласие 100%, кворум=True -> '277'
+[01/30] PASS  | Model: 277 | GT: 277 | Tokens: 781,262 | Time: 3289.3s | task 1 | sm 3
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: ImportError: cannot import name 'integers' from 'sympy' (/home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/.venv/lib/python3.13/…
+    ! [tool_result] ERROR: TypeError: list indices must be integers or slices, not list
+    ! [tool_result] ERROR: KeyError: 0
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step claims that $vT = (v+2)(T-1)$ reduces to $v = 2T - 2$, but expanding the right side gives $vT = vT + 2T - v -…
+    ! [tool_result] ERROR: ImportError: cannot import name 'as_numer_denom' from 'sympy' (/home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/.venv/lib/pytho…
+    ! … ещё 8 похожих строк, полностью — в траектории
+[02/30] PASS  | Model: 62 | GT: 62 | Tokens: 358,538 | Time: 1635.8s | task 2 | sm 2
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: The step correctly derives the constraints on $S$ and $m$, but it fails to include the case $m=6$. The proble…
+    ! [tool_result] ERROR: execution timed out after 30s - likely brute force over too large a range. Narrow the search space or derive a formula.
+    ! [tool_result] ERROR: TypeError: unsupported operand type(s) for +=: 'int' and 'NoneType'
+    ! [tool_result] ERROR: NameError: name 'comb' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистог…
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! [tool_result] ERROR: NameError: name 'count_palindromes' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стар…
+    ! … ещё 4 похожих строк, полностью — в траектории
+[03/30] PASS  | Model: 79 | GT: 79 | Tokens: 602,516 | Time: 3109.6s | task 3 | sm 2
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: SyntaxError: invalid syntax (<unknown>, line 21)
+    ! [tool_result] ERROR: TypeError: 'float' object cannot be interpreted as an integer
+    ! [tool_result] ERROR: NameError: name 'sol' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого…
+    ! - Candidate 2 Score: 0.0000 | Rationale: The arithmetic error occurs in the calculation of $200^2 - 2(200)(42)$, which equals $38800$, not $23200$.
+    ! Raw preview: The Python tool seems to have an issue with output. Let me proceed with the mathematical derivation directly. The key error in Step 1 is the condi…
+    ! … ещё 2 похожих строк, полностью — в траектории
+  [samples] 3 сэмплов, голоса {'279': 3}, согласие 100%, кворум=True -> '279'
+  [samples] большинства нет (голоса {'244': 1, '916': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] первый сэмпл ненадёжен (сдался) — добираю.
+  [samples] 2 сэмплов, голоса {'50': 2}, согласие 100%, кворум=True -> '50'
+  [samples] 2 сэмплов, голоса {'503': 2}, согласие 100%, кворум=True -> '503'
+  [samples] первый сэмпл ненадёжен (токенов 765,848 > 250,000) — добираю.
+  [samples] 3 сэмплов, голоса {'244': 2, '916': 1}, согласие 67%, кворум=True -> '244'
+  [samples] 3 сэмплов, голоса {'754': 3}, согласие 100%, кворум=True -> '754'
+  [samples] первый сэмпл ненадёжен (токенов 295,916 > 250,000) — добираю.
+  [samples] первый сэмпл ненадёжен (токенов 681,725 > 250,000) — добираю.
+  [samples] первый сэмпл ненадёжен (сдался) — добираю.
+  [samples] 3 сэмплов, голоса {'896': 3}, согласие 100%, кворум=True -> '896'
+  [samples] первый сэмпл ненадёжен (токенов 380,347 > 250,000) — добираю.
+  [samples] большинства нет (голоса {'161': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] 4 сэмплов, голоса {'71': 1, '70': 1}, согласие 25%, кворум=False -> '71'
+[04/30] FAIL  | Model: 71 | GT: 70 | Tokens: 1,384,370 | Time: 5870.1s | task 4 | sm 4
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: NameError: name 'n' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого п…
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: The step claims the number of distinct values equals "composite integers in [6, 101] excluding those that are…
+    ! [tool_result] ERROR: SyntaxError: invalid syntax (<unknown>, line 38)
+    ! [tool_result] ERROR: SyntaxError: invalid syntax. Perhaps you forgot a comma? (<unknown>, line 17)
+    ! - Candidate 2 Score: 0.0000 | Rationale: Recheck: The problem asks for the number of **integers** $\le 100$ of the form $a+b+ab$. However, the step (and the pr…
+    ! … ещё 15 похожих строк, полностью — в траектории
+[05/30] PASS  | Model: 65 | GT: 65 | Tokens: 296,996 | Time: 1300.8s | task 5 | sm 2
+    ! [tool_result] ERROR: SyntaxError: invalid decimal literal (<unknown>, line 27)
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 1000 — ответ оборван.
+    ! - Candidate 2 Score: 0.0000 | Rationale: The step incorrectly calculates the squared distance $AB'^2$ as $(\cos \theta - 2)^2 + \sin^2 \theta$, whereas substit…
+    ! [tool_result] ERROR: ImportError: cannot import name 'isprime' from 'math' (/home/ykapushev/miniconda3/lib/python3.13/lib-dynload/math.cpython-313-x86_64-linux…
+    ! [tool_result] ERROR: NameError: name 'B_prime' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чис…
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! … ещё 0 похожих строк, полностью — в траектории
+[06/30] PASS  | Model: 441 | GT: 441 | Tokens: 317,354 | Time: 1317.2s | task 6 | sm 2
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 1000 — ответ оборван.
+    ! [tool_result] ERROR: NameError: name 'factors' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чис…
+    ! [tool_result] ERROR: TypeError: Equality.__new__() missing 1 required positional argument: 'rhs'
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! [tool_result] ERROR: ImportError: cannot import name 'solve_normal' from 'sympy' (/home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/.venv/lib/python3…
+    ! … ещё 3 похожих строк, полностью — в траектории
+[07/30] PASS  | Model: 396 | GT: 396 | Tokens: 213,362 | Time: 1067.7s | task 7 | sm 2
+    ! [tool_result] ERROR: SyntaxError: cannot assign to function call here. Maybe you meant '==' instead of '='? (<unknown>, line 3)
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван.
+    ! - Candidate 3 Score: 0.0000 | Rationale: The step is incorrect because it omits the valid cycle type (3, 2, 1). The lcm of cycle lengths for (3, 2, 1) is 6, wh…
+[08/30] PASS  | Model: 244 | GT: 244 | Tokens: 853,619 | Time: 3950.1s | task 8 | sm 3
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! [tool_result] ERROR: TypeError: unsupported operand type(s) for ** or pow(): 'str' and 'int'
+    ! - Candidate 2 Score: 1.0000 | Rationale: The step correctly factorizes $17017 = 7 \times 11 \times 13 \times 17$ and sets up the divisor form $d = 7^a 11^b 13^…
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: The step claims $17017 = 11^2 \cdot 13 \cdot 17$. This factorization is incorrect. Verification using Python:…
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step claims the number of valid triples $(a, b, e)$ is $162$, calculated as $9 \cdot 9 + 9 \cdot 9$. However, the …
+    ! … ещё 5 похожих строк, полностью — в траектории
+  [samples] первый сэмпл ненадёжен (токенов 453,850 > 250,000) — добираю.
+<unknown>:18: SyntaxWarning: invalid escape sequence '\c'
+<unknown>:14: SyntaxWarning: invalid escape sequence '\c'
+  [samples] первый сэмпл ненадёжен (сдался) — добираю.
+  [samples] первый сэмпл ненадёжен (сдался) — добираю.
+  [samples] первый сэмпл ненадёжен (токенов 454,900 > 250,000) — добираю.
+  [samples] 3 сэмплов, голоса {'850': 3}, согласие 100%, кворум=True -> '850'
+  [samples] 4 сэмплов, голоса {'161': 2}, согласие 50%, кворум=True -> '161'
+  [samples] 3 сэмплов, голоса {'681': 3}, согласие 100%, кворум=True -> '681'
+  [samples] первый сэмпл ненадёжен (сдался) — добираю.
+  [samples] большинства нет (голоса {'2': 1, '4': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] 3 сэмплов, голоса {'669': 2, '999': 1}, согласие 67%, кворум=True -> '669'
+  [samples] 3 сэмплов, голоса {'39': 2}, согласие 67%, кворум=True -> '39'
+  [samples] 3 сэмплов, голоса {}, согласие 0%, кворум=False -> None
+[09/30] EMPTY | Model: — | GT: 29 | Tokens: 1,814,378 | Time: 9836.5s | task 9 | sm 3 | gave up
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: NameError: name 'valid_BE' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чи…
+    ! [tool_result] ERROR: IndexError: tuple index out of range
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: NameError: name 'num' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого…
+    ! - Candidate 1 Score: 0.0000 | Rationale: The proposed step defines $N$ as the number of sequences where "the even-numbered stickers $\{2, 4\}$ are visible". Ho…
+    ! … ещё 25 похожих строк, полностью — в траектории
+  [samples] 4 сэмплов, голоса {'2': 1, '4': 1, '2148': 1}, согласие 25%, кворум=False -> '2'
+  [samples] 3 сэмплов, голоса {'223': 2}, согласие 67%, кворум=True -> '223'
+  [samples] 3 сэмплов, голоса {'132': 3}, согласие 100%, кворум=True -> '132'
+  [samples] большинства нет (голоса {'418': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] большинства нет (голоса {'\\sqrt{89}': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] 3 сэмплов, голоса {}, согласие 0%, кворум=False -> None
+  [samples] большинства нет (голоса {'162': 1, '1458': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] большинства нет (голоса {'15': 1, '12': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] 4 сэмплов, голоса {'162': 1, '1458': 1, '243': 1}, согласие 25%, кворум=False -> '162'
+  [samples] 4 сэмплов, голоса {'418': 1}, согласие 25%, кворум=False -> '418'
+[10/30] FAIL  | Model: 418 | GT: 156 | Tokens: 2,983,310 | Time: 14430.9s | task 10 | sm 4
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step correctly calculates the area (84) and circumradius ($65/8$) of $\triangle ABC$, as well as $\cos \gamma = 3/…
+    ! [tool_result] ERROR: ImportError: cannot import name 'print' from 'sympy' (/home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/.venv/lib/python3.13/sit…
+    ! [tool_result] ERROR: NameError: name 'acos' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистог…
+    ! - Candidate 2 Score: 0.0000 | Rationale: The proposed step claims the area is $\frac{46467}{640} \approx 72.6$, but the correct area of the hexagon formed by t…
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! [tool_result] ERROR: NameError: name 'P_B' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого…
+    ! … ещё 67 похожих строк, полностью — в траектории
+[11/30] PASS  | Model: 896 | GT: 896 | Tokens: 1,004,909 | Time: 5294.2s | task 11 | sm 3
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 1000 — ответ оборван.
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван.
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! [tool_result] ERROR: TypeError: 'int' object is not iterable
+    ! - Candidate 1 Score: 0.0000 | Rationale: The proposed step concludes $M=3896$ and $3896 \equiv 896 \pmod{1000}$, but the arithmetic is correct while the claim …
+    ! … ещё 5 похожих строк, полностью — в траектории
+[12/30] PASS  | Model: 161 | GT: 161 | Tokens: 1,438,915 | Time: 8014.5s | task 12 | sm 4
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: TypeError: both arguments should be Rational instances
+    ! [tool_result] ERROR: TypeError: 'NaN' object is not subscriptable
+    ! - Candidate 3 Score: 0.0000 | Rationale: The centroid coordinates claimed as $(\frac{2}{1}, \frac{4}{3}, 0)$ are incorrect because $x_G = (0+6+0)/3 = 2$ is cor…
+    ! [tool_result] ERROR: AttributeError: type object 'Point3D' has no attribute 'row_join'
+    ! … ещё 19 похожих строк, полностью — в траектории
+[13/30] PASS  | Model: 39 | GT: 39 | Tokens: 1,606,000 | Time: 9486.4s | task 13 | sm 3
+    ! [tool_result] ERROR: NameError: name 'Q' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого п…
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! - Candidate 2 Score: 0.0000 | Rationale: The proposed step concludes that the number of $r \in \{0,1,\dots,501\}$ such that $\binom{462}{r} \equiv 0 \pmod{503}…
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck the proposed step's key claims: **Claim 1:** The step states $S_r \equiv \sum_{k \equiv r \pmod{502}} \binom{4…
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван (и пуст).
+    ! … ещё 22 похожих строк, полностью — в траектории
+[14/30] PASS  | Model: 681 | GT: 681 | Tokens: 1,723,745 | Time: 8044.7s | task 14 | sm 3
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! [tool_result] ERROR: TypeError: invalid input: 76460/211 + 107440*sqrt(5)/211
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck the arithmetic in the proposed step. From the equation $184 = 2 \cos 72^\circ \Sigma_1$ with $\cos 72^\circ = …
+    ! [tool_result] ERROR: TypeError: invalid input: sqrt(5)
+    ! [tool_result] ERROR: NameError: name 'i' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого п…
+    ! [tool_result] ERROR: NameError: name 'P1' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого …
+    ! … ещё 34 похожих строк, полностью — в траектории
+[15/30] FAIL  | Model: 2 | GT: 83 | Tokens: 1,705,428 | Time: 10231.1s | task 15 | sm 4
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: TypeError: unsupported operand type(s) for -: 'str' and 'str'
+    ! [tool_result] ERROR: ImportError: module 'sys' is not available in this sandbox. sympy, numpy (as np), scipy, itertools, math, statistics, collections and frac…
+    ! [tool_result] ERROR: execution timed out after 30s - likely brute force over too large a range. Narrow the search space or derive a formula.
+    ! [tool_result] ERROR: NameError: name 'N' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого п…
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck the proposed step: It presents a nested configuration with dimensions $(10,10), (8,8), (6,6), (4,4), (2,2)$ an…
+    ! … ещё 29 похожих строк, полностью — в траектории
+[16/30] PASS  | Model: 178 | GT: 178 | Tokens: 267,151 | Time: 888.5s | task 16 | sm 2
+    ! [tool_result] ERROR: NameError: name 'gcd2030' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чис…
+    ! [tool_result] ERROR: you have run this exact code several times in a row. Stop calling the tool and use the result you already have.
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+  [samples] большинства нет (голоса {'0': 1, '14': 1}) — добираю сэмпл для разрешения ничьей.
+  [samples] 4 сэмплов, голоса {'\\sqrt{89}': 1}, согласие 25%, кворум=False -> '\\sqrt{89}'
+[17/30] FAIL  | Model: \sqrt{89} | GT: 243 | Tokens: 2,532,106 | Time: 13799.2s | task 17 | sm 4
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: The step claims the recurrence relations are $a_{x+1} = a_x + b_x$ and $b_{x+1} = 2a_x + b_x$. Let me verify …
+    ! [tool_result] ERROR: IndexError: list index out of range
+    ! - Candidate 2 Score: 0.0000 | Rationale: Recheck: The proposed step claims the recurrence $b_i = 2(a_{i-1} + b_{i-1})$. However, in this grid, to reach $(i,1)$…
+    ! - Candidate 3 Score: 0.0000 | Rationale: Recheck: The proposed recurrence relations are mathematically inconsistent. The step claims: - $dp[i][0] = dp[i-1][0] …
+    ! - Candidate 2 Score: 0.0000 | Rationale: Recheck: The proposed step claims the bug can move "only rightwards or upwards". However, the thick line in the figure…
+    ! … ещё 46 похожих строк, полностью — в траектории
+[18/30] PASS  | Model: 503 | GT: 503 | Tokens: 429,035 | Time: 2764.6s | task 18 | sm 2
+    ! [tool_result] ERROR: NameError: name 'i' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого п…
+    ! [tool_result] ERROR: SyntaxError: f-string: single '}' is not allowed (<unknown>, line 41)
+[19/30] PASS  | Model: 279 | GT: 279 | Tokens: 442,468 | Time: 2074.4s | task 19 | sm 3
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван.
+    ! [tool_result] ERROR: TypeError: 'int' object is not callable
+[20/30] PASS  | Model: 190 | GT: 190 | Tokens: 137,366 | Time: 567.6s | task 20 | sm 2
+[21/30] PASS  | Model: 50 | GT: 50 | Tokens: 415,873 | Time: 2060.3s | task 21 | sm 2
+    ! [tool_result] ERROR: SyntaxError: invalid syntax (<unknown>, line 16)
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 1000 — ответ оборван.
+    ! - Candidate 1 Score: 0.0000 | Rationale: The differentiation of the squared distance function $D(x)$ is incorrect; the derivative of the term $(\frac{1}{2}x^2 …
+    ! [tool_result] ERROR: AttributeError: 'Integer' object has no attribute 'is_positive_real'
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: SyntaxError: invalid syntax (<unknown>, line 3)
+    ! … ещё 2 похожих строк, полностью — в траектории
+[22/30] PASS  | Model: 754 | GT: 754 | Tokens: 539,003 | Time: 2535.2s | task 22 | sm 3
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! [tool_result] ERROR: ValueError: Non-suitable parameters.
+    ! [tool_result] ERROR: NameError: name 'k' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого п…
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: The proposed recurrence relation is $x_{i,j} = \frac{1}{3}x_{i+1,j} + \frac{1}{3}x_{i,j+1}$, but this is inco…
+    ! [tool_result] ERROR: SyntaxError: f-string: expecting '!', or ':', or '}' (<unknown>, line 7)
+    ! … ещё 8 похожих строк, полностью — в траектории
+[23/30] EMPTY | Model: — | GT: 245 | Tokens: 1,940,137 | Time: 9373.9s | task 23 | sm 3 | gave up
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 1000 — ответ оборван.
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step contains a calculation error: substituting $k = \frac{12a - 119b}{250}$ into $k^2(2a+b) = ab^2$ yields $(12a …
+    ! - Candidate 2 Score: 0.0000 | Rationale: The proposed step contains a calculation error: substituting $x = 7/10$ into the derived equation $500x^3 + 250x^2 - 2…
+    ! - Candidate 3 Score: 0.0000 | Rationale: Recheck: The step claims $AI = n$ implies $n^2 = \frac{a^2 b}{2a + b}$. For an isosceles triangle with sides $a, a, b$…
+    ! [tool_result] ERROR: SyntaxError: Generator expression must be parenthesized (<unknown>, line 7)
+    ! [tool_result] ERROR: ImportError: cannot import name 'is_Rational' from 'sympy' (/home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/.venv/lib/python3.…
+    ! … ещё 48 похожих строк, полностью — в траектории
+[24/30] PASS  | Model: 669 | GT: 669 | Tokens: 1,166,119 | Time: 6036.5s | task 24 | sm 3
+    ! ⚠️ [ОЦЕНЩИК] Ни один ответ в раунде не распарсился — подряд 1/3 ненадёжных раундов.
+    ! [tool_result] ERROR: ImportError: module 'sys' is not available in this sandbox. sympy, numpy (as np), scipy, itertools, math, statistics, collections and frac…
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 1000 — ответ оборван.
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step's calculation of the remainder is incorrect because it fails to account for terms with negative exponents (wh…
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! ⚠️ [TRUNCATED] segment: finish_reason=length при лимите 4000 — ответ оборван.
+    ! … ещё 18 похожих строк, полностью — в траектории
+[25/30] PASS  | Model: 850 | GT: 850 | Tokens: 825,754 | Time: 4345.9s | task 25 | sm 3
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 1000 — ответ оборван.
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step incorrectly equates $BD^2$ to $BE \cdot BA$ using the Power of a Point Theorem, whereas the theorem applies t…
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван.
+    ! ⚠️ [NO PROGRESS] Принятый шаг не отличается по содержанию от предыдущего — подряд 1/2.
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: Step 4 is a repetition of Step 3. Step 3 already states "The possible values of $BC$ are $85, 170, 255, 340$.…
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! … ещё 5 похожих строк, полностью — в траектории
+[26/30] PASS  | Model: 132 | GT: 132 | Tokens: 1,205,234 | Time: 7044.1s | task 26 | sm 3
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step contains a fundamental logical error. It claims that "the condition for exactly 7 distinct values of α+β+γ is…
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: NameError: name 'poly_n132' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с ч…
+    ! [tool_result] ERROR: NameError: name 'D2' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого …
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван (и пуст).
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: The step claims that squaring $\sqrt{x_1} \pm\sqrt{x_2} \pm\sqrt{x_3} = 0$ leads to $x_1+x_2+x_3 + 2(x_1 x_2 …
+    ! … ещё 18 похожих строк, полностью — в траектории
+[27/30] PASS  | Model: 223 | GT: 223 | Tokens: 1,187,226 | Time: 6728.2s | task 27 | sm 3
+    ! [tool_result] ERROR: SyntaxError: invalid syntax (<unknown>, line 14)
+    ! [tool_result] ERROR: TypeError: 'int' object is not callable
+    ! [tool_result] ERROR: NameError: name 'dist_RSA' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чи…
+    ! [tool_result] ERROR: SyntaxError: invalid syntax (<unknown>, line 148)
+    ! [tool_result] ERROR: NameError: name 'Bz' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого …
+    ! [tool_result] ERROR: SyntaxError: invalid syntax. Perhaps you forgot a comma? (<unknown>, line 23)
+    ! … ещё 21 похожих строк, полностью — в траектории
+  [samples] 4 сэмплов, голоса {'15': 1, '12': 1}, согласие 25%, кворум=False -> '15'
+[28/30] FAIL  | Model: 15 | GT: 107 | Tokens: 2,381,943 | Time: 13207.7s | task 28 | sm 4
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: TypeError: 'set' object is not subscriptable
+    ! [tool_result] ERROR: SyntaxError: expected an indented block after 'for' statement on line 53 (<unknown>, line 62)
+    ! [tool_result] ERROR: NameError: name 'k' is not defined HINT: Переменные и символы НЕ сохраняются между вызовами инструмента: каждый вызов стартует с чистого п…
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step contains a fundamental mathematical error. It claims that "S and T must form a sequence of m consecutive inte…
+    ! - Candidate 3 Score: 0.0000 | Rationale: Recheck: The step claims that a chain of 100 elements (elements 0, 2, ..., 198) has 101 cousins. However, for S = {0, …
+    ! … ещё 51 похожих строк, полностью — в траектории
+  [samples] 4 сэмплов, голоса {'0': 1, '14': 1}, согласие 25%, кворум=False -> '0'
+[29/30] FAIL  | Model: 0 | GT: 157 | Tokens: 2,664,090 | Time: 12760.8s | task 29 | sm 4
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: execution timed out after 30s - likely brute force over too large a range. Narrow the search space or derive a formula.
+    ! [tool_result] ERROR: ImportError: module 'sys' is not available in this sandbox. sympy, numpy (as np), scipy, itertools, math, statistics, collections and frac…
+    ! ⚠️ [TRUNCATED] evaluate: finish_reason=length при лимите 16000 — ответ оборван (и пуст).
+    ! [tool_result] ERROR: TypeError: unsupported operand type(s) for %: 'list' and 'int'
+    ! [tool_result] ERROR: TypeError: unsupported operand type(s) for +: 'int' and 'list'
+    ! … ещё 75 похожих строк, полностью — в траектории
+[30/30] FAIL  | Model: 162 | GT: 393 | Tokens: 2,054,991 | Time: 8737.2s | task 30 | sm 4
+    ! ⚠️ [TRUNCATED] generate: finish_reason=length при лимите 40000 — ответ оборван (и пуст).
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: The proposed step claims the second condition is $\sum_{i=1}^7 a_i a_{i+1} a_{i+2} \pmod 3$ (indices mod 7). …
+    ! - Candidate 3 Score: 0.0000 | Rationale: Recheck: The proposed step contains a critical arithmetic/logical error. It claims the second condition is $\sum a_k a…
+    ! - Candidate 1 Score: 0.0000 | Rationale: The step claims $|S \cap E| = 162$, but a direct verification of the problem's constraints shows that the correct coun…
+    ! - Candidate 1 Score: 0.0000 | Rationale: Recheck: The proposed step claims that for $j=0, L=0$, the matrix $A$ is all-ones and $\text{Tr}(A^7) = 9^7$. However,…
+    ! [tool_result] ERROR: TypeError: unsupported operand type(s) for ** or pow(): 'list' and 'int'
+    ! … ещё 34 похожих строк, полностью — в траектории
+Saved 30 records to /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/results/runs/nikita-qwen4b-v11-aime26-s43/aime26.jsonl   (PASS 21 | FAIL 7 | EMPTY 2)
+Статусы в строках задач — быстрая сверка для глаз; итоговая точность считается ниже отдельным процессом.
+
+[verify] verify_answers.py -> aime26_verified.jsonl
+2026-08-14 02:29:40,474 [INFO] id=1 correct=True
+2026-08-14 02:29:40,477 [INFO] id=2 correct=True
+2026-08-14 02:29:40,479 [INFO] id=3 correct=True
+2026-08-14 02:29:40,482 [INFO] id=4 correct=False
+2026-08-14 02:29:40,484 [INFO] id=5 correct=True
+2026-08-14 02:29:40,486 [INFO] id=6 correct=True
+2026-08-14 02:29:40,488 [INFO] id=7 correct=True
+2026-08-14 02:29:40,489 [INFO] id=8 correct=True
+2026-08-14 02:29:40,489 [WARNING] id=9: отсутствует поле 'solution' с ответом модели.
+2026-08-14 02:29:40,490 [INFO] id=9 correct=False (no_answer_extracted_from_model_output)
+2026-08-14 02:29:40,494 [INFO] id=10 correct=False
+2026-08-14 02:29:40,496 [INFO] id=11 correct=True
+2026-08-14 02:29:40,497 [INFO] id=12 correct=True
+2026-08-14 02:29:40,499 [INFO] id=13 correct=True
+2026-08-14 02:29:40,500 [INFO] id=14 correct=True
+2026-08-14 02:29:40,502 [INFO] id=15 correct=False
+2026-08-14 02:29:40,504 [INFO] id=16 correct=True
+2026-08-14 02:29:40,605 [INFO] id=17 correct=False
+2026-08-14 02:29:40,607 [INFO] id=18 correct=True
+2026-08-14 02:29:40,609 [INFO] id=19 correct=True
+2026-08-14 02:29:40,610 [INFO] id=20 correct=True
+2026-08-14 02:29:40,612 [INFO] id=21 correct=True
+2026-08-14 02:29:40,613 [INFO] id=22 correct=True
+2026-08-14 02:29:40,613 [WARNING] id=23: отсутствует поле 'solution' с ответом модели.
+2026-08-14 02:29:40,614 [INFO] id=23 correct=False (no_answer_extracted_from_model_output)
+2026-08-14 02:29:40,616 [INFO] id=24 correct=True
+2026-08-14 02:29:40,617 [INFO] id=25 correct=True
+2026-08-14 02:29:40,618 [INFO] id=26 correct=True
+2026-08-14 02:29:40,620 [INFO] id=27 correct=True
+2026-08-14 02:29:40,621 [INFO] id=28 correct=False
+2026-08-14 02:29:40,624 [INFO] id=29 correct=False
+2026-08-14 02:29:40,626 [INFO] id=30 correct=False
+2026-08-14 02:29:40,627 [INFO] ============================================================
+2026-08-14 02:29:40,627 [INFO] Готово. Итоговая точность: 21/30 = 70.00%
+2026-08-14 02:29:40,627 [WARNING] 2 элементов с ошибками верификации (см. поле 'verification_error').
+2026-08-14 02:29:40,627 [INFO] Разбивка по группам:
+2026-08-14 02:29:40,627 [INFO]   benchmark_name=AIME26: 21/30 = 70.00%
+2026-08-14 02:29:40,627 [INFO]   model_name=Qwen/Qwen3.5-4B: 21/30 = 70.00%
+2026-08-14 02:29:40,627 [INFO] Результат сохранён в: /home/ykapushev/mathagent/work/nikita-qwen4b-v11-aime26-s43/results/runs/nikita-qwen4b-v11-aime26-s43/aime26_verified.jsonl
+[verify] ИТОГ AIME26: 21/30 = 70.0%
+>>> kedro завершился с кодом 0
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю sglang...
+Requesting graceful shutdown of supervisor PID 3987436...
+SGLang stopped.
+=== 2026-08-13T23:29:53.084327+00:00 status=done exit_code=0 duration=17464.5s
