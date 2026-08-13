@@ -1,0 +1,34 @@
+# Один запуск на двух моделях без solution writer и verifier:
+# 9B выполняет ReAct-цикл, 35B-A3B создаёт advisory plan с thinking
+#
+# Адреса серверов становятся известны после запуска. Обёртка подставляет
+# {BASE_URL} для основной модели и {SECOND_BASE_URL} для planner-модели
+# Run ID задаёт dispatcher по имени этого job-файла
+command: >-
+  MODEL=Qwen/Qwen3.5-9B
+  SECOND_MODEL=Qwen/Qwen3.6-35B-A3B
+  MAX_MODEL_LEN=131072
+  MAX_NUM_SEQS=96
+  SECOND_MTP=0
+  scripts/run_benchmarks_two_models.sh --
+  .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py
+  --benchmarks aime26 hmmt26
+  --pipeline react_agent
+  --prompt conf/base/prompts/pavel/react-agent-v12.yml
+  --model Qwen/Qwen3.5-9B
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --planner-model Qwen/Qwen3.6-35B-A3B
+  --planner-base-url {SECOND_BASE_URL}
+  --planner-api-key EMPTY
+  --seed 42
+  --max-tokens 65536
+  --concurrency 30
+  --max-tool-calls 20
+  --max-tool-repairs 5
+  --execution-timeout 20
+  --timeout 7200
+  --reasoning-parser qwen3
+  --vllm-max-model-len 131072
+gpus: 2
+timeout_minutes: 480
