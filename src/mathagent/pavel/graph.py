@@ -24,6 +24,10 @@ from mathagent.pavel.nodes_code import (
     create_planner_node,
     create_repair_node,
 )
+from mathagent.pavel.nodes_planner_agent import (
+    create_planner_agent_planner_node,
+    create_planner_agent_solver_node,
+)
 from mathagent.pavel.nodes_react import (
     create_react_code_repair_node,
     create_react_agent_node,
@@ -108,6 +112,19 @@ class CodeAgentState(TypedDict):
     timeout: NotRequired[bool]
     execution_history: NotRequired[list[dict[str, Any]]]
     repair_attempt: NotRequired[int]
+    solution: NotRequired[str]
+    reasoning: NotRequired[dict[str, str]]
+    usage: NotRequired[dict[str, Any]]
+    prompt_version: NotRequired[str]
+    trace: NotRequired[dict[str, Any]]
+
+
+class PlannerAgentState(TypedDict):
+    """Описывает двухузловой planner-agent граф без tools"""
+
+    problem: str
+    plan: NotRequired[str]
+    planner_trace: NotRequired[dict[str, Any]]
     solution: NotRequired[str]
     reasoning: NotRequired[dict[str, str]]
     usage: NotRequired[dict[str, Any]]
@@ -378,6 +395,56 @@ def create_code_agent_graph(
         graph.add_edge("execute", "finalize")
 
     graph.add_edge("finalize", END)
+    return graph.compile()
+
+
+def create_planner_agent_graph(
+    model_config: ModelConfig,
+    prompt_path: Path,
+    node_generation: NodeGeneration | None = None,
+    planner_model_config: ModelConfig | None = None,
+    node_models: NodeModels | None = None,
+) -> Any:
+    """Создаёт граф planner → agent без bind_tools и исполняемых нод"""
+    generation = node_generation if node_generation is not None else {}
+    models = node_models if node_models is not None else {}
+    effective_planner_config = planner_model_config or model_config
+    models["planner"] = {
+        "model": effective_planner_config.name,
+        "uses_primary_endpoint": (
+            normalize_base_url(effective_planner_config.base_url)
+            == normalize_base_url(model_config.base_url)
+        ),
+    }
+
+    graph = StateGraph(PlannerAgentState)
+    graph.add_node(
+        "planner",
+        create_planner_agent_planner_node(
+            create_node_model(
+                effective_planner_config,
+                prompt_path,
+                "planner",
+                generation,
+            ),
+            prompt_path,
+        ),
+    )
+    graph.add_node(
+        "agent",
+        create_planner_agent_solver_node(
+            create_node_model(
+                model_config,
+                prompt_path,
+                "agent",
+                generation,
+            ),
+            prompt_path,
+        ),
+    )
+    graph.add_edge(START, "planner")
+    graph.add_edge("planner", "agent")
+    graph.add_edge("agent", END)
     return graph.compile()
 
 

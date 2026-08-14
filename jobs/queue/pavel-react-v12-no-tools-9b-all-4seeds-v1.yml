@@ -1,0 +1,27 @@
+# Четыре запуска planner → agent без tools с seeds 42, 43, 44 и 45
+# Одна Qwen3.5-9B выполняет обе LLM-ноды с thinking=true и max_tokens=50000
+# Каждый seed последовательно проходит AIME26, HMMT26 и IMOAnswerBench
+command: >-
+  ENGINE=sglang
+  MODEL=Qwen/Qwen3.5-9B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-9B
+  MTP=1
+  MAX_MODEL_LEN=131072
+  MAX_NUM_SEQS=96
+  scripts/run_benchmarks.sh --
+  scripts/run_seeds.sh
+  .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py
+  --benchmarks aime26 hmmt26 imo_answerbench
+  --pipeline planner_agent
+  --prompt conf/base/prompts/pavel/react-agent-v12-no-tools.yml
+  --model {MODEL}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --max-tokens 50000
+  --concurrency 80
+  --timeout 7200
+  --reasoning-parser qwen3
+  --vllm-max-num-seqs 96
+  --vllm-max-model-len 131072
+gpus: 1
+timeout_minutes: 1440

@@ -23,6 +23,7 @@ from mathagent.pavel.graph import (
     NodeGeneration,
     NodeModels,
     create_code_agent_graph,
+    create_planner_agent_graph,
     create_react_agent_graph,
     create_solver_graph,
 )
@@ -48,6 +49,9 @@ from scripts.benchmarks.pavel.run_artifacts import (
 
 DEFAULT_SOLVER_PROMPT = ROOT / "conf/base/prompts/pavel/solver-v0.yml"
 DEFAULT_CODE_AGENT_PROMPT = ROOT / "conf/base/prompts/pavel/code-agent-v1.yml"
+DEFAULT_PLANNER_AGENT_PROMPT = (
+    ROOT / "conf/base/prompts/pavel/react-agent-v12-no-tools.yml"
+)
 DEFAULT_REACT_AGENT_PROMPT = ROOT / "conf/base/prompts/pavel/react-agent-v0.yml"
 DEFAULT_MODEL = "Qwen/Qwen3.5-4B"
 
@@ -133,7 +137,7 @@ def parse_benchmark_args(
 
     parser.add_argument(
         "--pipeline",
-        choices=("solver", "code_agent", "react_agent"),
+        choices=("solver", "code_agent", "planner_agent", "react_agent"),
         default="solver",
     )
     parser.add_argument("--prompt", type=Path)
@@ -444,11 +448,22 @@ def create_manifest_config(
                         }
                         if args.pipeline == "react_agent"
                         else {"max_repairs": args.max_repairs}
+                        if args.pipeline == "code_agent"
+                        else {
+                            "architecture": "planner-agent-v1",
+                            "prompt_ablation": "react-agent-v12-without-tools",
+                            "plan_policy": "advisory",
+                            "tools": [],
+                        }
                     ),
-                    "execution_timeout": args.execution_timeout,
+                    **(
+                        {"execution_timeout": args.execution_timeout}
+                        if args.pipeline in ("code_agent", "react_agent")
+                        else {}
+                    ),
                 }
             }
-            if args.pipeline in ("code_agent", "react_agent")
+            if args.pipeline in ("code_agent", "planner_agent", "react_agent")
             else {}
         ),
     }
@@ -521,6 +536,15 @@ def create_graph(
             max_repairs=args.max_repairs,
             execution_timeout=args.execution_timeout,
             node_generation=node_generation,
+        )
+        return GraphBuild(graph, node_generation, node_models)
+    if args.pipeline == "planner_agent":
+        graph = create_planner_agent_graph(
+            model_config,
+            prompt_path,
+            node_generation=node_generation,
+            planner_model_config=planner_model_config,
+            node_models=node_models,
         )
         return GraphBuild(graph, node_generation, node_models)
     if args.pipeline == "react_agent":
@@ -899,6 +923,7 @@ def _run_benchmark(
     default_prompts = {
         "solver": DEFAULT_SOLVER_PROMPT,
         "code_agent": DEFAULT_CODE_AGENT_PROMPT,
+        "planner_agent": DEFAULT_PLANNER_AGENT_PROMPT,
         "react_agent": DEFAULT_REACT_AGENT_PROMPT,
     }
     prompt_path = args.prompt or default_prompts[args.pipeline]
