@@ -42,10 +42,11 @@ def build_react_trace(
     repair_history: list[dict[str, Any]] | None = None,
     solution_attempts: list[dict[str, Any]] | None = None,
     selected_attempt: int | None = None,
+    status: str = "completed",
 ) -> dict[str, Any]:
     """Собирает компактную траекторию без messages и hidden reasoning."""
     trace = {
-        "status": "completed",
+        "status": status,
         "finish_reason": finish_reason,
         "agent_calls": agent_history,
         "tool_calls": tool_history,
@@ -66,10 +67,12 @@ def build_react_trace(
 def format_retry_messages(
     message: AIMessage,
     clean_message: AIMessage,
+    format_error: str,
     tool_calls_remaining: int,
     available_tool_names: list[str],
+    terminal_only_reason: str | None = None,
 ) -> list[Any]:
-    """Закрывает невалидные tool calls и запрашивает одно корректное действие."""
+    """Закрывает невалидные tool calls и объясняет точную ошибку формата."""
     retry_message = clean_message
     if message.invalid_tool_calls:
         retry_message = AIMessage(
@@ -82,8 +85,8 @@ def format_retry_messages(
         retry_messages.append(
             ToolMessage(
                 content=(
-                    "This tool call is invalid and was not executed. "
-                    "Return exactly one valid tool call."
+                    "This tool call was rejected and was not executed. "
+                    f"Reason: {format_error}."
                 ),
                 tool_call_id=tool_call["id"],
                 name=tool_call.get("name"),
@@ -92,7 +95,11 @@ def format_retry_messages(
             )
         )
 
-    if tool_calls_remaining > 0:
+    if terminal_only_reason is not None:
+        allowed_tools = (
+            f"{terminal_only_reason} Use only {available_tool_names[-1]}."
+        )
+    elif tool_calls_remaining > 0:
         choices = ", ".join(available_tool_names)
         allowed_tools = f"Use exactly one of these tools: {choices}."
     else:
@@ -100,16 +107,72 @@ def format_retry_messages(
             "The tool budget is exhausted, so use "
             f"{available_tool_names[-1]}."
         )
+    if "non-empty corrected_code" in format_error:
+        correction = (
+            "If you choose repair, provide the complete corrected script in the "
+            "required `corrected_code` argument."
+        )
+    elif "non-empty code" in format_error:
+        correction = (
+            "If you choose python or sympy, provide a complete non-empty notebook "
+            "cell in the required `code` argument."
+        )
+    elif "non-empty solution_context" in format_error:
+        correction = (
+            "If you choose final_answer, provide a concise non-empty verified "
+            "outline in the required `solution_context` argument."
+        )
+    elif "non-empty complete solution" in format_error:
+        correction = (
+            "If you choose final_solution, provide the complete mathematical "
+            "argument in the required `solution` argument."
+        )
+    elif "non-empty answer" in format_error:
+        correction = (
+            f"If you choose {available_tool_names[-1]}, provide a non-empty "
+            "mathematical answer in the required `answer` argument."
+        )
+    elif "non-empty context" in format_error:
+        correction = (
+            "If you choose cot, python, or sympy, provide a concise non-empty "
+            "mathematical summary in the required `context` argument."
+        )
+    elif "non-empty goal" in format_error:
+        correction = "If you choose cot, provide one focused non-empty `goal`."
+    elif "exactly one tool call" in format_error:
+        correction = "Do not return zero or multiple tool calls."
+    else:
+        correction = "Correct the reported schema violation before responding."
     retry_messages.append(
         HumanMessage(
             content=(
                 "Your previous response did not follow the required tool protocol. "
-                f"Return exactly one valid tool call. {allowed_tools}"
+                f"It was not executed. Exact error: {format_error}. "
+                f"{correction} Return exactly one valid tool call. {allowed_tools}"
             ),
             id="react:format_retry",
         )
     )
     return retry_messages
+
+
+class ReactFormatError(ValueError):
+    """Передаёт runner частичную траекторию исчерпанного format recovery."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        trace: dict[str, Any],
+        reasoning: dict[str, str],
+        usage: dict[str, Any],
+        prompt_version: str,
+    ) -> None:
+        super().__init__(message)
+        self.trace = trace
+        self.reasoning = reasoning
+        self.usage = usage
+        self.prompt_version = prompt_version
 
 
 def execution_failed(tool_history: list[dict[str, Any]]) -> bool:
@@ -162,6 +225,7 @@ def create_react_agent_node(
     terminal_tool: BaseTool,
     prompt_path: Path,
     max_tool_calls: int,
+    max_format_retries: int = 3,
     repair_tool: BaseTool | None = None,
     cot_tool: BaseTool | None = None,
     precheck_enabled: bool = False,
@@ -172,6 +236,8 @@ def create_react_agent_node(
     solution_context_required: bool = False,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Вызывает ReAct-модель и обрабатывает tools выбранной версии промпта."""
+    if max_format_retries < 0:
+        raise ValueError("max_format_retries must be non-negative")
     if repair_tool is not None and cot_tool is not None:
         raise ValueError("ReAct graph cannot enable cot and repair together")
     if not execution_tools:
@@ -240,11 +306,12 @@ def create_react_agent_node(
         force_final_reason = state.get("force_final_reason")
         forced_final = tool_calls_remaining == 0 or force_final_reason is not None
         if forced_final:
-            reason = (
-                "The precheck rejection limit has been reached"
-                if force_final_reason == "precheck_limit_reached"
-                else "The tool-call limit has been reached"
-            )
+            if force_final_reason == "precheck_limit_reached":
+                reason = "The precheck rejection limit has been reached"
+            elif force_final_reason == "format_recovery_forced_final":
+                reason = "The format-recovery limit has been reached"
+            else:
+                reason = "The tool-call limit has been reached"
             new_messages.append(
                 HumanMessage(
                     content=(
@@ -291,6 +358,8 @@ def create_react_agent_node(
         }
 
         format_error: str | None = None
+        requested_tool_name: str | None = None
+        requested_arguments: Any = None
         if message.invalid_tool_calls:
             format_error = "ReAct agent returned an invalid tool call"
         elif len(message.tool_calls) != 1:
@@ -299,6 +368,8 @@ def create_react_agent_node(
             tool_call = message.tool_calls[0]
             tool_name = tool_call.get("name")
             arguments = tool_call.get("args") or {}
+            requested_tool_name = str(tool_name) if tool_name is not None else None
+            requested_arguments = arguments
             history_entry["tool_call_id"] = tool_call.get("id")
 
             if tool_name in execution_tools_by_name:
@@ -472,10 +543,88 @@ def create_react_agent_node(
             else:
                 format_error = f"ReAct agent requested unknown tool: {tool_name}"
 
-        if state.get("format_retry_count", 0) >= 1:
-            raise ValueError(format_error or "ReAct agent violated tool protocol")
-
+        current_format_retries = state.get("format_retry_count", 0)
         history_entry["error"] = format_error
+        history_entry["consecutive_format_error"] = current_format_retries + 1
+        history_entry["retry_scheduled"] = (
+            current_format_retries < max_format_retries
+        )
+        if requested_tool_name is not None:
+            history_entry["tool_name"] = requested_tool_name
+            history_entry["arguments"] = requested_arguments
+        elif message.tool_calls:
+            history_entry["tool_calls"] = [
+                {
+                    "id": tool_call.get("id"),
+                    "name": tool_call.get("name"),
+                    "args": tool_call.get("args"),
+                }
+                for tool_call in message.tool_calls
+            ]
+        elif message.invalid_tool_calls:
+            history_entry["invalid_tool_calls"] = [
+                {
+                    "id": tool_call.get("id"),
+                    "name": tool_call.get("name"),
+                    "args": tool_call.get("args"),
+                    "error": tool_call.get("error"),
+                }
+                for tool_call in message.invalid_tool_calls
+            ]
+        failed_history = [*agent_history, history_entry]
+        if current_format_retries >= max_format_retries:
+            if not forced_final:
+                history_entry["recovery_action"] = "force_final"
+                return {
+                    **base_update,
+                    "messages": [
+                        *new_messages,
+                        *format_retry_messages(
+                            message,
+                            clean_message,
+                            format_error or "ReAct agent violated tool protocol",
+                            0,
+                            available_tool_names,
+                            "The regular format-retry limit has been reached.",
+                        ),
+                    ],
+                    "agent_history": failed_history,
+                    "format_retry_count": 0,
+                    "had_format_recovery": True,
+                    "force_final_reason": "format_recovery_forced_final",
+                    "status": "format_retry",
+                }
+
+            finish_reason = "forced_final_format_retry_exhausted"
+            raise ReactFormatError(
+                format_error or "ReAct agent violated tool protocol",
+                trace=build_react_trace(
+                    failed_history,
+                    list(state.get("tool_history", [])),
+                    finish_reason,
+                    (
+                        list(state.get("precheck_history", []))
+                        if precheck_enabled
+                        else None
+                    ),
+                    (
+                        dict(state["planner_trace"])
+                        if isinstance(state.get("planner_trace"), dict)
+                        else None
+                    ),
+                    (
+                        list(state.get("repair_history", []))
+                        if structured_repair_enabled
+                        else None
+                    ),
+                    list(state.get("solution_attempts", [])) or None,
+                    status="failed",
+                ),
+                reasoning=base_update["reasoning"],
+                usage=base_update["usage"],
+                prompt_version=prompt_version,
+            )
+
         return {
             **base_update,
             "messages": [
@@ -483,12 +632,18 @@ def create_react_agent_node(
                 *format_retry_messages(
                     message,
                     clean_message,
+                    format_error or "ReAct agent violated tool protocol",
                     0 if forced_final else tool_calls_remaining,
                     available_tool_names,
+                    (
+                        "The agent is already in forced-final recovery mode."
+                        if force_final_reason == "format_recovery_forced_final"
+                        else None
+                    ),
                 ),
             ],
-            "agent_history": [*agent_history, history_entry],
-            "format_retry_count": 1,
+            "agent_history": failed_history,
+            "format_retry_count": current_format_retries + 1,
             "had_format_recovery": True,
             "status": "format_retry",
         }

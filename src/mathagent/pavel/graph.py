@@ -385,6 +385,7 @@ def create_react_agent_graph(
     model_config: ModelConfig,
     prompt_path: Path,
     max_tool_calls: int = 8,
+    max_format_retries: int = 3,
     max_tool_repairs: int = 5,
     max_precheck_rejections: int = 3,
     max_verification_rounds: int = 2,
@@ -396,6 +397,8 @@ def create_react_agent_graph(
     """Создаёт ReAct-граф с tools и необязательной отдельной моделью planner."""
     if max_tool_calls < 1:
         raise ValueError("max_tool_calls must be positive")
+    if max_format_retries < 0:
+        raise ValueError("max_format_retries must be non-negative")
     if max_tool_repairs < 0:
         raise ValueError("max_tool_repairs must be non-negative")
     if max_precheck_rejections < 1:
@@ -572,6 +575,7 @@ def create_react_agent_graph(
             terminal_tool,
             prompt_path,
             max_tool_calls,
+            max_format_retries=max_format_retries,
             repair_tool=repair_tool,
             cot_tool=cot_tool,
             precheck_enabled=precheck_enabled,
@@ -709,6 +713,7 @@ def create_react_agent_graph(
         graph.add_edge("record_tool", "agent")
     recursion_limit = (
         (4 if precheck_enabled else 3) * max_tool_calls
+        + (max_tool_calls + 1) * max_format_retries
         + 2 * max_tool_calls * max_tool_repairs
         + 2 * max_precheck_rejections
         + (1 if planner_enabled else 0)

@@ -21,6 +21,7 @@ command: >-
   --max-tokens 65536
   --concurrency 80
   --max-tool-calls 20
+  --max-format-retries 3
   --max-tool-repairs 5
   --execution-timeout 20
   --timeout 7200

@@ -16,6 +16,7 @@ from scripts.benchmarks.pavel.run_artifacts import (
     finalize_run_manifest,
     generate_run_id,
     get_manifest_path,
+    read_json,
     validate_run_id,
 )
 
@@ -93,6 +94,8 @@ def build_command(script: Path, args: argparse.Namespace) -> list[str]:
         str(args.max_repairs),
         "--max-tool-calls",
         str(args.max_tool_calls),
+        "--max-format-retries",
+        str(args.max_format_retries),
         "--max-tool-repairs",
         str(args.max_tool_repairs),
         "--max-precheck-rejections",
@@ -118,12 +121,19 @@ def build_command(script: Path, args: argparse.Namespace) -> list[str]:
     return command
 
 
+def read_completed_process_status(manifest_path: Path) -> str | None:
+    """Читает статус, записанный завершившимся benchmark-процессом."""
+    if not manifest_path.exists():
+        return None
+    status = read_json(manifest_path).get("status")
+    return status if isinstance(status, str) else None
+
+
 def main() -> int:
     """Последовательно запускает список бенчмарков и управляет общим статусом run.
 
-    Следующий датасет начинается только после предыдущего. При ошибке или обрыве
-    цикл прекращается, manifest получает соответствующий статус, а код возврата
-    позволяет shell/CI отличить успех, частичный результат и interruption.
+    Task-level ошибки дают completed_with_errors и не прерывают следующие
+    датасеты. Только fatal/infrastructure остановка завершает цикл с кодом 2.
     """
     args = parse_args()
     args.run_id = (
@@ -138,32 +148,54 @@ def main() -> int:
         ",".join(script.stem for script in selected_scripts),
     )
     failed: list[str] = []
-    interrupted = False
+    abort_status: str | None = None
+    completed_with_errors = False
+    manifest_path = get_manifest_path(args.run_id)
     for script in selected_scripts:
         logger.info("benchmark_process_started script=%s", script.stem)
         result = subprocess.run(build_command(script, args), cwd=ROOT, check=False)
-        if result.returncode:
+        process_status = read_completed_process_status(manifest_path)
+
+        # Код 1 поддерживается для совместимости со старыми benchmark scripts:
+        # это частичные task errors, после которых следующий датасет безопасен
+        if result.returncode == 1 or process_status == "completed_with_errors":
+            completed_with_errors = True
+            logger.warning(
+                "benchmark_process_completed_with_errors script=%s",
+                script.stem,
+            )
+
+        if result.returncode not in {0, 1}:
             failed.append(script.stem)
             logger.error(
                 "benchmark_process_failed script=%s returncode=%d",
                 script.stem,
                 result.returncode,
             )
-            interrupted = result.returncode == 2
+            abort_status = (
+                process_status
+                if process_status in {"failed", "interrupted"}
+                else "failed"
+            )
             break
 
-    manifest_path = get_manifest_path(args.run_id)
     status = (
-        "interrupted"
-        if interrupted
+        abort_status
+        if abort_status is not None
         else "completed_with_errors"
-        if failed
+        if completed_with_errors
         else "completed"
     )
     finalize_run_manifest(manifest_path, status)
     if failed:
         logger.error("run_all_finished status=%s failed=%s", status, ",".join(failed))
-        return 2 if interrupted else 1
+        return 2
+    if completed_with_errors:
+        logger.warning(
+            "run_all_finished status=completed_with_errors run_id=%s",
+            args.run_id,
+        )
+        return 0
     logger.info("run_all_finished status=completed run_id=%s", args.run_id)
     return 0
 

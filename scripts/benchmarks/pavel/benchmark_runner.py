@@ -139,6 +139,7 @@ def parse_benchmark_args(
     parser.add_argument("--prompt", type=Path)
     parser.add_argument("--max-repairs", type=int, default=2)
     parser.add_argument("--max-tool-calls", type=int, default=8)
+    parser.add_argument("--max-format-retries", type=int, default=3)
     parser.add_argument("--max-tool-repairs", type=int, default=5)
     parser.add_argument("--max-precheck-rejections", type=int, default=3)
     parser.add_argument("--max-verification-rounds", type=int, default=2)
@@ -240,6 +241,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-repairs must be non-negative")
     if args.max_tool_calls < 1:
         raise ValueError("--max-tool-calls must be positive")
+    if args.max_format_retries < 0:
+        raise ValueError("--max-format-retries must be non-negative")
     if args.max_tool_repairs < 0:
         raise ValueError("--max-tool-repairs must be non-negative")
     if args.max_precheck_rejections < 1:
@@ -306,6 +309,7 @@ def create_manifest_config(
             "react-agent-v9",
             "react-agent-v10",
             "react-agent-v11",
+            "react-agent-v12",
         }
     )
     return {
@@ -345,6 +349,8 @@ def create_manifest_config(
                     **(
                         {
                             "max_tool_calls": args.max_tool_calls,
+                            "max_format_retries": args.max_format_retries,
+                            "format_recovery": "exact-feedback-forced-final-v3",
                             **(
                                 {
                                     "max_tool_repairs": args.max_tool_repairs,
@@ -522,6 +528,7 @@ def create_graph(
             model_config,
             prompt_path,
             max_tool_calls=args.max_tool_calls,
+            max_format_retries=args.max_format_retries,
             max_tool_repairs=args.max_tool_repairs,
             max_precheck_rejections=args.max_precheck_rejections,
             max_verification_rounds=args.max_verification_rounds,
@@ -629,6 +636,18 @@ def solve_item(
         prompt_version = state["prompt_version"]
         trace = state.get("trace")
     except Exception as exc:
+        exception_trace = getattr(exc, "trace", None)
+        if isinstance(exception_trace, dict):
+            trace = exception_trace
+        exception_reasoning = getattr(exc, "reasoning", None)
+        if isinstance(exception_reasoning, dict):
+            reasoning = exception_reasoning
+        exception_usage = getattr(exc, "usage", None)
+        if isinstance(exception_usage, dict):
+            usage = exception_usage
+        exception_prompt_version = getattr(exc, "prompt_version", None)
+        if isinstance(exception_prompt_version, str):
+            prompt_version = exception_prompt_version
         error_category = classify_exception(exc)
         error = f"{type(exc).__name__}: {exc}"
 
@@ -705,6 +724,11 @@ def summarize_records(
         "wall_time_seconds": round(wall_time, 3),
         "tasks_per_second": round(len(records) / wall_time, 4) if wall_time else 0.0,
     }
+
+
+def benchmark_exit_code(status: str) -> int:
+    """Возвращает ненулевой код только для аварийно остановленного бенчмарка."""
+    return 2 if status in {"failed", "interrupted"} else 0
 
 
 def run_concurrent_tasks(
@@ -991,12 +1015,8 @@ def _run_benchmark(
         output_path,
     )
 
-    # Код возврата позволяет run_all решить, можно ли запускать следующий бенчмарк
-    if status in {"failed", "interrupted"}:
-        return 2
-    if status == "completed_with_errors":
-        return 1
-    return 0
+    # Частичные task errors уже сохранены в JSONL и не должны останавливать job
+    return benchmark_exit_code(status)
 
 
 def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
