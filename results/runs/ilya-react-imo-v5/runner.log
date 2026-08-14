@@ -1,0 +1,4 @@
+=== 2026-08-14T12:36:57.688571+00:00 run_id=ilya-react-imo-v5 branch=Ilya/agentic_loop@e6298f8652b5 gpus=1 devices=1 isolation=bwrap
+=== command: ENGINE=sglang MAX_MODEL_LEN=131072 MAX_NUM_SEQS=48 CONCURRENCY=32 SELECT=[imo_answerbench] scripts/run_benchmarks.sh
+Нет команды бенчмарков: напишите её после '--', а адрес сервера в ней — как {BASE_URL}
+=== 2026-08-14T12:36:58.663627+00:00 status=failed exit_code=1 duration=1.0s
