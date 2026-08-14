@@ -320,6 +320,14 @@ def parse_benchmark_args(
              "вердикт не нёс информации. Работает только у --pipeline qwen4b.",
     )
     group.add_argument(
+        "--evaluator-min-depth", type=int, default=0,
+        help="Глубина, начиная с которой оценщик включается. 0 (по умолчанию) — "
+             "оценивать все шаги. 2 — шаги на глубинах 0 и 1 принимать без вызова "
+             "модели. Замер по базовым прогонам: там 83%% всех оценок и 87%% всех "
+             "отвержений, причём строгость выше (69%%/66%% против 49-50%% глубже). "
+             "Флаг проверяет, работа это или шум. Только --pipeline qwen4b.",
+    )
+    group.add_argument(
         "--min-steps-before-answer", type=int, default=0,
         help="Сколько шагов должно быть принято, прежде чем \\boxed{} засчитывается "
              "как финальный ответ. Работает для ОБОИХ пайплайнов. 0 (по умолчанию) "
@@ -1020,6 +1028,16 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
         else:
             print(f"[config] ⚠️  --evaluator-mode={mode} игнорируется: пайплайн "
                   f"'{args.pipeline}' его не поддерживает")
+
+    min_depth = int(getattr(args, "evaluator_min_depth", 0) or 0)
+    if min_depth:
+        if hasattr(solver_mod, "EVALUATOR_MIN_DEPTH"):
+            solver_mod.EVALUATOR_MIN_DEPTH = min_depth
+            print(f"[config] ⚠️  ОЦЕНЩИК ВКЛЮЧАЕТСЯ С ГЛУБИНЫ {min_depth}: шаги "
+                  f"на глубинах 0..{min_depth - 1} принимаются без вызова модели.")
+        else:
+            print(f"[config] ⚠️  --evaluator-min-depth={min_depth} игнорируется: "
+                  f"пайплайн '{args.pipeline}' его не поддерживает")
 
     if getattr(args, "seed", None) is not None:
         if hasattr(solver_mod, "SEED"):

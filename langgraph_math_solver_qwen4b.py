@@ -225,6 +225,15 @@ def _next_seed() -> Optional[int]:
 EVALUATOR_MODE = "llm"
 RANDOM_EVAL_REJECT_RATE = float(os.getenv("RANDOM_EVAL_REJECT_RATE", "0.6"))
 
+# Глубина, начиная с которой оценщик вообще включается. 0 — как всегда.
+#
+# Зачем. Замер по двум базовым прогонам: 83% всех оценок и 87% всех отвержений
+# приходятся на глубины 0-1, и отвергает он там заметно строже (69% и 66%)
+# против 49-50% на глубине 2-3. Вопрос: эта ранняя строгость — работа или шум.
+# С min_depth=2 шаги на глубинах 0-1 принимаются без вызова модели; если счёт
+# не упадёт, значит ранние отвержения ничего не давали.
+EVALUATOR_MIN_DEPTH = 0
+
 
 def _random_eval_score() -> float:
     """Вердикт случайного оценщика. Воспроизводим: зерно из той же цепочки,
@@ -1262,6 +1271,22 @@ def evaluate_steps(state: AgentState):
             scores.append(score)
             print(f"    - Candidate {i+1} Score: {score:.4f} | Rationale: {rationale} "
                   f"♻️ [ДУБЛИКАТ шага, оценщик повторно не вызывался]")
+            continue
+
+        # Мелкая глубина: принимаем не спрашивая. Пустой шаг сюда не попадёт —
+        # он отсеян выше, иначе агент коммитил бы пустоту.
+        if len(state.get('steps', [])) < EVALUATOR_MIN_DEPTH:
+            score = 1.0
+            rationale = (f"ПРИНЯТО БЕЗ ОЦЕНКИ: глубина "
+                         f"{len(state.get('steps', []))} < {EVALUATOR_MIN_DEPTH}")
+            any_reliable = True
+            seen[key] = (score, rationale)
+            scores.append(score)
+            RECORDER.record(
+                stage="evaluate_result", depth=len(state.get('steps', [])), branch=i + 1,
+                content=rationale, score=score, reliable=True, step_text=step,
+            )
+            print(f"    - Candidate {i+1} Score: {score:.4f} | {rationale}")
             continue
 
         # Контрольный режим: балл вместо вердикта модели. Пустой шаг выше всё
