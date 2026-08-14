@@ -269,6 +269,7 @@ def create_graph(
             prompt_path,
             max_steps=args.react_max_steps,
             use_tester=args.react_tester,
+            max_model_len=args.vllm_max_model_len,
         )
     return create_solver_graph(model_config, prompt_path)
 

@@ -68,26 +68,74 @@ def parse_tool_call(text: str, tools: dict[str, Tool]) -> tuple[str, str] | None
     return found
 
 
+# Запас контекста на разметку чата/спец-токены и погрешность оценки длины.
+_CTX_MARGIN = 8192
+# Минимум выхода: меньше просить нет смысла (гард не даёт входу разрастись).
+_MIN_OUTPUT = 2048
+
+
+def _estimate_tokens(messages: list[Any]) -> int:
+    """Грубая ВЕРХНЯЯ оценка длины истории в токенах (без токенайзера).
+
+    ~3 символа/токен для смешанного текста + оверхед на сообщение. Оценка нужна
+    только чтобы не заказать max_tokens больше, чем влезает в контекст, поэтому
+    намеренно завышена: лучше недодать выхода, чем поймать 400 переполнения."""
+    total = 0
+    for message in messages:
+        content = getattr(message, "content", None)
+        if content is None and isinstance(message, (tuple, list)) and len(message) == 2:
+            content = message[1]
+        total += len(str(content or "")) // 3 + 8
+    return total
+
+
 def build_react_loop(
     model: Any,
     tools: dict[str, Tool],
     max_steps: int = 6,
+    *,
+    context_budget: dict[str, Any] | None = None,
 ) -> Any:
     """Собрать ReAct-граф вокруг модели и набора инструментов.
 
     max_steps ограничивает число обращений к инструментам, чтобы луп гарантированно
     завершался (после лимита переходим в END с тем, что модель успела наработать).
-    """
+
+    context_budget (опц.): {'max_model_len', 'max_tokens_cap', 'base_extra_body'}.
+    Включает ДИНАМИЧЕСКИЙ max_tokens на каждый вызов (вход+выход ≤ контекста, чтобы
+    растущий ReAct-диалог не ловил 400) и защиту от зацикливания генераций,
+    обрезанных по длине. None → фиксированный max_tokens модели (для вложенного
+    тестировщика, где история короткая)."""
+
+    def _invoke(messages: list[Any]) -> Any:
+        """Вызвать модель, при наличии бюджета — с подобранным под контекст max_tokens."""
+        if context_budget is None:
+            return model.invoke(messages)
+        budget = (
+            context_budget["max_model_len"]
+            - _estimate_tokens(messages)
+            - _CTX_MARGIN
+        )
+        dyn = max(_MIN_OUTPUT, min(context_budget["max_tokens_cap"], budget))
+        extra = {**context_budget["base_extra_body"], "max_tokens": dyn}
+        return model.bind(extra_body=extra).invoke(messages)
 
     def agent(state: ReactState) -> dict[str, Any]:
         """Шаг рассуждения: вызвать модель на текущей истории."""
-        response = model.invoke(state["messages"])
-        return {"messages": [response]}
+        return {"messages": [_invoke(state["messages"])]}
 
     def route(state: ReactState) -> str:
         """Решить: исполнять инструмент, дожать финал или завершать."""
         last = state["messages"][-1]
-        wants_tool = parse_tool_call(last.content, tools) is not None
+        content = last.content or ""
+        finish = (getattr(last, "response_metadata", None) or {}).get("finish_reason")
+        wants_tool = parse_tool_call(content, tools) is not None
+        has_boxed = "\\boxed" in content
+        # Генерацию обрезало по длине, а готового \boxed нет → дожимаем финал, но НЕ
+        # возвращаем огромный обрезанный текст в контекст новым шагом. Именно это
+        # рвало прогон: вход раздувался до >130k токенов → сервер отвечал 400.
+        if finish == "length" and not has_boxed:
+            return "finalize"
         if state.get("steps", 0) >= max_steps:
             # Шаги кончились. Если модель всё ещё зовёт инструмент (значит финала в
             # \boxed нет) — принудительно дожимаем ответ, а не обрываем пустышкой.
@@ -101,8 +149,7 @@ def build_react_loop(
             "Сейчас же дай ОКОНЧАТЕЛЬНЫЙ ответ, оформи его в \\boxed{...}. "
             "Если полностью не уверен — дай лучшую текущую оценку, но \\boxed обязателен."
         )
-        response = model.invoke(state["messages"] + [("human", force)])
-        return {"messages": [response]}
+        return {"messages": [_invoke(state["messages"] + [("human", force)])]}
 
     def tool_node(state: ReactState) -> dict[str, Any]:
         """Исполнить запрошенный инструмент и вернуть Observation в историю."""
@@ -243,13 +290,17 @@ def create_react_graph(
     *,
     max_steps: int = 6,
     use_tester: bool = False,
+    max_model_len: int = 131072,
 ) -> _ReactSolver:
     """Собрать ReAct-агента с инструментами под контракт benchmark_runner.
 
     model_config — ModelConfig (как у create_solver_graph). prompt_path — YAML в
     формате react-tools.yml (version + roles[role].system). По умолчанию у солвера
     только run_python (полный учёт токенов); use_tester=True добавляет test_claim.
-    """
+
+    max_model_len — окно контекста сервинга: из него на каждом шаге вычитается
+    оценка входа и получается динамический max_tokens (чтобы растущий ReAct-диалог
+    не переполнял контекст и не ловил 400)."""
     from mathagent.agent.vllm_chat import ChatVLLM
 
     config = yaml.safe_load(Path(prompt_path).read_text(encoding="utf-8"))
@@ -282,6 +333,20 @@ def create_react_graph(
         },
     )
 
+    # База для per-call bind: все sampling-поля, КРОМЕ max_tokens (его на каждом
+    # шаге подставляет _invoke под остаток контекста).
+    base_extra_body = {
+        "top_k": model_config.top_k,
+        "min_p": model_config.min_p,
+        "repetition_penalty": model_config.repetition_penalty,
+        "chat_template_kwargs": {"enable_thinking": model_config.thinking},
+    }
+    context_budget = {
+        "max_model_len": max_model_len,
+        "max_tokens_cap": model_config.max_tokens,
+        "base_extra_body": base_extra_body,
+    }
+
     tools = dict(TOOLS)
     if use_tester:
         tester_persona = config["roles"]["tester"]["system"]
@@ -289,5 +354,7 @@ def create_react_graph(
         tools[tester.name] = tester
 
     system_prompt = build_system_prompt(persona, tools)
-    app = build_react_loop(model, tools, max_steps=max_steps)
+    app = build_react_loop(
+        model, tools, max_steps=max_steps, context_budget=context_budget
+    )
     return _ReactSolver(app, system_prompt, task_template, prompt_version)
