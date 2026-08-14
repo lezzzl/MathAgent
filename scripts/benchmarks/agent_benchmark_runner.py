@@ -1294,6 +1294,10 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
                             record["solution"], record["ground_truth"],
                             console.get("error"))
                         counters[status] = counters.get(status, 0) + 1
+                        # Ноль токенов — генератор не получил ответа ни разу.
+                        # Это всегда сбой связи, а не свойство задачи.
+                        if not metrics.get("tokens_used"):
+                            counters["dead"] = counters.get("dead", 0) + 1
                         extra = f"task {record['task_id']}"
                         if metrics.get("samples", 1) > 1:
                             extra += f" | sm {metrics['samples']}"
@@ -1327,6 +1331,23 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
               "точность считается ниже отдельным процессом.")
     if counters["errors"]:
         print(f"Задач с ошибками: {counters['errors']}")
+
+    # Прогон, где задачи не потратили ни одного токена, — это не замер, а
+    # недоступный сервер. Без этой проверки он завершается кодом 0, диспетчер
+    # публикует его как состоявшийся, и в results/ ложится правдоподобное с виду
+    # «0/30». Ровно так и вышло 2026-08-14: на машине кончилось место, SGLang
+    # умер через шесть минут после старта, все 30 задач получили ConnectionError,
+    # а прогон записался как done — с нулём, который легко принять за результат
+    # эксперимента.
+    dead = counters.get("dead", 0)
+    if dead:
+        print(f"\n⚠️  Задач без единого токена: {dead} из {counters['done']} — "
+              f"генератор ни разу не получил ответа от сервера.")
+    if counters["done"] and dead >= max(1, int(counters["done"] * 0.3)):
+        print("❌ ПРОГОН НЕДОСТОВЕРЕН: сервер был недоступен большую часть "
+              "времени. Сверку не запускаю и возвращаю ненулевой код, чтобы "
+              f"результат не ушёл как состоявшийся. JSONL сохранён: {output_path}")
+        return 1
 
     # Сверка идёт ПОСЛЕ записи JSONL и не влияет на код возврата прогона:
     # результат многочасовой работы не должен зависеть от того, отработал ли
