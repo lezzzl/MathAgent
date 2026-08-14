@@ -1,7 +1,7 @@
-# ЭКСПЕРИМЕНТ 1: случайный оценщик, зерно 42.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evalrandom-s42b/.
+# ЭКСПЕРИМЕНТ 1: случайный оценщик, зерно 43.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evalrandom-s43b/.
 #
-# Единственное отличие от nikita-qwen4b-v11-aime26-evalrandom-s42b —
+# Единственное отличие от nikita-qwen4b-v11-aime26-evalrandom-s43b —
 # --evaluator-mode random: модель для оценки шага не зовётся вовсе, балл берётся
 # из той же шкалы (0/0.25/0.5/0.75/1.0) со средней долей отвержений 60% — как у
 # живого оценщика в этих же прогонах (68-71%).
@@ -33,7 +33,7 @@ command: >-
   --pipeline qwen4b
   --prompt conf/base/prompts/agent-step-qwen4b-v11.yml
   --branch-mode single
-  --seed 42
+  --seed 43
   --samples 3
   --resample-token-threshold 250000
   --vote-tiebreak-samples 0

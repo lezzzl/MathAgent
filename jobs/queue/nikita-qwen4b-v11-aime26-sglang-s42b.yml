@@ -1,5 +1,5 @@
 # КОНТРОЛЬ А: базовая линия на SGLang, зерно 42.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-sglang-s42/.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-sglang-s42b/.
 #
 # Зачем ещё один прогон на том же зерне, что и nikita-qwen4b-v11-aime26-s42.
 # Тот прогон шёл СТАРОЙ командой (scripts/bench_qwen4b.sh, коммит 70f7fed): без

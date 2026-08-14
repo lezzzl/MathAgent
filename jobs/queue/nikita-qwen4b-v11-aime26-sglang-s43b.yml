@@ -1,11 +1,11 @@
 # КОНТРОЛЬ А: базовая линия на SGLang, зерно 43.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-sglang-s43/.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-sglang-s43b/.
 #
 # Зачем ещё один прогон на том же зерне, что и nikita-qwen4b-v11-aime26-s43.
 # Тот прогон шёл СТАРОЙ командой (scripts/bench_qwen4b.sh, коммит 70f7fed): без
 # --vote-tiebreak-samples 0 и с --workers 16. Сравнивать с ним что-либо нельзя —
 # конфигурация другая. Этот файл задаёт эталон, относительно которого меряется
-# соседний nikita-qwen4b-v11-aime26-evalrandom-s43 — случайный оценщик.
+# соседний nikita-qwen4b-v11-aime26-evalrandom-s43b — случайный оценщик.
 #
 # Две спеки отличаются ровно одним пунктом. Зерно и там и там одно.
 command: >-
