@@ -1,6 +1,7 @@
 import json
 import operator
 import os
+import random
 import re
 import sys
 import threading
@@ -199,6 +200,36 @@ def _next_seed() -> Optional[int]:
         return None
     _seed_state.counter = getattr(_seed_state, "counter", 0) + 1
     return (base + _seed_state.counter * 7919) % (2 ** 31 - 1)
+
+
+# ---------------------------------------------------------------------------
+# Режим оценщика (эксперимент: нужен ли он вообще)
+# ---------------------------------------------------------------------------
+# "llm"    — обычный оценщик, роль evaluator из yaml;
+# "random" — модель не зовём, вердикт бросаем монетой.
+#
+# Зачем. Оценщик стоит заметной доли бюджета и отвергает больше половины
+# кандидатов, но что он даёт качеству — никогда не измерялось. Случайный
+# оценщик отвечает на это прямо: если счёт бенчмарка не изменится, значит
+# вердикт не нёс информации и весь этот расход был впустую.
+#
+# Шкала БИНАРНАЯ — 0.0 или 1.0. Промежуточных значений у qwen4b нет: промпт
+# роли требует «ONLY as 0.0 or 1.0», и по всем прогонам (золотому и четырём
+# августовским) в eval_history не встречается ни одного другого значения.
+# Градуированная шкала 0/0.25/0.5/0.75/1.0 живёт только в линейке 9B.
+#
+# Доля нулей подобрана под наблюдаемую у живого оценщика (52% в прогоне на
+# vLLM, 59-63% в прогонах на SGLang). Без этого сравнивались бы не «оценка
+# против случайности», а «строгий судья против мягкого», и разница в счёте
+# ничего не сказала бы про качество вердикта.
+EVALUATOR_MODE = "llm"
+RANDOM_EVAL_REJECT_RATE = float(os.getenv("RANDOM_EVAL_REJECT_RATE", "0.6"))
+
+
+def _random_eval_score() -> float:
+    """Вердикт случайного оценщика. Воспроизводим: зерно из той же цепочки,
+    что и у обращений к модели (seed + task_id + номер вызова)."""
+    return 0.0 if random.Random(_next_seed()).random() < RANDOM_EVAL_REJECT_RATE else 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -1231,6 +1262,23 @@ def evaluate_steps(state: AgentState):
             scores.append(score)
             print(f"    - Candidate {i+1} Score: {score:.4f} | Rationale: {rationale} "
                   f"♻️ [ДУБЛИКАТ шага, оценщик повторно не вызывался]")
+            continue
+
+        # Контрольный режим: балл вместо вердикта модели. Пустой шаг выше всё
+        # равно получает 0 — это не суждение о качестве, а защита от коммита
+        # пустоты, и без неё сравнивались бы разные пайплайны, а не разные
+        # оценщики. Всё остальное ниже по графу не меняется.
+        if EVALUATOR_MODE == "random":
+            score = _random_eval_score()
+            rationale = f"СЛУЧАЙНЫЙ ОЦЕНЩИК (контрольный режим), балл {score:.2f}"
+            any_reliable = True
+            seen[key] = (score, rationale)
+            scores.append(score)
+            RECORDER.record(
+                stage="evaluate_result", depth=len(state.get('steps', [])), branch=i + 1,
+                content=rationale, score=score, reliable=True, step_text=step,
+            )
+            print(f"    - Candidate {i+1} Score: {score:.4f} | {rationale}")
             continue
 
         messages = [

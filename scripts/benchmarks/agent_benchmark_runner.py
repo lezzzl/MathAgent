@@ -311,6 +311,15 @@ def parse_benchmark_args(
              "бюджета — на замерах его стоит отключать.",
     )
     group.add_argument(
+        "--evaluator-mode", default="llm", choices=["llm", "random"],
+        help="Чем оценивать шаги. 'llm' — роль evaluator из промпта (как всегда). "
+             "'random' — контрольный режим: модель не зовётся, вердикт бросается "
+             "монетой по той же бинарной шкале 0.0/1.0 с той же долей нулей "
+             "(RANDOM_EVAL_REJECT_RATE, по умолчанию 0.6 — как у живого оценщика). "
+             "Нужен, чтобы измерить вклад оценщика: если счёт не изменился, "
+             "вердикт не нёс информации. Работает только у --pipeline qwen4b.",
+    )
+    group.add_argument(
         "--min-steps-before-answer", type=int, default=0,
         help="Сколько шагов должно быть принято, прежде чем \\boxed{} засчитывается "
              "как финальный ответ. Работает для ОБОИХ пайплайнов. 0 (по умолчанию) "
@@ -1000,6 +1009,18 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
     solver_mod.API_KEY = args.api_key
     solver_mod.DEFAULT_MAX_TOKENS = args.max_tokens
     solver_mod.REQUEST_TIMEOUT = args.timeout
+    mode = getattr(args, "evaluator_mode", "llm")
+    if mode != "llm":
+        if hasattr(solver_mod, "EVALUATOR_MODE"):
+            solver_mod.EVALUATOR_MODE = mode
+            print(f"[config] ⚠️  ОЦЕНЩИК В КОНТРОЛЬНОМ РЕЖИМЕ '{mode}': вердикты "
+                  f"не от модели, доля отвержений "
+                  f"{solver_mod.RANDOM_EVAL_REJECT_RATE:.0%}. Это не замер "
+                  f"качества пайплайна, а проверка вклада оценщика.")
+        else:
+            print(f"[config] ⚠️  --evaluator-mode={mode} игнорируется: пайплайн "
+                  f"'{args.pipeline}' его не поддерживает")
+
     if getattr(args, "seed", None) is not None:
         if hasattr(solver_mod, "SEED"):
             solver_mod.SEED = args.seed
