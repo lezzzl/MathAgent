@@ -47,10 +47,16 @@ print(...)
 
 
 class ReactState(TypedDict):
-    """История сообщений + счётчик шагов (предохранитель от бесконечного лупа)."""
+    """История сообщений + счётчик шагов (предохранитель от бесконечного лупа).
+
+    ctx_tokens — реальные prompt-токены, которые уйдут в СЛЕДУЮЩИЙ вызов модели
+    (0 = ещё неизвестно, оценим по символам). Ведём его по usage_metadata ответов
+    сервера, а не по длине .content: reasoning-модель прячет весь <think> в
+    additional_kwargs и возвращает его в контекст — по символам он не виден."""
 
     messages: Annotated[list, add_messages]
     steps: int
+    ctx_tokens: int
 
 
 def build_system_prompt(persona: str, tools: dict[str, Tool]) -> str:
@@ -74,19 +80,41 @@ _CTX_MARGIN = 8192
 _MIN_OUTPUT = 2048
 
 
-def _estimate_tokens(messages: list[Any]) -> int:
-    """Грубая ВЕРХНЯЯ оценка длины истории в токенах (без токенайзера).
+def _message_text(message: Any) -> str:
+    """Весь текст сообщения, включая скрытый reasoning из additional_kwargs.
 
-    ~3 символа/токен для смешанного текста + оверхед на сообщение. Оценка нужна
-    только чтобы не заказать max_tokens больше, чем влезает в контекст, поэтому
-    намеренно завышена: лучше недодать выхода, чем поймать 400 переполнения."""
-    total = 0
-    for message in messages:
-        content = getattr(message, "content", None)
-        if content is None and isinstance(message, (tuple, list)) and len(message) == 2:
-            content = message[1]
-        total += len(str(content or "")) // 3 + 8
-    return total
+    Важно для оценки размера: reasoning-модель кладёт <think> не в .content, а в
+    additional_kwargs (reasoning/reasoning_content), и он уходит обратно в контекст."""
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, (tuple, list)) and len(message) == 2:
+        content = message[1]
+    parts = [str(content or "")]
+    extra = getattr(message, "additional_kwargs", None) or {}
+    for value in extra.values():
+        if isinstance(value, str):
+            parts.append(value)
+    return "".join(parts)
+
+
+def _estimate_tokens(messages: list[Any]) -> int:
+    """ВЕРХНЯЯ оценка длины истории в токенах по символам (~3 симв/токен).
+
+    Запасной путь, когда реальных usage-токенов ещё нет (самый первый вызов).
+    Учитывает и скрытый reasoning — иначе недосчитывает половину и max_tokens
+    выходит слишком большим (→ 400 переполнения контекста)."""
+    return sum(len(_message_text(m)) // 3 + 8 for m in messages)
+
+
+def _prompt_tokens_after(response: Any, fallback: int) -> int:
+    """Реальные prompt-токены для СЛЕДУЮЩЕГО вызова = вход + выход этого ответа.
+
+    Берём из usage_metadata сервера (там учтён и reasoning). fallback — если
+    сервер usage не отдал."""
+    usage = getattr(response, "usage_metadata", None) or {}
+    total = int(usage.get("input_tokens", 0) or 0) + int(
+        usage.get("output_tokens", 0) or 0
+    )
+    return total or fallback
 
 
 def build_react_loop(
@@ -107,22 +135,27 @@ def build_react_loop(
     обрезанных по длине. None → фиксированный max_tokens модели (для вложенного
     тестировщика, где история короткая)."""
 
-    def _invoke(messages: list[Any]) -> Any:
-        """Вызвать модель, при наличии бюджета — с подобранным под контекст max_tokens."""
+    def _invoke(state: ReactState, messages: list[Any]) -> dict[str, Any]:
+        """Вызвать модель с max_tokens под остаток контекста; вернуть узловой апдейт.
+
+        Размер входа берём из ctx_tokens (реальные prompt-токены прошлого ответа),
+        а для самого первого вызова — из оценки по символам. После ответа обновляем
+        ctx_tokens по usage сервера — так учитывается и скрытый reasoning."""
         if context_budget is None:
-            return model.invoke(messages)
-        budget = (
-            context_budget["max_model_len"]
-            - _estimate_tokens(messages)
-            - _CTX_MARGIN
-        )
+            return {"messages": [model.invoke(messages)]}
+        input_tokens = state.get("ctx_tokens", 0) or _estimate_tokens(messages)
+        budget = context_budget["max_model_len"] - input_tokens - _CTX_MARGIN
         dyn = max(_MIN_OUTPUT, min(context_budget["max_tokens_cap"], budget))
         extra = {**context_budget["base_extra_body"], "max_tokens": dyn}
-        return model.bind(extra_body=extra).invoke(messages)
+        response = model.bind(extra_body=extra).invoke(messages)
+        return {
+            "messages": [response],
+            "ctx_tokens": _prompt_tokens_after(response, input_tokens + dyn),
+        }
 
     def agent(state: ReactState) -> dict[str, Any]:
         """Шаг рассуждения: вызвать модель на текущей истории."""
-        return {"messages": [_invoke(state["messages"])]}
+        return _invoke(state, state["messages"])
 
     def route(state: ReactState) -> str:
         """Решить: исполнять инструмент, дожать финал или завершать."""
@@ -149,7 +182,9 @@ def build_react_loop(
             "Сейчас же дай ОКОНЧАТЕЛЬНЫЙ ответ, оформи его в \\boxed{...}. "
             "Если полностью не уверен — дай лучшую текущую оценку, но \\boxed обязателен."
         )
-        return {"messages": [_invoke(state["messages"] + [("human", force)])]}
+        # force-реплика добавляет ~40 токенов ко входу — учитываем в бюджете.
+        state = {**state, "ctx_tokens": (state.get("ctx_tokens", 0) or 0) + 48}
+        return _invoke(state, state["messages"] + [("human", force)])
 
     def tool_node(state: ReactState) -> dict[str, Any]:
         """Исполнить запрошенный инструмент и вернуть Observation в историю."""
@@ -158,9 +193,12 @@ def build_react_loop(
         assert call is not None  # route гарантирует наличие вызова
         name, body = call
         observation = tools[name].run(body)
+        message = f"Observation ({name}):\n{observation}"
         return {
-            "messages": [("human", f"Observation ({name}):\n{observation}")],
+            "messages": [("human", message)],
             "steps": state.get("steps", 0) + 1,
+            # Observation войдёт во вход следующего вызова — доучитываем его размер.
+            "ctx_tokens": (state.get("ctx_tokens", 0) or 0) + len(message) // 3 + 8,
         }
 
     graph = StateGraph(ReactState)
