@@ -226,3 +226,5 @@ report_qwen4b.md
 scripts/export_run.py
 jobs/queue/test.yml
 jobs/queue/react-2-models.yml
+eval_exps_qwen4b_report.md
+labeling/

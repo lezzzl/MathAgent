@@ -1,0 +1,54 @@
+# IMO-AnswerBench, 400 задач, оценщик с глубины 1. Зерно 42.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-imo-depth1-s42/.
+#
+# Конфигурация золотая, с одним изменением: --evaluator-min-depth 1.
+#
+# Почему 1, а не 2. Измерено на AIME26 (см. EXPERIMENTS.md):
+#   с глубины 1 (пропущена только глубина 0): 48/60 против базы 46/60, токенов -26%
+#   с глубины 2 (пропущены глубины 0 и 1):    85/120 против базы 92/120, токенов -48%
+# Глубина 2 экономит вдвое больше, но стабильно теряет задачи: на трёх зёрнах из
+# четырёх минус, и на AIME25 тоже минус (18/30 -> 14/30). Глубина 1 не теряет
+# ничего. На 400 задачах шесть процентов — это два десятка задач, экономия того
+# не стоит.
+#
+# CONCURRENCY=96 и --workers 96: здесь, в отличие от AIME с его тридцатью
+# задачами, воркеры реально загружены — задач 400. MAX_NUM_SEQS выйдет 144.
+# В логе после старта смотреть max_total_num_tokens: при 96 одновременных
+# запросах и контексте 65536 худший случай не поместится, движок будет ставить
+# часть в очередь. Это нормально, но если появятся retract'ы — снижать воркеров.
+#
+# --verify-timeout 10800: на IMO сверку ведёт LLM-судья на этом же сервере, и
+# 400 задач в дефолтный час не укладываются. Прогон при срыве сверки не
+# пропадает — JSONL уже записан, сверку можно догнать вручную.
+#
+# Траектории не пишем: на 400 задачах это сотни мегабайт, а под LFS подпадают
+# только *.jsonl, так что .json уехал бы в историю обычным блобом.
+command: >-
+  MODEL=Qwen/Qwen3.5-4B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-4B
+  CONCURRENCY=96
+  MAX_MODEL_LEN=65536
+  KV_CACHE_DTYPE=auto
+  MTP=0
+  TOOL_CALL_PARSER=qwen3_coder
+  scripts/run_benchmarks.sh --
+  .venv/bin/python -u scripts/benchmarks/run_imo_answerbench.py
+  --model {SERVED_MODEL_NAME}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --pipeline qwen4b
+  --prompt conf/base/prompts/agent-step-qwen4b-v11.yml
+  --branch-mode single
+  --seed 42
+  --samples 3
+  --resample-token-threshold 250000
+  --vote-tiebreak-samples 0
+  --evaluator-min-depth 1
+  --no-verify-step
+  --token-budget 800000
+  --timeout 1200
+  --workers 96
+  --verify-timeout 10800
+  --output results/runs/{RUN_ID}/imo_answerbench.jsonl
+gpus: 1
+timeout_minutes: 2880

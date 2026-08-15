@@ -1,8 +1,8 @@
-# ЭКСПЕРИМЕНТ 2б: оценщик с глубины 1, зерно 43.
+# Оценщик с глубины 1, зерно 45. Четвёртая точка лучшего конфига.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evaldepth1-s45/.
 #
-# Пара к базе nikita-qwen4b-v11-aime26-sglang-s43b (23/30). Второе зерно к
-# nikita-qwen4b-v11-aime26-evaldepth1-s42.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evaldepth1-s43/.
+# База для зерна есть: results/runs/nikita-qwen4b-v11-aime26-s45/, 23/30 — тот
+# прогон шёл ровно текущей командой, проверено по его runner.log.
 command: >-
   MODEL=Qwen/Qwen3.5-4B
   SERVED_MODEL_NAME=Qwen/Qwen3.5-4B
@@ -19,7 +19,7 @@ command: >-
   --pipeline qwen4b
   --prompt conf/base/prompts/agent-step-qwen4b-v11.yml
   --branch-mode single
-  --seed 43
+  --seed 45
   --samples 3
   --resample-token-threshold 250000
   --vote-tiebreak-samples 0
