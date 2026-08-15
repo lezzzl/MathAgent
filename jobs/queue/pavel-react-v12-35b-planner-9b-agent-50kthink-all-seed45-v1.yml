@@ -1,6 +1,5 @@
-# Четыре запуска planner → agent без tools с seeds 42, 43, 44 и 45
-# Qwen3.6-35B-A3B строит план без thinking, Qwen3.5-9B решает задачу
-# Planner получает до 10000 токенов, agent — до 50000 токенов
+# Все три бенчмарка, seed 45: 35B-planner и 9B ReAct-agent v12
+# Planner использует thinking=true и max_tokens=50000 из react-agent-v12.yml
 command: >-
   ENGINE=sglang
   MODEL=Qwen/Qwen3.5-9B
@@ -12,19 +11,23 @@ command: >-
   MAX_MODEL_LEN=131072
   MAX_NUM_SEQS=96
   scripts/run_benchmarks_two_models.sh --
-  scripts/run_seeds.sh
   .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py
   --benchmarks aime26 hmmt26 imo_answerbench
-  --pipeline planner_agent
-  --prompt conf/base/prompts/pavel/react-agent-v12-no-tools-planner-10k.yml
+  --pipeline react_agent
+  --prompt conf/base/prompts/pavel/react-agent-v12.yml
   --model {MODEL}
   --base-url {BASE_URL}
   --api-key EMPTY
   --planner-model {SECOND_MODEL}
   --planner-base-url {SECOND_BASE_URL}
   --planner-api-key EMPTY
-  --max-tokens 50000
+  --seed 45
+  --max-tokens 65536
   --concurrency 80
+  --max-tool-calls 20
+  --max-format-retries 3
+  --max-tool-repairs 5
+  --execution-timeout 20
   --timeout 7200
   --reasoning-parser qwen3
   --vllm-max-num-seqs 96

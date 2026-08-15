@@ -1,0 +1,25 @@
+# Baseline CoT на Qwen3.5-9B, seed 45, все три бенчмарка
+command: >-
+  ENGINE=sglang
+  MODEL=Qwen/Qwen3.5-9B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-9B
+  MTP=1
+  MAX_MODEL_LEN=131072
+  MAX_NUM_SEQS=96
+  scripts/run_benchmarks.sh --
+  .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py
+  --benchmarks aime26 hmmt26 imo_answerbench
+  --pipeline solver
+  --prompt conf/base/prompts/pavel/solver-v0.yml
+  --model {MODEL}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --seed 45
+  --max-tokens 65536
+  --concurrency 80
+  --timeout 7200
+  --reasoning-parser qwen3
+  --vllm-max-num-seqs 96
+  --vllm-max-model-len 131072
+gpus: 1
+timeout_minutes: 1440
