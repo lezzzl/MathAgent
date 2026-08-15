@@ -225,6 +225,50 @@ def _next_seed() -> Optional[int]:
 EVALUATOR_MODE = "llm"
 RANDOM_EVAL_REJECT_RATE = float(os.getenv("RANDOM_EVAL_REJECT_RATE", "0.6"))
 
+# ---------------------------------------------------------------------------
+# Явные параметры сэмплирования
+# ---------------------------------------------------------------------------
+# Клиент исторически шлёт только temperature и max_tokens. Всё остальное —
+# top_p, top_k, min_p — подставляет ДВИЖОК, и у каждого движка свои значения:
+# у SGLang в логе видно sampling_defaults='model', то есть берётся
+# generation_config модели. Что подставлял vLLM в докере, где был получен
+# результат 28/30, неизвестно и невосстановимо.
+#
+# Из-за этого конфигурация недоопределена: при смене движка или версии модели
+# замер уезжает, а причину назвать нельзя. Словарь ниже позволяет задать эти
+# параметры явно и одинаково для всех ролей.
+#
+# Пусто (по умолчанию) — прежнее поведение, ни одно поле в запрос не добавляется.
+SAMPLING_OVERRIDES: Dict[str, float] = {}
+
+# Что вообще имеет смысл передавать. Ограничение намеренное: опечатка в имени
+# параметра иначе молча улетела бы на сервер и была бы там проигнорирована.
+SAMPLING_KEYS = ("top_p", "top_k", "min_p", "presence_penalty",
+                 "frequency_penalty", "repetition_penalty")
+
+
+def parse_sampling_overrides(text: str) -> Dict[str, float]:
+    """'top_p=1.0,top_k=-1' -> {'top_p': 1.0, 'top_k': -1}.
+
+    top_k и presence/frequency_penalty приводятся к int/float по значению:
+    сервер ждёт top_k целым, а -1 и 0 означают «выключено».
+    """
+    out: Dict[str, float] = {}
+    for chunk in (text or "").split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "=" not in chunk:
+            raise ValueError(f"'{chunk}' — ожидалось имя=значение")
+        name, _, value = chunk.partition("=")
+        name = name.strip()
+        if name not in SAMPLING_KEYS:
+            raise ValueError(f"'{name}' — допустимы только {', '.join(SAMPLING_KEYS)}")
+        number = float(value)
+        out[name] = int(number) if name == "top_k" else number
+    return out
+
+
 # Глубина, начиная с которой оценщик вообще включается. 0 — как всегда.
 #
 # Зачем. Замер по двум базовым прогонам: 83% всех оценок и 87% всех отвержений
@@ -344,6 +388,10 @@ def _chat(messages, temperature=0.2, seed=None, num_predict=None, json_format=Fa
         "temperature": temperature,
         "max_tokens": num_predict if num_predict is not None else DEFAULT_MAX_TOKENS,
     }
+    # Раньше temperature: явные значения не должны молча перекрываться ролью,
+    # но и роль не должна терять свою температуру — поэтому temperature здесь
+    # не трогаем, а дописываем только то, что задано снаружи.
+    payload.update(SAMPLING_OVERRIDES)
     seed = seed if seed is not None else _next_seed()
     if seed is not None:
         payload["seed"] = seed

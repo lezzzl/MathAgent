@@ -320,6 +320,15 @@ def parse_benchmark_args(
              "вердикт не нёс информации. Работает только у --pipeline qwen4b.",
     )
     group.add_argument(
+        "--sampling", default="",
+        help="Явные параметры сэмплирования для ВСЕХ ролей, через запятую: "
+             "'top_p=1.0,top_k=-1,min_p=0'. Пусто (по умолчанию) — не слать их "
+             "вовсе, как было всегда; тогда значения подставляет движок, и они "
+             "у vLLM и SGLang разные. Это единственное известное различие между "
+             "прогоном на 28/30 и нынешними 23/30 (§5 п.00 памяти). "
+             "Только --pipeline qwen4b.",
+    )
+    group.add_argument(
         "--evaluator-min-depth", type=int, default=0,
         help="Глубина, начиная с которой оценщик включается. 0 (по умолчанию) — "
              "оценивать все шаги. 2 — шаги на глубинах 0 и 1 принимать без вызова "
@@ -1027,6 +1036,22 @@ def run_benchmark(config: BenchmarkConfig, args: argparse.Namespace) -> int:
                   f"качества пайплайна, а проверка вклада оценщика.")
         else:
             print(f"[config] ⚠️  --evaluator-mode={mode} игнорируется: пайплайн "
+                  f"'{args.pipeline}' его не поддерживает")
+
+    sampling = (getattr(args, "sampling", "") or "").strip()
+    if sampling:
+        if hasattr(solver_mod, "parse_sampling_overrides"):
+            try:
+                overrides = solver_mod.parse_sampling_overrides(sampling)
+            except ValueError as exc:
+                print(f"\n[config] ❌ --sampling: {exc}\n")
+                return 2
+            solver_mod.SAMPLING_OVERRIDES = overrides
+            print(f"[config] сэмплирование задано явно: "
+                  + ", ".join(f"{k}={v}" for k, v in overrides.items())
+                  + " — эти значения идут во ВСЕ вызовы вместо дефолтов движка")
+        else:
+            print(f"[config] ⚠️  --sampling={sampling} игнорируется: пайплайн "
                   f"'{args.pipeline}' его не поддерживает")
 
     min_depth = int(getattr(args, "evaluator_min_depth", 0) or 0)
