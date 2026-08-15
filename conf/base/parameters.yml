@@ -80,6 +80,7 @@ benchmarks:
   react:
     max_steps: 8                    # лимит вызовов инструментов на задачу (при исчерпании — принудительный финал в \boxed)
     tester: true                    # солверу дан инструмент test_claim (вложенный тестировщик)
+    tools: all                      # какие тулы дать: all | none (ablation без тулов) | список 'run_python;sympy_check'
   run_id: null                      # null → сгенерируется; задать тот же для resume
   resume: false                     # продолжить прерванный run (нужен явный run_id)
   limit: null                       # напр. 2 — быстрый прогон на 2 задачах

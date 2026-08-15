@@ -115,6 +115,7 @@ def _build_command(
     if params.get("pipeline") == "react":
         react = params.get("react") or {}
         command += ["--react-max-steps", str(react.get("max_steps", 6))]
+        command += ["--react-tools", str(react.get("tools", "all"))]
         if react.get("tester"):
             command.append("--react-tester")
     # prompt хранится относительно корня репозитория; подпроцесс работает с cwd=ROOT

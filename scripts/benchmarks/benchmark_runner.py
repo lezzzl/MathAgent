@@ -104,6 +104,15 @@ def parse_benchmark_args(
     parser.add_argument(
         "--react-tester", action="store_true", help="дать солверу инструмент test_claim"
     )
+    parser.add_argument(
+        "--react-tools",
+        default="all",
+        help=(
+            "какие тулы дать солверу: 'all' (по умолчанию), 'none' (react без "
+            "тулов — голое reasoning в react-обвязке), либо список через ';' "
+            "(напр. 'run_python;sympy_check' — для ablation/leave-one-out)."
+        ),
+    )
     parser.add_argument("--prompt", type=Path)
     parser.add_argument("--limit", type=int) # ограничивает число задач из датасета, чтобы быстро проверить работу runner
 
@@ -270,6 +279,7 @@ def create_graph(
             max_steps=args.react_max_steps,
             use_tester=args.react_tester,
             max_model_len=args.vllm_max_model_len,
+            tools=args.react_tools,
         )
     return create_solver_graph(model_config, prompt_path)
 

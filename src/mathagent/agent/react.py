@@ -60,7 +60,12 @@ class ReactState(TypedDict):
 
 
 def build_system_prompt(persona: str, tools: dict[str, Tool]) -> str:
-    """Склеивает роль (persona) + протокол инструментов + их JSON-описание."""
+    """Склеивает роль (persona) + протокол инструментов + их JSON-описание.
+
+    Без тулов (ablation 'none') протокол не добавляем — остаётся голая персона,
+    чтобы модель не сбивал рассказ про недоступные инструменты."""
+    if not tools:
+        return persona.strip()
     return f"{persona.strip()}\n\n{TOOL_PROTOCOL}{render_tools_block(tools)}"
 
 
@@ -329,6 +334,7 @@ def create_react_graph(
     max_steps: int = 6,
     use_tester: bool = False,
     max_model_len: int = 131072,
+    tools: str = "all",
 ) -> _ReactSolver:
     """Собрать ReAct-агента с инструментами под контракт benchmark_runner.
 
@@ -338,7 +344,11 @@ def create_react_graph(
 
     max_model_len — окно контекста сервинга: из него на каждом шаге вычитается
     оценка входа и получается динамический max_tokens (чтобы растущий ReAct-диалог
-    не переполнял контекст и не ловил 400)."""
+    не переполнял контекст и не ловил 400).
+
+    tools — какие инструменты дать солверу (для ablation/leave-one-out):
+    'all' — все из TOOLS; 'none' — ни одного (react-обвязка без тулов, голое
+    reasoning); список через ';' — только перечисленные (напр. 'run_python')."""
     from mathagent.agent.vllm_chat import ChatVLLM
 
     config = yaml.safe_load(Path(prompt_path).read_text(encoding="utf-8"))
@@ -385,8 +395,23 @@ def create_react_graph(
         "base_extra_body": base_extra_body,
     }
 
-    tools = dict(TOOLS)
-    if use_tester:
+    # Подмножество тулов: 'all' | 'none' | 'run_python;sympy_check;...'.
+    spec = (tools or "all").strip().lower()
+    if spec in ("all", ""):
+        selected = dict(TOOLS)
+    elif spec == "none":
+        selected = {}
+    else:
+        wanted = [n.strip() for n in re.split(r"[;,|]", tools) if n.strip()]
+        unknown = [n for n in wanted if n not in TOOLS]
+        if unknown:
+            raise ValueError(
+                f"--react-tools: неизвестные тулы {unknown}; доступны {list(TOOLS)}"
+            )
+        selected = {n: TOOLS[n] for n in wanted}
+
+    tools = selected
+    if use_tester and tools:  # тестировщик бессмысленен без базовых тулов
         tester_persona = config["roles"]["tester"]["system"]
         tester = make_test_claim_tool(model, tester_persona, max_steps=max_steps)
         tools[tester.name] = tester
