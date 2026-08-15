@@ -41,7 +41,7 @@
     }
   },
   "runtime": {
-    "concurrency": 80,
+    "concurrency": 30,
     "timeout": 7200.0,
     "max_retries": 1,
     "max_consecutive_api_errors": 3
@@ -69,27 +69,27 @@
     "notebook_isolation": "shared",
     "execution_timeout": 20.0
   },
-  "status": "completed",
+  "status": "completed_with_errors",
   "created_at": "2026-08-14T09:41:14.341907+00:00",
-  "updated_at": "2026-08-14T11:02:18.928871+00:00",
+  "updated_at": "2026-08-15T15:23:36.480350+00:00",
   "benchmarks": {
     "IMOAnswerBench": {
       "dataset": "OpenEvals/IMO-AnswerBench",
       "split": "train",
       "total_tasks": 400,
       "output": "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-imo-3seeds-v2/results/runs/qwen35-9b-react-v8-repair-imo-seed44-v2/imo_answerbench.jsonl",
-      "status": "completed",
-      "updated_at": "2026-08-14T11:02:16.381356+00:00",
+      "status": "completed_with_errors",
+      "updated_at": "2026-08-15T15:23:35.394052+00:00",
       "summary": {
         "total_tasks": 400,
-        "successful_tasks": 400,
-        "failed_tasks": 0,
+        "successful_tasks": 399,
+        "failed_tasks": 1,
         "remaining_tasks": 0,
-        "input_tokens": 51303769,
-        "output_tokens": 27740348,
-        "total_tokens": 79044117,
-        "wall_time_seconds": 4862.016,
-        "tasks_per_second": 0.0823
+        "input_tokens": 52908915,
+        "output_tokens": 26598404,
+        "total_tokens": 79507319,
+        "wall_time_seconds": 6492.85,
+        "tasks_per_second": 0.0616
       },
       "segments": [
         {
@@ -99,19 +99,27 @@
           "tasks_per_second": 0.0823,
           "status": "completed",
           "updated_at": "2026-08-14T11:02:16.381328+00:00"
+        },
+        {
+          "resume": false,
+          "processed_tasks": 400,
+          "wall_time_seconds": 6492.85,
+          "tasks_per_second": 0.0616,
+          "status": "completed_with_errors",
+          "updated_at": "2026-08-15T15:23:35.394026+00:00"
         }
       ]
     }
   },
   "summary": {
     "total_tasks": 400,
-    "successful_tasks": 400,
-    "failed_tasks": 0,
+    "successful_tasks": 399,
+    "failed_tasks": 1,
     "remaining_tasks": 0,
-    "input_tokens": 51303769,
-    "output_tokens": 27740348,
-    "total_tokens": 79044117,
-    "wall_time_seconds": 4862.016,
-    "tasks_per_second": 0.0823
+    "input_tokens": 52908915,
+    "output_tokens": 26598404,
+    "total_tokens": 79507319,
+    "wall_time_seconds": 6492.85,
+    "tasks_per_second": 0.0616
   }
 }

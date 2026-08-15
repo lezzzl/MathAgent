@@ -41,7 +41,7 @@
     }
   },
   "runtime": {
-    "concurrency": 80,
+    "concurrency": 30,
     "timeout": 7200.0,
     "max_retries": 1,
     "max_consecutive_api_errors": 3
@@ -71,7 +71,7 @@
   },
   "status": "completed",
   "created_at": "2026-08-14T08:26:25.488467+00:00",
-  "updated_at": "2026-08-14T09:40:59.164213+00:00",
+  "updated_at": "2026-08-15T13:35:08.817573+00:00",
   "benchmarks": {
     "IMOAnswerBench": {
       "dataset": "OpenEvals/IMO-AnswerBench",
@@ -79,17 +79,17 @@
       "total_tasks": 400,
       "output": "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-imo-3seeds-v2/results/runs/qwen35-9b-react-v8-repair-imo-seed43-v2/imo_answerbench.jsonl",
       "status": "completed",
-      "updated_at": "2026-08-14T09:40:57.993018+00:00",
+      "updated_at": "2026-08-15T13:35:06.683563+00:00",
       "summary": {
         "total_tasks": 400,
         "successful_tasks": 400,
         "failed_tasks": 0,
         "remaining_tasks": 0,
-        "input_tokens": 51299791,
-        "output_tokens": 27305687,
-        "total_tokens": 78605478,
-        "wall_time_seconds": 4472.477,
-        "tasks_per_second": 0.0894
+        "input_tokens": 53161399,
+        "output_tokens": 27130036,
+        "total_tokens": 80291435,
+        "wall_time_seconds": 7432.252,
+        "tasks_per_second": 0.0538
       },
       "segments": [
         {
@@ -99,6 +99,14 @@
           "tasks_per_second": 0.0894,
           "status": "completed",
           "updated_at": "2026-08-14T09:40:57.992994+00:00"
+        },
+        {
+          "resume": false,
+          "processed_tasks": 400,
+          "wall_time_seconds": 7432.252,
+          "tasks_per_second": 0.0538,
+          "status": "completed",
+          "updated_at": "2026-08-15T13:35:06.683527+00:00"
         }
       ]
     }
@@ -108,10 +116,10 @@
     "successful_tasks": 400,
     "failed_tasks": 0,
     "remaining_tasks": 0,
-    "input_tokens": 51299791,
-    "output_tokens": 27305687,
-    "total_tokens": 78605478,
-    "wall_time_seconds": 4472.477,
-    "tasks_per_second": 0.0894
+    "input_tokens": 53161399,
+    "output_tokens": 27130036,
+    "total_tokens": 80291435,
+    "wall_time_seconds": 7432.252,
+    "tasks_per_second": 0.0538
   }
 }
