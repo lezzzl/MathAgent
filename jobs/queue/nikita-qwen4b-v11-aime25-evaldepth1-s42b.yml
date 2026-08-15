@@ -1,5 +1,5 @@
 # Оценщик с глубины 1 на AIME 2025, зерно 42. Переносимость лучшего конфига.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime25-evaldepth1-s42/.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime25-evaldepth1-s42b/.
 #
 # База есть: results/runs/nikita-qwen4b-v11-aime25-sglang-s42/, 18/30.
 #

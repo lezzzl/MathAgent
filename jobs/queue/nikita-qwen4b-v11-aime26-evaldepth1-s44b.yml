@@ -1,5 +1,5 @@
 # Оценщик с глубины 1, зерно 44. Третья точка лучшего конфига.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evaldepth1-s44/.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evaldepth1-s44b/.
 #
 # База для зерна есть: results/runs/nikita-qwen4b-v11-aime26-sglang-s44/, 23/30.
 # Отличие ровно одно: --evaluator-min-depth 1.

@@ -1,5 +1,5 @@
 # ЭКСПЕРИМЕНТ 1, четвёртая точка: случайный оценщик, зерно 45.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evalrandom-s45/.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evalrandom-s45b/.
 #
 # Отличие от базы ровно одно: --evaluator-mode random. Модель для оценки шага не
 # зовётся, вердикт бросается монетой по бинарной шкале 0.0/1.0 с долей нулей 60%
