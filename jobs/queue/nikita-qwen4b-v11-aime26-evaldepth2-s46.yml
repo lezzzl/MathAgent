@@ -1,0 +1,33 @@
+# ЭКСПЕРИМЕНТ 2, пятая точка: оценщик с глубины 2, зерно 46.
+#
+# Пара к nikita-qwen4b-v11-aime26-sglang-s46; отличаются ровно одним флагом.
+# Вместе с зерном 45 доводит эксперимент до пяти точек и сужает интервал.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-aime26-evaldepth2-s46/.
+command: >-
+  MODEL=Qwen/Qwen3.5-4B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-4B
+  CONCURRENCY=96
+  MAX_MODEL_LEN=65536
+  KV_CACHE_DTYPE=auto
+  MTP=0
+  TOOL_CALL_PARSER=qwen3_coder
+  scripts/run_benchmarks.sh --
+  .venv/bin/python -u scripts/benchmarks/run_aime26.py
+  --model {SERVED_MODEL_NAME}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --pipeline qwen4b
+  --prompt conf/base/prompts/agent-step-qwen4b-v11.yml
+  --branch-mode single
+  --seed 46
+  --samples 3
+  --resample-token-threshold 250000
+  --vote-tiebreak-samples 0
+  --evaluator-min-depth 2
+  --no-verify-step
+  --token-budget 800000
+  --timeout 1200
+  --workers 30
+  --output results/runs/{RUN_ID}/aime26.jsonl
+gpus: 1
+timeout_minutes: 720
