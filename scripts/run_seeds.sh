@@ -14,8 +14,8 @@
 # недоступный сервер, и оставшиеся сиды всё равно уткнутся в то же самое.
 set -euo pipefail
 
-SEEDS="42 43 44 45"
-RUN_ID_TEMPLATE="qwen35-9b-react-v12-no-tools-35b-planner-all-seed{SEED}-v1"
+SEEDS="43 44 45"
+RUN_ID_TEMPLATE="qwen35-9b-react-v8-repair-imo-seed{SEED}-v2"
 
 for seed in ${SEEDS}; do
   run_id="${RUN_ID_TEMPLATE//\{SEED\}/${seed}}"
