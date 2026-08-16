@@ -23,5 +23,6 @@ command: >-
   --reasoning-parser qwen3
   --vllm-max-num-seqs 96
   --vllm-max-model-len 131072
+  --resume
 gpus: 1
 timeout_minutes: 1440
