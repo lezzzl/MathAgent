@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "run_id": "qwen35-9b-react-v12-no-tools-all-seed43-v1",
+  "model": "Qwen/Qwen3.5-9B",
+  "pipeline": "planner_agent",
+  "prompt": "/home/ykapushev/mathagent/work/pavel-react-v12-no-tools-9b-all-4seeds-v1/conf/base/prompts/pavel/react-agent-v12-no-tools.yml",
+  "prompt_version": "react-agent-v12-no-tools",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 43,
+    "max_tokens": 50000
+  },
+  "node_generation": {
+    "planner": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "agent": {
+      "thinking": true,
+      "max_tokens": 50000
+    }
+  },
+  "node_models": {
+    "planner": {
+      "model": "Qwen/Qwen3.5-9B",
+      "uses_primary_endpoint": true
+    }
+  },
+  "runtime": {
+    "concurrency": 80,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 96,
+    "max_model_len": 131072
+  },
+  "pipeline_config": {
+    "architecture": "planner-agent-v1",
+    "prompt_ablation": "react-agent-v12-without-tools",
+    "plan_policy": "advisory",
+    "tools": []
+  },
+  "status": "completed_with_errors",
+  "created_at": "2026-08-15T00:37:26.917336+00:00",
+  "updated_at": "2026-08-15T01:30:15.640653+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/pavel-react-v12-no-tools-9b-all-4seeds-v1/results/runs/qwen35-9b-react-v12-no-tools-all-seed43-v1/aime26.jsonl",
+      "status": "completed_with_errors",
+      "updated_at": "2026-08-15T00:43:33.152024+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 27,
+        "failed_tasks": 3,
+        "remaining_tasks": 0,
+        "input_tokens": 37694,
+        "output_tokens": 965975,
+        "total_tokens": 1003669,
+        "wall_time_seconds": 366.226,
+        "tasks_per_second": 0.0819
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 366.226,
+          "tasks_per_second": 0.0819,
+          "status": "completed_with_errors",
+          "updated_at": "2026-08-15T00:43:33.152006+00:00"
+        }
+      ]
+    },
+    "HMMT26": {
+      "dataset": "MathArena/hmmt_feb_2026",
+      "split": "train",
+      "total_tasks": 33,
+      "output": "/home/ykapushev/mathagent/work/pavel-react-v12-no-tools-9b-all-4seeds-v1/results/runs/qwen35-9b-react-v12-no-tools-all-seed43-v1/hmmt26.jsonl",
+      "status": "completed_with_errors",
+      "updated_at": "2026-08-15T00:49:30.897267+00:00",
+      "summary": {
+        "total_tasks": 33,
+        "successful_tasks": 25,
+        "failed_tasks": 8,
+        "remaining_tasks": 0,
+        "input_tokens": 32041,
+        "output_tokens": 931902,
+        "total_tokens": 963943,
+        "wall_time_seconds": 348.714,
+        "tasks_per_second": 0.0946
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 33,
+          "wall_time_seconds": 348.714,
+          "tasks_per_second": 0.0946,
+          "status": "completed_with_errors",
+          "updated_at": "2026-08-15T00:49:30.897231+00:00"
+        }
+      ]
+    },
+    "IMOAnswerBench": {
+      "dataset": "OpenEvals/IMO-AnswerBench",
+      "split": "train",
+      "total_tasks": 400,
+      "output": "/home/ykapushev/mathagent/work/pavel-react-v12-no-tools-9b-all-4seeds-v1/results/runs/qwen35-9b-react-v12-no-tools-all-seed43-v1/imo_answerbench.jsonl",
+      "status": "completed_with_errors",
+      "updated_at": "2026-08-15T01:30:14.090548+00:00",
+      "summary": {
+        "total_tasks": 400,
+        "successful_tasks": 307,
+        "failed_tasks": 93,
+        "remaining_tasks": 0,
+        "input_tokens": 423016,
+        "output_tokens": 13043906,
+        "total_tokens": 13466922,
+        "wall_time_seconds": 2432.757,
+        "tasks_per_second": 0.1644
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 400,
+          "wall_time_seconds": 2432.757,
+          "tasks_per_second": 0.1644,
+          "status": "completed_with_errors",
+          "updated_at": "2026-08-15T01:30:14.090525+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 463,
+    "successful_tasks": 359,
+    "failed_tasks": 104,
+    "remaining_tasks": 0,
+    "input_tokens": 492751,
+    "output_tokens": 14941783,
+    "total_tokens": 15434534,
+    "wall_time_seconds": 3147.697,
+    "tasks_per_second": 0.1471
+  }
+}

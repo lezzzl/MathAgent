@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "run_id": "qwen35-9b-react-v8-repair-imo-seed43-v1",
+  "model": "Qwen/Qwen3.5-9B",
+  "pipeline": "react_agent",
+  "prompt": "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-imo-3seeds-v1/conf/base/prompts/pavel/react-agent-v8.yml",
+  "prompt_version": "react-agent-v8",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 43,
+    "max_tokens": 65536
+  },
+  "node_generation": {
+    "agent": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "planner": {
+      "thinking": false,
+      "max_tokens": 10000
+    },
+    "repair": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "cot": {
+      "thinking": true,
+      "max_tokens": 50000
+    }
+  },
+  "node_models": {
+    "planner": {
+      "model": "Qwen/Qwen3.5-9B",
+      "uses_primary_endpoint": true
+    }
+  },
+  "runtime": {
+    "concurrency": 80,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 8,
+    "max_model_len": 131072
+  },
+  "pipeline_config": {
+    "max_tool_calls": 20,
+    "max_tool_repairs": 5,
+    "execution_diagnostics": "structured-v1",
+    "repair_mode": "separate-node-v2",
+    "repair_candidate_validation": "compile-deduplicate-v1",
+    "python_mode": "notebook",
+    "cot_parser": "tolerant-v1",
+    "execution_tools": [
+      "python",
+      "sympy"
+    ],
+    "notebook_isolation": "shared",
+    "execution_timeout": 20.0
+  },
+  "status": "completed_with_errors",
+  "created_at": "2026-08-13T23:12:08.263803+00:00",
+  "updated_at": "2026-08-14T01:00:29.788142+00:00",
+  "benchmarks": {
+    "IMOAnswerBench": {
+      "dataset": "OpenEvals/IMO-AnswerBench",
+      "split": "train",
+      "total_tasks": 400,
+      "output": "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-imo-3seeds-v1/results/runs/qwen35-9b-react-v8-repair-imo-seed43-v1/imo_answerbench.jsonl",
+      "status": "completed_with_errors",
+      "updated_at": "2026-08-14T01:00:28.430664+00:00",
+      "summary": {
+        "total_tasks": 400,
+        "successful_tasks": 386,
+        "failed_tasks": 14,
+        "remaining_tasks": 0,
+        "input_tokens": 49878933,
+        "output_tokens": 25936058,
+        "total_tokens": 75814991,
+        "wall_time_seconds": 6500.147,
+        "tasks_per_second": 0.0615
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 400,
+          "wall_time_seconds": 6500.147,
+          "tasks_per_second": 0.0615,
+          "status": "completed_with_errors",
+          "updated_at": "2026-08-14T01:00:28.430641+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 400,
+    "successful_tasks": 386,
+    "failed_tasks": 14,
+    "remaining_tasks": 0,
+    "input_tokens": 49878933,
+    "output_tokens": 25936058,
+    "total_tokens": 75814991,
+    "wall_time_seconds": 6500.147,
+    "tasks_per_second": 0.0615
+  }
+}
