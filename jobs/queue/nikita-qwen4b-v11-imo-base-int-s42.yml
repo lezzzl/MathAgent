@@ -1,0 +1,58 @@
+# IMO, ЦЕЛОЧИСЛЕННОЕ подмножество (228 задач), БАЗОВЫЙ конфиг. Зерно 42.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-imo-base-int-s42/.
+#
+# Отличий от nikita-qwen4b-v11-imo-depth1-s42-2 два, и оба намеренные:
+#   1. нет --evaluator-min-depth 1 — это базовая конфигурация;
+#   2. --integer-only — только 228 задач с целочисленным эталоном.
+#
+# Почему только целочисленные. Прогон на 400 задачах несравним со старым по
+# символьной половине: там вердикт ставит LLM-судья, и он повёл себя совершенно
+# по-разному. В прогоне на vLLM судья не дал надёжного вердикта НИ РАЗУ
+# (judge_unreliable на 183 задачах, все зачтены неверными), в нашем — дал на 220
+# и зачёл 10. То есть разница на символьной части может быть разницей судьи, а не
+# решателя. На целочисленных всё решает math_verify, и сравнение чистое.
+#
+# Что этот прогон закрывает:
+#   * даёт первую базовую линию IMO на SGLang — сейчас её нет вовсе, и разрыв
+#     движков на IMO мы оценивать не можем;
+#   * позволяет спарить с нашим прогоном на глубине 1 по тем же 228 задачам и
+#     проверить, не он ли стоил задач.
+#
+# Что уже известно и почему это скорее страховка, чем необходимость. На
+# целочисленной части vLLM дал 120/228, SGLang с глубиной 1 — 100/228 (-8.8 п.п.,
+# p = 0.006). Глубина 1 на AIME измерена ровно в 0.0 п.п. разницы (92/120 против
+# 92/120), а разрыв движков там же -16.7 п.п. на AIME26 и -23.3 п.п. на AIME25.
+# То есть падение на IMO МЕНЬШЕ, чем предсказывает один только движок.
+#
+# Расход: базовый конфиг на AIME стоит в 1.5 раза дороже глубины 1, а полный
+# прогон на 400 задачах обошёлся в 375M токенов и 1141 машино-час. На 228 задачах
+# базой ожидается порядка 320M токенов — отсюда и timeout.
+command: >-
+  MODEL=Qwen/Qwen3.5-4B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-4B
+  CONCURRENCY=96
+  MAX_MODEL_LEN=65536
+  KV_CACHE_DTYPE=auto
+  MTP=0
+  TOOL_CALL_PARSER=qwen3_coder
+  scripts/run_benchmarks.sh --
+  .venv/bin/python -u scripts/benchmarks/run_imo_answerbench.py
+  --integer-only
+  --model {SERVED_MODEL_NAME}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --pipeline qwen4b
+  --prompt conf/base/prompts/agent-step-qwen4b-v11.yml
+  --branch-mode single
+  --seed 42
+  --samples 3
+  --resample-token-threshold 250000
+  --vote-tiebreak-samples 0
+  --no-verify-step
+  --token-budget 800000
+  --timeout 1200
+  --workers 96
+  --verify-timeout 10800
+  --output results/runs/{RUN_ID}/imo_answerbench.jsonl
+gpus: 1
+timeout_minutes: 2880
