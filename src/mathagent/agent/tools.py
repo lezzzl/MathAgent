@@ -25,7 +25,19 @@ from typing import Callable
 
 # Предел вывода инструмента, чтобы не раздувать контекст
 MAX_OUTPUT_CHARS = 4000
-DEFAULT_TIMEOUT = 10.0
+DEFAULT_TIMEOUT = 20.0  # было 10: часть падений — таймаут на легитимном переборе
+
+# Преамбула, впрыскиваемая перед кодом модели. Главная причина падений run_python
+# (по логам imo — 61 из 176 ошибок) — NameError вида `name 'math' is not defined`:
+# модель забывает import. Пред-импортируем ходовые модули, чтобы `math.gcd(...)`,
+# `sp.solve(...)`, `Fraction(...)`, `np.array(...)` работали без import. Плюс
+# снимаем лимит int→str (иначе ValueError на больших числах). Всё в ОДНУ строку —
+# чтобы номера строк в трейсбеке кода модели не съезжали (сдвиг ровно +1).
+_PREAMBLE = (
+    "import sys; sys.set_int_max_str_digits(1000000); "
+    "import math, cmath, itertools, functools, collections, statistics, random, re, "
+    "numpy as np, sympy, sympy as sp; from fractions import Fraction"
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +58,8 @@ def run_python(code: str, timeout: float = DEFAULT_TIMEOUT) -> str:
     доверенной локальной среды и математических проверок; не запускать на
     непроверенном вводе.
     """
+    # Пред-импорт ходовых модулей одной строкой (сдвиг трейсбека +1 строка).
+    code = f"{_PREAMBLE}\n{code}"
     try:
         proc = subprocess.run(
             [sys.executable, "-I", "-c", code],
@@ -225,8 +239,10 @@ TOOLS: dict[str, Tool] = {
         description=(
             "Выполнить Python-код и вернуть его вывод. Используй, чтобы ПРОВЕРИТЬ "
             "утверждение на конкретных примерах: перебрать случаи, посчитать "
-            "значение, найти контрпример. Стандартная библиотека доступна "
-            "(math, itertools, fractions, sympy)."
+            "значение, найти контрпример. УЖЕ импортированы (писать import не нужно): "
+            "math, cmath, itertools, functools, collections, statistics, random, re, "
+            "numpy как np, sympy как sp, Fraction. Пиши сразу math.gcd(...), "
+            "sp.solve(...), Fraction(1,3)."
         ),
         argument="Python-скрипт; печатай результат через print(). Один вызов = один скрипт.",
         run=run_python,
