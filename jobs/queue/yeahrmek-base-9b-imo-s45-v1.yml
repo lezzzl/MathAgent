@@ -1,0 +1,36 @@
+# Baseline CoT на Qwen/Qwen3.5-9B — IMO AnswerBench, seed 45.
+#
+# Один бенчмарк и один сид на задачу: так они встают в очередь независимо и идут
+# параллельно, как только освобождаются карты.
+#
+# MTP=1 — у Qwen3.5 есть MTP-слой (mtp_num_hidden_layers=1 в text_config), в
+# отличие от Qwen3.6-35B-A3B, где спекуляцию приходится выключать. Значение
+# совпадает с дефолтом run_benchmarks.sh, но написано явно: у трёх моделей этого
+# сравнения оно разное, и молчаливый дефолт тут читается как недосмотр.
+#
+# Остальные настройки зеркалят p-base-all-s45-v2, чтобы числа были сравнимы
+# между 4B, 9B и 35B.
+command: >-
+  ENGINE=sglang
+  MODEL=Qwen/Qwen3.5-9B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-9B
+  MTP=1
+  MAX_MODEL_LEN=131072
+  MAX_NUM_SEQS=96
+  scripts/run_benchmarks.sh --
+  .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py
+  --benchmarks imo_answerbench
+  --pipeline solver
+  --prompt conf/base/prompts/pavel/solver-v0.yml
+  --model {MODEL}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --seed 45
+  --max-tokens 65536
+  --concurrency 80
+  --timeout 7200
+  --reasoning-parser qwen3
+  --vllm-max-num-seqs 96
+  --vllm-max-model-len 131072
+gpus: 1
+timeout_minutes: 1440
