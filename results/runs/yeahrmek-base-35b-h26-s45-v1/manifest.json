@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "run_id": "yeahrmek-base-35b-h26-s45-v1",
+  "model": "Qwen/Qwen3.6-35B-A3B",
+  "pipeline": "solver",
+  "prompt": "/home/ykapushev/mathagent/work/yeahrmek-base-35b-h26-s45-v1/conf/base/prompts/pavel/solver-v0.yml",
+  "prompt_version": "solver-v0",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 45,
+    "max_tokens": 65536
+  },
+  "node_generation": {
+    "solver": {
+      "thinking": true,
+      "max_tokens": 65536
+    }
+  },
+  "runtime": {
+    "concurrency": 80,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 96,
+    "max_model_len": 131072
+  },
+  "status": "completed",
+  "created_at": "2026-08-17T10:35:51.251087+00:00",
+  "updated_at": "2026-08-17T10:50:35.440467+00:00",
+  "benchmarks": {
+    "HMMT26": {
+      "dataset": "MathArena/hmmt_feb_2026",
+      "split": "train",
+      "total_tasks": 33,
+      "output": "/home/ykapushev/mathagent/work/yeahrmek-base-35b-h26-s45-v1/results/runs/yeahrmek-base-35b-h26-s45-v1/hmmt26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-17T10:50:33.510026+00:00",
+      "summary": {
+        "total_tasks": 33,
+        "successful_tasks": 33,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 4962,
+        "output_tokens": 1258184,
+        "total_tokens": 1263146,
+        "wall_time_seconds": 882.255,
+        "tasks_per_second": 0.0374
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 33,
+          "wall_time_seconds": 882.255,
+          "tasks_per_second": 0.0374,
+          "status": "completed",
+          "updated_at": "2026-08-17T10:50:33.510008+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 33,
+    "successful_tasks": 33,
+    "failed_tasks": 0,
+    "remaining_tasks": 0,
+    "input_tokens": 4962,
+    "output_tokens": 1258184,
+    "total_tokens": 1263146,
+    "wall_time_seconds": 882.255,
+    "tasks_per_second": 0.0374
+  }
+}

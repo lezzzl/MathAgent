@@ -1,0 +1,97 @@
+=== 2026-08-13T13:55:09.694446+00:00 run_id=pavel-react-v8-9b-repair-all-3seeds-v1 branch=pavel/code_agent_pipeline@79ec9b9c1f13 gpus=1 devices=4 isolation=bwrap
+=== command: ENGINE=sglang MODEL=Qwen/Qwen3.5-9B MAX_MODEL_LEN=131072 MAX_NUM_SEQS=96 scripts/run_benchmarks.sh -- scripts/run_seeds.sh .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py --benchmarks aime26 hmmt26 imo_answerbench --pipeline react_agent --prompt conf/base/prompts/pavel/react-agent-v8.yml --model Qwen/Qwen3.5-9B --base-url {BASE_URL} --api-key EMPTY --max-tokens 65536 --concurrency 80 --max-tool-calls 20 --max-tool-repairs 5 --execution-timeout 20 --timeout 7200 --reasoning-parser qwen3 --vllm-max-model-len 131072
+>>> Стартую sglang: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 4, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-v1/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-v1/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 455774
+Log: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-v1/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-v1/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-v1/scripts/qwen35-vllm-bench/bench-server.log)
+>>> Движок (sglang) готов. Размер KV-кэша:
+>>> Спекуляция: <в логе не видно>
+>>> ВНИМАНИЕ: просили MTP=1, а следов спекуляции в логе нет
+>>> Запускаю бенчмарки (run_id=pavel-react-v8-9b-repair-all-3seeds-v1)
+    scripts/run_seeds.sh    .venv/bin/python    scripts/benchmarks/pavel/run_all_benchmarks.py    --benchmarks    aime26    hmmt26    imo_answerbench    --pipeline    react_agent    --prompt    conf/base/prompts/pavel/react-agent-v8.yml    --model    Qwen/Qwen3.5-9B    --base-url    \{BASE_URL\}    --api-key    EMPTY    --max-tokens    65536    --concurrency    80    --max-tool-calls    20    --max-tool-repairs    5    --execution-timeout    20    --timeout    7200    --reasoning-parser    qwen3    --vllm-max-model-len    131072
+>>> seed=43, run_id=qwen35-9b-react-v8-repair-all-seed43-v1
+2026-08-13T16:55:15+0300 INFO run_all_started run_id=qwen35-9b-react-v8-repair-all-seed43-v1 model=Qwen/Qwen3.5-9B benchmarks=run_aime26,run_hmmt26,run_imo_answerbench
+2026-08-13T16:55:15+0300 INFO benchmark_process_started script=run_aime26
+2026-08-13T16:55:20+0300 INFO run_started run_id=qwen35-9b-react-v8-repair-all-seed43-v1 model=Qwen/Qwen3.5-9B benchmark=AIME26
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-08-13T16:55:23+0300 INFO benchmark_started benchmark=AIME26 total=30 skipped=0 concurrency=80 output=/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-v1/results/runs/qwen35-9b-react-v8-repair-all-seed43-v1/aime26.jsonl
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=1
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=2
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=3
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=4
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=5
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=6
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=7
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=8
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=9
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=10
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=11
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=12
+2026-08-13T16:55:23+0300 INFO task_submitted benchmark=AIME26 task_id=13
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=14
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=15
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=16
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=17
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=18
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=19
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=20
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=21
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=22
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=23
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=24
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=25
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=26
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=27
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=28
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=29
+2026-08-13T16:55:24+0300 INFO task_submitted benchmark=AIME26 task_id=30
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=7 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=10 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=21 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=3 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=13 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=15 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=5 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=6 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=2 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=11 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=1 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=14 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=18 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=19 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=4 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=15
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=12 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=17 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=9 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=20 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=8 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=16 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=9
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=22 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=8
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=23 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=7
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=25 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=6
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=27 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR task_failed benchmark=AIME26 task_id=26 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:24+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=4
+2026-08-13T16:55:25+0300 ERROR task_failed benchmark=AIME26 task_id=29 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:25+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=3
+2026-08-13T16:55:25+0300 ERROR task_failed benchmark=AIME26 task_id=24 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:25+0300 ERROR task_failed benchmark=AIME26 task_id=28 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:25+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=1
+2026-08-13T16:55:25+0300 ERROR task_failed benchmark=AIME26 task_id=30 category=infrastructure error=APIConnectionError: Connection error.
+2026-08-13T16:55:25+0300 ERROR circuit_breaker_open benchmark=AIME26 status=interrupted remaining=0
+2026-08-13T16:55:25+0300 INFO benchmark_finished benchmark=AIME26 status=interrupted successful=0 failed=30 remaining=0 wall_time=1.120 output=/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-v1/results/runs/qwen35-9b-react-v8-repair-all-seed43-v1/aime26.jsonl
+2026-08-13T16:55:26+0300 ERROR benchmark_process_failed script=run_aime26 returncode=2
+2026-08-13T16:55:26+0300 ERROR run_all_finished status=interrupted failed=run_aime26
+>>> kedro завершился с кодом 2
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю sglang...
+Requesting graceful shutdown of supervisor PID 455774...
+SGLang stopped.
+=== 2026-08-13T13:55:31.159276+00:00 status=failed exit_code=2 duration=21.5s

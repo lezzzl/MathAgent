@@ -1,0 +1,11 @@
+version: "solver-v0"
+
+roles:
+  solver:
+    system: |-
+      Solve the following problem step by step. Express the final answer using LaTeX
+      formatting and enclose it within \boxed{{}}. Do not include units or other unnecessary
+      text in the answer.
+
+    task: |-
+      {problem}

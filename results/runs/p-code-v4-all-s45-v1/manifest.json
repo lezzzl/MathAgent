@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "run_id": "p-code-v4-all-s45-v1",
+  "model": "Qwen/Qwen3.5-9B",
+  "pipeline": "code_agent",
+  "prompt": "/home/ykapushev/mathagent/work/p-code-v4-all-s45-v1/conf/base/prompts/pavel/code-agent-v4.yml",
+  "prompt_version": "code-agent-v4",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 45,
+    "max_tokens": 65536
+  },
+  "node_generation": {
+    "planner": {
+      "thinking": false,
+      "max_tokens": 10000
+    },
+    "coder": {
+      "thinking": true,
+      "max_tokens": 63000
+    },
+    "finalizer": {
+      "thinking": false,
+      "max_tokens": 1000
+    },
+    "repair": {
+      "thinking": true,
+      "max_tokens": 50000
+    }
+  },
+  "runtime": {
+    "concurrency": 80,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 96,
+    "max_model_len": 131072
+  },
+  "pipeline_config": {
+    "max_repairs": 5,
+    "execution_timeout": 10.0
+  },
+  "status": "completed",
+  "created_at": "2026-08-16T02:09:13.683867+00:00",
+  "updated_at": "2026-08-16T02:53:30.583348+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/p-code-v4-all-s45-v1/results/runs/p-code-v4-all-s45-v1/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-16T02:14:48.019248+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 30,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 69747,
+        "output_tokens": 767565,
+        "total_tokens": 837312,
+        "wall_time_seconds": 334.325,
+        "tasks_per_second": 0.0897
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 334.325,
+          "tasks_per_second": 0.0897,
+          "status": "completed",
+          "updated_at": "2026-08-16T02:14:48.019218+00:00"
+        }
+      ]
+    },
+    "HMMT26": {
+      "dataset": "MathArena/hmmt_feb_2026",
+      "split": "train",
+      "total_tasks": 33,
+      "output": "/home/ykapushev/mathagent/work/p-code-v4-all-s45-v1/results/runs/p-code-v4-all-s45-v1/hmmt26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-16T02:20:48.461923+00:00",
+      "summary": {
+        "total_tasks": 33,
+        "successful_tasks": 33,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 79094,
+        "output_tokens": 1143380,
+        "total_tokens": 1222474,
+        "wall_time_seconds": 350.247,
+        "tasks_per_second": 0.0942
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 33,
+          "wall_time_seconds": 350.247,
+          "tasks_per_second": 0.0942,
+          "status": "completed",
+          "updated_at": "2026-08-16T02:20:48.461891+00:00"
+        }
+      ]
+    },
+    "IMOAnswerBench": {
+      "dataset": "OpenEvals/IMO-AnswerBench",
+      "split": "train",
+      "total_tasks": 400,
+      "output": "/home/ykapushev/mathagent/work/p-code-v4-all-s45-v1/results/runs/p-code-v4-all-s45-v1/imo_answerbench.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-16T02:53:29.140237+00:00",
+      "summary": {
+        "total_tasks": 400,
+        "successful_tasks": 400,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 1511216,
+        "output_tokens": 14311636,
+        "total_tokens": 15822852,
+        "wall_time_seconds": 1949.886,
+        "tasks_per_second": 0.2051
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 400,
+          "wall_time_seconds": 1949.886,
+          "tasks_per_second": 0.2051,
+          "status": "completed",
+          "updated_at": "2026-08-16T02:53:29.140212+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 463,
+    "successful_tasks": 463,
+    "failed_tasks": 0,
+    "remaining_tasks": 0,
+    "input_tokens": 1660057,
+    "output_tokens": 16222581,
+    "total_tokens": 17882638,
+    "wall_time_seconds": 2634.458,
+    "tasks_per_second": 0.1757
+  }
+}

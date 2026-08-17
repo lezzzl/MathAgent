@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "run_id": "qwen35-9b-react-v8-repair-all-seed43-v3",
+  "model": "Qwen/Qwen3.5-9B",
+  "pipeline": "react_agent",
+  "prompt": "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re3/conf/base/prompts/pavel/react-agent-v8.yml",
+  "prompt_version": "react-agent-v8",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 43,
+    "max_tokens": 65536
+  },
+  "node_generation": {
+    "agent": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "planner": {
+      "thinking": false,
+      "max_tokens": 10000
+    },
+    "repair": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "cot": {
+      "thinking": true,
+      "max_tokens": 50000
+    }
+  },
+  "node_models": {
+    "planner": {
+      "model": "Qwen/Qwen3.5-9B",
+      "uses_primary_endpoint": true
+    }
+  },
+  "runtime": {
+    "concurrency": 80,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 8,
+    "max_model_len": 131072
+  },
+  "pipeline_config": {
+    "max_tool_calls": 20,
+    "max_tool_repairs": 5,
+    "execution_diagnostics": "structured-v1",
+    "repair_mode": "separate-node-v2",
+    "repair_candidate_validation": "compile-deduplicate-v1",
+    "python_mode": "notebook",
+    "cot_parser": "tolerant-v1",
+    "execution_tools": [
+      "python",
+      "sympy"
+    ],
+    "notebook_isolation": "shared",
+    "execution_timeout": 20.0
+  },
+  "status": "completed_with_errors",
+  "created_at": "2026-08-13T16:01:19.764831+00:00",
+  "updated_at": "2026-08-13T16:48:48.344584+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re3/results/runs/qwen35-9b-react-v8-repair-all-seed43-v3/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-13T16:25:38.587891+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 30,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 2733217,
+        "output_tokens": 1109438,
+        "total_tokens": 3842655,
+        "wall_time_seconds": 1458.818,
+        "tasks_per_second": 0.0206
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 1458.818,
+          "tasks_per_second": 0.0206,
+          "status": "completed",
+          "updated_at": "2026-08-13T16:25:38.587857+00:00"
+        }
+      ]
+    },
+    "HMMT26": {
+      "dataset": "MathArena/hmmt_feb_2026",
+      "split": "train",
+      "total_tasks": 33,
+      "output": "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re3/results/runs/qwen35-9b-react-v8-repair-all-seed43-v3/hmmt26.jsonl",
+      "status": "completed_with_errors",
+      "updated_at": "2026-08-13T16:48:46.285588+00:00",
+      "summary": {
+        "total_tasks": 33,
+        "successful_tasks": 31,
+        "failed_tasks": 2,
+        "remaining_tasks": 0,
+        "input_tokens": 4269726,
+        "output_tokens": 1907518,
+        "total_tokens": 6177244,
+        "wall_time_seconds": 1377.096,
+        "tasks_per_second": 0.024
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 33,
+          "wall_time_seconds": 1377.096,
+          "tasks_per_second": 0.024,
+          "status": "completed_with_errors",
+          "updated_at": "2026-08-13T16:48:46.285556+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 63,
+    "successful_tasks": 61,
+    "failed_tasks": 2,
+    "remaining_tasks": 0,
+    "input_tokens": 7002943,
+    "output_tokens": 3016956,
+    "total_tokens": 10019899,
+    "wall_time_seconds": 2835.914,
+    "tasks_per_second": 0.0222
+  }
+}

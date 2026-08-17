@@ -1,0 +1,124 @@
+=== 2026-08-13T13:19:13.522219+00:00 run_id=pavel-react-v12-two-models-aime26-hmmt26-seed42-v1 branch=pavel/code_agent_pipeline@6d4d98765def gpus=2 devices=2,3 isolation=bwrap
+=== command: MODEL=Qwen/Qwen3.5-9B SECOND_MODEL=Qwen/Qwen3.6-35B-A3B MAX_MODEL_LEN=131072 MAX_NUM_SEQS=96 SECOND_MTP=0 scripts/run_benchmarks_two_models.sh -- .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py --benchmarks aime26 hmmt26 --pipeline react_agent --prompt conf/base/prompts/pavel/react-agent-v12.yml --model Qwen/Qwen3.5-9B --base-url {BASE_URL} --api-key EMPTY --planner-model Qwen/Qwen3.6-35B-A3B --planner-base-url {SECOND_BASE_URL} --planner-api-key EMPTY --seed 42 --max-tokens 65536 --concurrency 30 --max-tool-calls 20 --max-tool-repairs 5 --execution-timeout 20 --timeout 7200 --reasoning-parser qwen3 --vllm-max-model-len 131072
+>>> Стартую sglang (first): Qwen/Qwen3.5-9B как 'Qwen/Qwen3.5-9B' на GPU 2, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/scripts/qwen35-vllm-bench/bench-first.log
+Started SGLang supervisor PID 11127
+Log: /home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/scripts/qwen35-vllm-bench/bench-first.log
+Stop: /home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Стартую sglang (second): Qwen/Qwen3.6-35B-A3B как 'Qwen/Qwen3.6-35B-A3B' на GPU 3, порт 8138
+>>> Лог: /home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/scripts/qwen35-vllm-bench/bench-second.log
+Started SGLang supervisor PID 11619
+Log: /home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/scripts/qwen35-vllm-bench/bench-second.log
+Stop: /home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности first: http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/scripts/qwen35-vllm-bench/bench-first.log)
+>>> Сервер first готов
+>>> Жду готовности second: http://127.0.0.1:8138/v1 (лог: /home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/scripts/qwen35-vllm-bench/bench-second.log)
+>>> Сервер second готов
+>>> Запускаю бенчмарки (run_id=pavel-react-v12-two-models-aime26-hmmt26-seed42-v1)
+    .venv/bin/python    scripts/benchmarks/pavel/run_all_benchmarks.py    --benchmarks    aime26    hmmt26    --pipeline    react_agent    --prompt    conf/base/prompts/pavel/react-agent-v12.yml    --model    Qwen/Qwen3.5-9B    --base-url    http://127.0.0.1:8137/v1    --api-key    EMPTY    --planner-model    Qwen/Qwen3.6-35B-A3B    --planner-base-url    http://127.0.0.1:8138/v1    --planner-api-key    EMPTY    --seed    42    --max-tokens    65536    --concurrency    30    --max-tool-calls    20    --max-tool-repairs    5    --execution-timeout    20    --timeout    7200    --reasoning-parser    qwen3    --vllm-max-model-len    131072
+2026-08-13T16:46:44+0300 INFO run_all_started run_id=pavel-react-v12-two-models-aime26-hmmt26-seed42-v1 model=Qwen/Qwen3.5-9B benchmarks=run_aime26,run_hmmt26
+2026-08-13T16:46:44+0300 INFO benchmark_process_started script=run_aime26
+2026-08-13T16:46:49+0300 INFO run_started run_id=pavel-react-v12-two-models-aime26-hmmt26-seed42-v1 model=Qwen/Qwen3.5-9B benchmark=AIME26
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-08-13T16:46:52+0300 INFO benchmark_started benchmark=AIME26 total=30 skipped=0 concurrency=30 output=/home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/results/runs/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/aime26.jsonl
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=1
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=2
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=3
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=4
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=5
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=6
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=7
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=8
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=9
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=10
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=11
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=12
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=13
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=14
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=15
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=16
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=17
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=18
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=19
+2026-08-13T16:46:52+0300 INFO task_submitted benchmark=AIME26 task_id=20
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=21
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=22
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=23
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=24
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=25
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=26
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=27
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=28
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=29
+2026-08-13T16:46:53+0300 INFO task_submitted benchmark=AIME26 task_id=30
+2026-08-13T16:49:12+0300 ERROR task_failed benchmark=AIME26 task_id=1 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:12+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=29
+2026-08-13T16:49:12+0300 ERROR task_failed benchmark=AIME26 task_id=16 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:12+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=28
+2026-08-13T16:49:15+0300 ERROR task_failed benchmark=AIME26 task_id=6 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:15+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=27
+2026-08-13T16:49:16+0300 ERROR task_failed benchmark=AIME26 task_id=7 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:16+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=26
+2026-08-13T16:49:23+0300 ERROR task_failed benchmark=AIME26 task_id=8 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:23+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=25
+2026-08-13T16:49:24+0300 ERROR task_failed benchmark=AIME26 task_id=30 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:24+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=24
+2026-08-13T16:49:25+0300 ERROR task_failed benchmark=AIME26 task_id=5 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:25+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=23
+2026-08-13T16:49:26+0300 ERROR task_failed benchmark=AIME26 task_id=3 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:26+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=22
+2026-08-13T16:49:28+0300 ERROR task_failed benchmark=AIME26 task_id=2 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:28+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=21
+2026-08-13T16:49:29+0300 ERROR task_failed benchmark=AIME26 task_id=25 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:29+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=20
+2026-08-13T16:49:30+0300 ERROR task_failed benchmark=AIME26 task_id=23 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:30+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=19
+2026-08-13T16:49:32+0300 ERROR task_failed benchmark=AIME26 task_id=19 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:32+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=18
+2026-08-13T16:49:34+0300 ERROR task_failed benchmark=AIME26 task_id=10 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:34+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=17
+2026-08-13T16:49:36+0300 ERROR task_failed benchmark=AIME26 task_id=4 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:36+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=16
+2026-08-13T16:49:37+0300 ERROR task_failed benchmark=AIME26 task_id=29 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:37+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=15
+2026-08-13T16:49:38+0300 ERROR task_failed benchmark=AIME26 task_id=21 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:38+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=14
+2026-08-13T16:49:40+0300 ERROR task_failed benchmark=AIME26 task_id=9 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:40+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=13
+2026-08-13T16:49:43+0300 ERROR task_failed benchmark=AIME26 task_id=24 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:43+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=12
+2026-08-13T16:49:45+0300 ERROR task_failed benchmark=AIME26 task_id=14 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:45+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=11
+2026-08-13T16:49:48+0300 ERROR task_failed benchmark=AIME26 task_id=26 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:48+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=10
+2026-08-13T16:49:54+0300 ERROR task_failed benchmark=AIME26 task_id=20 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:54+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=9
+2026-08-13T16:49:58+0300 ERROR task_failed benchmark=AIME26 task_id=12 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:49:58+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=8
+2026-08-13T16:50:03+0300 ERROR task_failed benchmark=AIME26 task_id=22 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:50:03+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=7
+2026-08-13T16:50:08+0300 ERROR task_failed benchmark=AIME26 task_id=17 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:50:08+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=6
+2026-08-13T16:50:09+0300 ERROR task_failed benchmark=AIME26 task_id=11 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:50:09+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=5
+2026-08-13T16:50:21+0300 ERROR task_failed benchmark=AIME26 task_id=13 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:50:21+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=4
+2026-08-13T16:50:25+0300 ERROR task_failed benchmark=AIME26 task_id=27 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:50:25+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=3
+2026-08-13T16:50:37+0300 ERROR task_failed benchmark=AIME26 task_id=15 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:50:37+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=2
+2026-08-13T16:50:49+0300 ERROR task_failed benchmark=AIME26 task_id=18 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:50:49+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=1
+2026-08-13T16:51:08+0300 ERROR task_failed benchmark=AIME26 task_id=28 category=fatal error=NotFoundError: Error code: 404 - {'error': {'message': 'The model `Qwen/Qwen3.5-9B` does not exist.', 'type': 'NotFoundError', 'param': 'model', 'code': 404}}
+2026-08-13T16:51:08+0300 ERROR circuit_breaker_open benchmark=AIME26 status=failed remaining=0
+2026-08-13T16:51:08+0300 INFO benchmark_finished benchmark=AIME26 status=failed successful=0 failed=30 remaining=0 wall_time=255.621 output=/home/ykapushev/mathagent/work/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/results/runs/pavel-react-v12-two-models-aime26-hmmt26-seed42-v1/aime26.jsonl
+2026-08-13T16:51:10+0300 ERROR benchmark_process_failed script=run_aime26 returncode=2
+2026-08-13T16:51:10+0300 ERROR run_all_finished status=interrupted failed=run_aime26
+>>> Команда завершилась с кодом 2
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю сервер (second)...
+Requesting graceful shutdown of supervisor PID 11619...
+SGLang stopped.
+>>> Останавливаю сервер (first)...
+No managed SGLang server is running.
+=== 2026-08-13T13:51:21.305976+00:00 status=failed exit_code=2 duration=1927.8s

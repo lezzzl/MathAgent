@@ -1,0 +1,34 @@
+=== 2026-08-13T14:22:53.654894+00:00 run_id=pavel-react-v8-9b-repair-all-3seeds-re1 branch=pavel/code_agent_pipeline@d2d2f22a11c3 gpus=1 devices=4 isolation=bwrap
+=== command: ENGINE=sglang MODEL=Qwen/Qwen3.5-9B MAX_MODEL_LEN=131072 MAX_NUM_SEQS=96 scripts/run_benchmarks.sh -- scripts/run_seeds.sh .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py --benchmarks aime26 hmmt26 imo_answerbench --pipeline react_agent --prompt conf/base/prompts/pavel/react-agent-v8.yml --model Qwen/Qwen3.5-9B --base-url {BASE_URL} --api-key EMPTY --max-tokens 65536 --concurrency 80 --max-tool-calls 20 --max-tool-repairs 5 --execution-timeout 20 --timeout 7200 --reasoning-parser qwen3 --vllm-max-model-len 131072
+>>> Стартую sglang: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 4, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re1/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re1/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 787541
+Log: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re1/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re1/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re1/scripts/qwen35-vllm-bench/bench-server.log)
+>>> Движок (sglang) готов. Размер KV-кэша:
+>>> Спекуляция: <в логе не видно>
+>>> ВНИМАНИЕ: просили MTP=1, а следов спекуляции в логе нет
+>>> Запускаю бенчмарки (run_id=pavel-react-v8-9b-repair-all-3seeds-re1)
+    scripts/run_seeds.sh    .venv/bin/python    scripts/benchmarks/pavel/run_all_benchmarks.py    --benchmarks    aime26    hmmt26    imo_answerbench    --pipeline    react_agent    --prompt    conf/base/prompts/pavel/react-agent-v8.yml    --model    Qwen/Qwen3.5-9B    --base-url    \{BASE_URL\}    --api-key    EMPTY    --max-tokens    65536    --concurrency    80    --max-tool-calls    20    --max-tool-repairs    5    --execution-timeout    20    --timeout    7200    --reasoning-parser    qwen3    --vllm-max-model-len    131072
+>>> seed=43, run_id=qwen35-9b-react-v8-repair-all-seed43-v1
+2026-08-13T17:23:00+0300 INFO run_all_started run_id=qwen35-9b-react-v8-repair-all-seed43-v1 model=Qwen/Qwen3.5-9B benchmarks=run_aime26,run_hmmt26,run_imo_answerbench
+2026-08-13T17:23:00+0300 INFO benchmark_process_started script=run_aime26
+2026-08-13T17:23:05+0300 INFO run_started run_id=qwen35-9b-react-v8-repair-all-seed43-v1 model=Qwen/Qwen3.5-9B benchmark=AIME26
+2026-08-13T17:23:06+0300 ERROR run_failed run_id=qwen35-9b-react-v8-repair-all-seed43-v1 benchmark=AIME26
+Traceback (most recent call last):
+  File "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re1/scripts/benchmarks/pavel/benchmark_runner.py", line 1019, in run_benchmark
+    return _run_benchmark(config, args, run_id, logger)
+  File "/home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re1/scripts/benchmarks/pavel/benchmark_runner.py", line 885, in _run_benchmark
+    raise FileExistsError(
+        f"Output already exists: {output_path}. Use --resume with the same --run-id."
+    )
+FileExistsError: Output already exists: /home/ykapushev/mathagent/work/pavel-react-v8-9b-repair-all-3seeds-re1/results/runs/qwen35-9b-react-v8-repair-all-seed43-v1/aime26.jsonl. Use --resume with the same --run-id.
+2026-08-13T17:23:08+0300 ERROR benchmark_process_failed script=run_aime26 returncode=2
+2026-08-13T17:23:08+0300 ERROR run_all_finished status=interrupted failed=run_aime26
+>>> kedro завершился с кодом 2
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю sglang...
+Requesting graceful shutdown of supervisor PID 787541...
+SGLang stopped.
+=== 2026-08-13T14:23:12.005142+00:00 status=failed exit_code=2 duration=18.4s

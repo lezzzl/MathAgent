@@ -1,0 +1,136 @@
+=== 2026-08-16T06:10:46.420339+00:00 run_id=p-v12-2m-a26-s43-v1 branch=pavel/code_agent_pipeline@75deeda3a0ac gpus=2 devices=4,5 isolation=bwrap
+=== command: ENGINE=sglang MODEL=Qwen/Qwen3.5-9B SECOND_MODEL=Qwen/Qwen3.6-35B-A3B SERVED_MODEL_NAME=Qwen/Qwen3.5-9B SECOND_SERVED_MODEL_NAME=Qwen/Qwen3.6-35B-A3B MTP=1 SECOND_MTP=0 MAX_MODEL_LEN=131072 MAX_NUM_SEQS=96 scripts/run_benchmarks_two_models.sh -- .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py --benchmarks aime26 --pipeline react_agent --prompt conf/base/prompts/pavel/react-agent-v12.yml --model {MODEL} --base-url {BASE_URL} --api-key EMPTY --planner-model {SECOND_MODEL} --planner-base-url {SECOND_BASE_URL} --planner-api-key EMPTY --seed 43 --max-tokens 65536 --concurrency 80 --max-tool-calls 20 --max-format-retries 3 --max-tool-repairs 5 --execution-timeout 20 --timeout 7200 --reasoning-parser qwen3 --vllm-max-num-seqs 96 --vllm-max-model-len 131072
+>>> Стартую sglang (first): Qwen/Qwen3.5-9B как 'Qwen/Qwen3.5-9B' на GPU 4, порт 8108
+>>> Лог: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/scripts/qwen35-vllm-bench/bench-first.log
+Started SGLang supervisor PID 3702270
+Log: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/scripts/qwen35-vllm-bench/bench-first.log
+Stop: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Стартую sglang (second): Qwen/Qwen3.6-35B-A3B как 'Qwen/Qwen3.6-35B-A3B' на GPU 5, порт 8109
+>>> Лог: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/scripts/qwen35-vllm-bench/bench-second.log
+Started SGLang supervisor PID 3702540
+Log: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/scripts/qwen35-vllm-bench/bench-second.log
+Stop: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности first: http://127.0.0.1:8108/v1 (лог: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/scripts/qwen35-vllm-bench/bench-first.log)
+>>> Сервер first готов
+>>> Жду готовности second: http://127.0.0.1:8109/v1 (лог: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/scripts/qwen35-vllm-bench/bench-second.log)
+>>> Сервер second готов
+>>> Запускаю бенчмарки (run_id=p-v12-2m-a26-s43-v1)
+    .venv/bin/python    scripts/benchmarks/pavel/run_all_benchmarks.py    --benchmarks    aime26    --pipeline    react_agent    --prompt    conf/base/prompts/pavel/react-agent-v12.yml    --model    Qwen/Qwen3.5-9B    --base-url    http://127.0.0.1:8108/v1    --api-key    EMPTY    --planner-model    Qwen/Qwen3.6-35B-A3B    --planner-base-url    http://127.0.0.1:8109/v1    --planner-api-key    EMPTY    --seed    43    --max-tokens    65536    --concurrency    80    --max-tool-calls    20    --max-format-retries    3    --max-tool-repairs    5    --execution-timeout    20    --timeout    7200    --reasoning-parser    qwen3    --vllm-max-num-seqs    96    --vllm-max-model-len    131072
+2026-08-16T09:36:17+0300 INFO run_all_started run_id=p-v12-2m-a26-s43-v1 model=Qwen/Qwen3.5-9B benchmarks=run_aime26
+2026-08-16T09:36:17+0300 INFO benchmark_process_started script=run_aime26
+2026-08-16T09:36:21+0300 INFO run_started run_id=p-v12-2m-a26-s43-v1 model=Qwen/Qwen3.5-9B benchmark=AIME26
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-08-16T09:36:25+0300 INFO benchmark_started benchmark=AIME26 total=30 skipped=0 concurrency=80 output=/home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/results/runs/p-v12-2m-a26-s43-v1/aime26.jsonl
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=1
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=2
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=3
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=4
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=5
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=6
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=7
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=8
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=9
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=10
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=11
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=12
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=13
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=14
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=15
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=16
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=17
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=18
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=19
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=20
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=21
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=22
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=23
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=24
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=25
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=26
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=27
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=28
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=29
+2026-08-16T09:36:25+0300 INFO task_submitted benchmark=AIME26 task_id=30
+2026-08-16T09:39:11+0300 INFO task_completed benchmark=AIME26 task_id=1 progress=1/30 latency=166.813 output_tokens=4198 finish_reason=None
+2026-08-16T09:39:32+0300 INFO task_completed benchmark=AIME26 task_id=4 progress=2/30 latency=187.529 output_tokens=6379 finish_reason=None
+2026-08-16T09:39:34+0300 INFO task_completed benchmark=AIME26 task_id=3 progress=3/30 latency=189.729 output_tokens=6724 finish_reason=None
+2026-08-16T09:39:39+0300 INFO task_completed benchmark=AIME26 task_id=19 progress=4/30 latency=194.257 output_tokens=7356 finish_reason=None
+2026-08-16T09:39:41+0300 INFO task_completed benchmark=AIME26 task_id=16 progress=5/30 latency=196.224 output_tokens=7817 finish_reason=None
+2026-08-16T09:39:59+0300 INFO task_completed benchmark=AIME26 task_id=30 progress=6/30 latency=213.666 output_tokens=10073 finish_reason=None
+2026-08-16T09:40:10+0300 INFO task_completed benchmark=AIME26 task_id=6 progress=7/30 latency=225.540 output_tokens=11110 finish_reason=None
+2026-08-16T09:40:13+0300 INFO task_completed benchmark=AIME26 task_id=24 progress=8/30 latency=227.602 output_tokens=11963 finish_reason=None
+2026-08-16T09:40:35+0300 INFO task_completed benchmark=AIME26 task_id=2 progress=9/30 latency=250.644 output_tokens=13981 finish_reason=None
+2026-08-16T09:40:40+0300 INFO task_completed benchmark=AIME26 task_id=12 progress=10/30 latency=255.552 output_tokens=14897 finish_reason=None
+2026-08-16T09:40:42+0300 INFO task_completed benchmark=AIME26 task_id=20 progress=11/30 latency=257.395 output_tokens=16164 finish_reason=None
+2026-08-16T09:40:43+0300 INFO task_completed benchmark=AIME26 task_id=27 progress=12/30 latency=257.899 output_tokens=15647 finish_reason=None
+2026-08-16T09:40:50+0300 INFO task_completed benchmark=AIME26 task_id=29 progress=13/30 latency=264.760 output_tokens=16005 finish_reason=None
+2026-08-16T09:40:52+0300 INFO task_completed benchmark=AIME26 task_id=8 progress=14/30 latency=267.492 output_tokens=16728 finish_reason=None
+2026-08-16T09:40:55+0300 INFO task_completed benchmark=AIME26 task_id=5 progress=15/30 latency=270.807 output_tokens=16838 finish_reason=None
+2026-08-16T09:41:03+0300 INFO task_completed benchmark=AIME26 task_id=21 progress=16/30 latency=278.137 output_tokens=18156 finish_reason=None
+2026-08-16T09:41:34+0300 INFO task_completed benchmark=AIME26 task_id=23 progress=17/30 latency=309.009 output_tokens=22225 finish_reason=None
+2026-08-16T09:41:37+0300 INFO task_completed benchmark=AIME26 task_id=14 progress=18/30 latency=312.480 output_tokens=23188 finish_reason=None
+2026-08-16T09:41:40+0300 INFO task_completed benchmark=AIME26 task_id=22 progress=19/30 latency=314.260 output_tokens=23220 finish_reason=None
+2026-08-16T09:41:44+0300 INFO task_completed benchmark=AIME26 task_id=7 progress=20/30 latency=319.452 output_tokens=24152 finish_reason=None
+2026-08-16T09:42:03+0300 INFO task_completed benchmark=AIME26 task_id=10 progress=21/30 latency=338.685 output_tokens=27294 finish_reason=None
+2026-08-16T09:42:10+0300 INFO task_completed benchmark=AIME26 task_id=9 progress=22/30 latency=345.462 output_tokens=27828 finish_reason=None
+2026-08-16T09:42:56+0300 INFO task_completed benchmark=AIME26 task_id=25 progress=23/30 latency=390.601 output_tokens=34584 finish_reason=None
+2026-08-16T09:42:56+0300 INFO task_completed benchmark=AIME26 task_id=13 progress=24/30 latency=391.539 output_tokens=33583 finish_reason=None
+2026-08-16T09:43:28+0300 INFO task_completed benchmark=AIME26 task_id=26 progress=25/30 latency=422.222 output_tokens=39234 finish_reason=None
+2026-08-16T09:44:31+0300 INFO task_completed benchmark=AIME26 task_id=28 progress=26/30 latency=486.005 output_tokens=49049 finish_reason=None
+2026-08-16T09:45:49+0300 INFO task_completed benchmark=AIME26 task_id=11 progress=27/30 latency=564.504 output_tokens=58511 finish_reason=None
+2026-08-16T09:46:53+0300 INFO task_completed benchmark=AIME26 task_id=18 progress=28/30 latency=628.385 output_tokens=71589 finish_reason=None
+2026-08-16T09:48:04+0300 INFO task_completed benchmark=AIME26 task_id=17 progress=29/30 latency=698.983 output_tokens=81871 finish_reason=None
+2026-08-16T09:49:47+0300 INFO task_completed benchmark=AIME26 task_id=15 progress=30/30 latency=802.176 output_tokens=90640 finish_reason=None
+2026-08-16T09:49:47+0300 INFO benchmark_finished benchmark=AIME26 status=completed successful=30 failed=0 remaining=0 wall_time=802.299 output=/home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1/results/runs/p-v12-2m-a26-s43-v1/aime26.jsonl
+2026-08-16T09:49:49+0300 INFO run_all_finished status=completed run_id=p-v12-2m-a26-s43-v1
+>>> Команда завершилась с кодом 0
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю сервер (second)...
+Requesting graceful shutdown of supervisor PID 3702540...
+SGLang stopped.
+>>> Останавливаю сервер (first)...
+Requesting graceful shutdown of supervisor PID 3702270...
+SGLang stopped.
+=== 2026-08-16T06:50:09.443462+00:00 status=done exit_code=0 duration=2363.0s
+=== 2026-08-16T06:51:35.094089+00:00 restored 3 file(s) from results cache (p-v12-2m-a26-s43-v1) — прошлая попытка продолжается с этого места
+=== 2026-08-16T06:51:35.510913+00:00 run_id=p-v12-2m-a26-s43-v1-2 branch=pavel/code_agent_pipeline@f65a77ffb4a4 gpus=2 devices=4,5 isolation=bwrap
+=== command: ENGINE=sglang MODEL=Qwen/Qwen3.5-9B SECOND_MODEL=Qwen/Qwen3.6-35B-A3B SERVED_MODEL_NAME=Qwen/Qwen3.5-9B SECOND_SERVED_MODEL_NAME=Qwen/Qwen3.6-35B-A3B MTP=1 SECOND_MTP=0 MAX_MODEL_LEN=131072 MAX_NUM_SEQS=96 scripts/run_benchmarks_two_models.sh -- .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py --benchmarks aime26 --pipeline react_agent --prompt conf/base/prompts/pavel/react-agent-v12.yml --model {MODEL} --base-url {BASE_URL} --api-key EMPTY --planner-model {SECOND_MODEL} --planner-base-url {SECOND_BASE_URL} --planner-api-key EMPTY --seed 43 --max-tokens 65536 --concurrency 80 --max-tool-calls 20 --max-format-retries 3 --max-tool-repairs 5 --execution-timeout 20 --timeout 7200 --reasoning-parser qwen3 --vllm-max-num-seqs 96 --vllm-max-model-len 131072
+>>> Стартую sglang (first): Qwen/Qwen3.5-9B как 'Qwen/Qwen3.5-9B' на GPU 4, порт 8108
+>>> Лог: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/qwen35-vllm-bench/bench-first.log
+Started SGLang supervisor PID 189557
+Log: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/qwen35-vllm-bench/bench-first.log
+Stop: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Стартую sglang (second): Qwen/Qwen3.6-35B-A3B как 'Qwen/Qwen3.6-35B-A3B' на GPU 5, порт 8109
+>>> Лог: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/qwen35-vllm-bench/bench-second.log
+Started SGLang supervisor PID 189881
+Log: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/qwen35-vllm-bench/bench-second.log
+Stop: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности first: http://127.0.0.1:8108/v1 (лог: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/qwen35-vllm-bench/bench-first.log)
+>>> Сервер first готов
+>>> Жду готовности second: http://127.0.0.1:8109/v1 (лог: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/qwen35-vllm-bench/bench-second.log)
+>>> Сервер second готов
+>>> Запускаю бенчмарки (run_id=p-v12-2m-a26-s43-v1-2)
+    .venv/bin/python    scripts/benchmarks/pavel/run_all_benchmarks.py    --benchmarks    aime26    --pipeline    react_agent    --prompt    conf/base/prompts/pavel/react-agent-v12.yml    --model    Qwen/Qwen3.5-9B    --base-url    http://127.0.0.1:8108/v1    --api-key    EMPTY    --planner-model    Qwen/Qwen3.6-35B-A3B    --planner-base-url    http://127.0.0.1:8109/v1    --planner-api-key    EMPTY    --seed    43    --max-tokens    65536    --concurrency    80    --max-tool-calls    20    --max-format-retries    3    --max-tool-repairs    5    --execution-timeout    20    --timeout    7200    --reasoning-parser    qwen3    --vllm-max-num-seqs    96    --vllm-max-model-len    131072
+2026-08-16T10:14:14+0300 INFO run_all_started run_id=p-v12-2m-a26-s43-v1-2 model=Qwen/Qwen3.5-9B benchmarks=run_aime26
+2026-08-16T10:14:14+0300 INFO benchmark_process_started script=run_aime26
+2026-08-16T10:14:19+0300 INFO run_started run_id=p-v12-2m-a26-s43-v1-2 model=Qwen/Qwen3.5-9B benchmark=AIME26
+2026-08-16T10:14:19+0300 ERROR run_failed run_id=p-v12-2m-a26-s43-v1-2 benchmark=AIME26
+Traceback (most recent call last):
+  File "/home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/benchmarks/pavel/benchmark_runner.py", line 1064, in run_benchmark
+    return _run_benchmark(config, args, run_id, logger)
+  File "/home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/scripts/benchmarks/pavel/benchmark_runner.py", line 934, in _run_benchmark
+    raise FileExistsError(
+        f"Output already exists: {output_path}. Use --resume with the same --run-id."
+    )
+FileExistsError: Output already exists: /home/ykapushev/mathagent/work/p-v12-2m-a26-s43-v1-2/results/runs/p-v12-2m-a26-s43-v1-2/aime26.jsonl. Use --resume with the same --run-id.
+2026-08-16T10:14:21+0300 ERROR benchmark_process_failed script=run_aime26 returncode=2
+2026-08-16T10:14:21+0300 ERROR run_all_finished status=failed failed=run_aime26
+>>> Команда завершилась с кодом 2
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю сервер (second)...
+Requesting graceful shutdown of supervisor PID 189881...
+SGLang stopped.
+>>> Останавливаю сервер (first)...
+Requesting graceful shutdown of supervisor PID 189557...
+SGLang stopped.
+=== 2026-08-16T07:14:40.694331+00:00 status=failed exit_code=2 duration=1385.2s

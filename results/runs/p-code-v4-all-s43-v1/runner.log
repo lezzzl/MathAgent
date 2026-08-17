@@ -1,0 +1,1020 @@
+=== 2026-08-16T01:17:10.220449+00:00 run_id=p-code-v4-all-s43-v1 branch=pavel/code_agent_pipeline@1f62b9935c02 gpus=1 devices=6 isolation=bwrap
+=== command: ENGINE=sglang MODEL=Qwen/Qwen3.5-9B SERVED_MODEL_NAME=Qwen/Qwen3.5-9B MTP=1 MAX_MODEL_LEN=131072 MAX_NUM_SEQS=96 scripts/run_benchmarks.sh -- .venv/bin/python scripts/benchmarks/pavel/run_all_benchmarks.py --benchmarks aime26 hmmt26 imo_answerbench --pipeline code_agent --prompt conf/base/prompts/pavel/code-agent-v4.yml --model {MODEL} --base-url {BASE_URL} --api-key EMPTY --seed 43 --max-tokens 65536 --concurrency 80 --max-repairs 5 --execution-timeout 10 --timeout 7200 --reasoning-parser qwen3 --vllm-max-num-seqs 96 --vllm-max-model-len 131072
+>>> Стартую sglang: Qwen/Qwen3.5-9B как 'Qwen/Qwen3.5-9B' на GPU 6, порт 8112
+>>> Лог: /home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 3138449
+Log: /home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8112/v1 (лог: /home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/scripts/qwen35-vllm-bench/bench-server.log)
+>>> Движок (sglang) готов. Размер KV-кэша:
+[2026-08-16 04:20:26] max_total_num_tokens=5310528, chunked_prefill_size=8192, max_prefill_tokens=16384, max_running_requests=96, context_len=131072, available_gpu_mem=7.89 GB
+>>> Спекуляция: [2026-08-16 04:17:26] server_args=ServerArgs(model_path='Qwen/Qwen3.5-9B', tokenizer_path='Qwen/Qwen3.5-9B', tokenizer_mode='auto', tokenizer_backend='huggingface', tokenizer_worker_num=1, detokenizer_worker_num=1, skip_tokenizer_init=False, load_format='auto', model_loader_extra_config='{}', trust_remote_code=False, context_length=131072, is_embedding=False, enable_multimodal=None, revision=None, model_impl='auto', model_config_parser='auto', json_model_override_args='{}', dtype='bfloat16', quantization=None, quantization_param_path=None, kv_cache_dtype='fp8_e4m3', enable_fp32_lm_head=False, modelopt_quant=None, modelopt_checkpoint_restore_path=None, modelopt_checkpoint_save_path=None, modelopt_export_path=None, quantize_and_serve=False, rl_quant_profile=None, enable_tf32_matmul=False, mem_fraction_static=0.9, max_running_requests=96, max_queued_requests=None, max_total_tokens=None, chunked_prefill_size=8192, enable_dynamic_chunking=False, max_prefill_tokens=16384, prefill_max_requests=None, schedule_policy='fcfs', enable_priority_scheduling=False, disable_priority_preemption=False, default_priority_value=None, abort_on_priority_when_disabled=False, schedule_low_priority_values_first=False, priority_scheduling_preemption_threshold=10, retraction_policy='length', schedule_conservativeness=1.0, page_size=64, swa_full_tokens_ratio=0.8, disable_hybrid_swa_memory=False, radix_eviction_policy='lru', prefill_only_disable_kv_cache=False, disable_radix_cache=False, enable_page_major_kv_layout=False, enable_unified_memory=False, disable_chunked_prefix_cache=False, disable_overlap_schedule=False, num_continuous_decode_steps=1, scheduler_recv_interval=1, enable_mixed_chunk=False, nccl_port=None, dist_timeout=None, dist_init_addr=None, nnodes=1, node_rank=0, tp_size=1, dcp_size=1, pp_size=1, pp_max_micro_batch_size=None, pp_async_batch_depth=0, dp_size=1, load_balance_method='round_robin', attn_cp_size=1, moe_dp_size=1, dwdp_size=1, dcp_comm_backend='ag_rs', dcp_replicate_q_proj=None, enable_prefill_cp=False, cp_strategy=None, enable_dsa_cache_layer_split=False, enable_dsa_prefill_context_parallel=False, dsa_prefill_cp_mode='round-robin-split', enable_prefill_context_parallel=False, prefill_cp_mode='in-seq-split', enable_cp_decode_attn_tp=False, enable_dp_attention=False, enable_dp_attention_local_control_broadcast=False, enable_dp_lm_head=False, enable_attn_tp_input_scattered=False, disable_attn_tp_gather=False, enable_p2p_check=False, device='cuda', base_gpu_id=0, gpu_id_step=1, random_seed=801671377, watchdog_timeout=300, soft_watchdog_timeout=None, sleep_on_idle=False, use_ray=False, custom_sigquit_handler=None, numa_node=None, gc_threshold=None, host='0.0.0.0', port=8112, fastapi_root_path='', smg_grpc_mode=False, grpc_mode=False, grpc_port=None, sidecar=None, sidecar_args=None, skip_server_warmup=False, warmups=None, enable_http2=False, ssl_keyfile=None, ssl_certfile=None, ssl_ca_certs=None, ssl_keyfile_password=None, enable_ssl_refresh=False, api_key=None, admin_api_key=None, served_model_name='Qwen/Qwen3.5-9B', weight_version='default', chat_template=None, hf_chat_template_name=None, completion_template=None, file_storage_path='sglang_storage', enable_cache_report=False, reasoning_parser='qwen3', default_chat_template_kwargs=None, strip_thinking_cache=False, enable_strict_thinking=False, tool_call_parser='qwen3_coder', tool_server=None, sampling_defaults='model', asr_max_buffer_seconds=60, asr_max_concurrent_sessions=32, preferred_sampling_params=None, allow_auto_truncate=False, stream_interval=1, batch_notify_size=16, stream_response_default_include_usage=False, incremental_streaming_output=False, enable_streaming_session=False, enable_session_radix_cache=False, log_level='info', log_level_http=None, log_requests=False, log_requests_level=2, log_requests_format='text', log_requests_target=None, uvicorn_access_log_exclude_prefixes=[], crash_dump_folder=None, show_time_cost=False, enable_metrics=False, smg_http_sidecar_port=None, enable_mfu_metrics=False, enable_metrics_for_all_schedulers=False, load_snapshot_publish_interval=15, tokenizer_metrics_custom_labels_header='x-custom-labels', tokenizer_metrics_allowed_custom_labels=None, extra_metric_labels=None, bucket_time_to_first_token=None, bucket_inter_token_latency=None, bucket_e2e_request_latency=None, prompt_tokens_buckets=None, generation_tokens_buckets=None, gc_warning_threshold_secs=0.0, decode_log_interval=40, enable_request_time_stats_logging=False, kv_events_config=None, enable_forward_pass_metrics=False, forward_pass_metrics_worker_id='', forward_pass_metrics_ipc_name=None, enable_trace=False, trace_modules='request', otlp_traces_endpoint='localhost:4317', export_metrics_to_file=False, export_metrics_to_file_dir=None, stat_loggers=None, constrained_json_whitespace_pattern=None, constrained_json_disable_any_whitespace=False, attention_backend='trtllm_mha', decode_attention_backend=None, prefill_attention_backend=None, sampling_backend='flashinfer', grammar_backend='xgrammar', radix_cache_backend=None, mm_attention_backend=None, fp8_gemm_runner_backend='auto', fp4_gemm_runner_backend='auto', bf16_gemm_backend='auto', dsa_prefill_backend=None, dsa_decode_backend=None, dsa_paged_mqa_logits_backend='auto', dsa_topk_backend='sgl-kernel', disable_flashinfer_autotune=False, flashinfer_autotune_skip_ops=None, mamba_backend='triton', cuda_graph_config=CudaGraphConfig(decode=PhaseConfig(backend='full', max_bs=192, bs=[1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 40, 44, 48, 52, 56, 60, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 144, 152, 160, 168, 176, 184, 192], tc_compiler='eager', full_prefill_max_req=None, full_prefill_prefix_chunk_tokens=None), prefill=PhaseConfig(backend='breakable', max_bs=8192, bs=[4, 8, 12, 16, 20, 24, 28, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 288, 320, 352, 384, 416, 448, 480, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840, 4096, 4608, 5120, 5632, 6144, 6656, 7168, 7680, 8192], tc_compiler='eager', full_prefill_max_req=None, full_prefill_prefix_chunk_tokens=None)), cuda_graph_backend_decode=None, cuda_graph_backend_prefill=None, cuda_graph_max_bs_decode=192, cuda_graph_max_bs_prefill=None, cuda_graph_bs_decode=None, cuda_graph_bs_prefill=None, cuda_graph_tc_compiler=None, disable_prefill_cuda_graph=False, disable_decode_cuda_graph=False, disable_cuda_graph=False, disable_cuda_graph_padding=False, enable_profile_cuda_graph=False, enable_cudagraph_gc=False, debug_cuda_graph=False, enable_layerwise_nvtx_marker=False, enable_nccl_nvls=False, enable_symm_mem=False, triton_attention_reduce_in_fp32=False, triton_attention_num_kv_splits=8, triton_attention_split_tile_size=None, flashinfer_mla_disable_ragged=False, enable_fused_qk_norm_rope=False, enable_precise_embedding_interpolation=False, enable_fused_moe_sum_all_reduce=False, enable_deepseek_v4_fp4_indexer=False, disable_custom_all_reduce=False, enable_mscclpp=False, enable_torch_symm_mem=False, enable_scattered_sconv=False, pre_warm_nccl=False, enable_quant_communications=False, enable_flashinfer_allreduce_fusion=False, enforce_disable_flashinfer_allreduce_fusion=False, flashinfer_allreduce_fusion_backend=None, enable_aiter_allreduce_fusion=False, enable_torch_compile=False, enable_torch_compile_debug_mode=False, torch_compile_max_bs=32, torchao_config='', speculative_algorithm='EAGLE', speculative_draft_model_path=None, speculative_draft_model_revision=None, speculative_draft_load_format=None, speculative_num_steps=1, speculative_eagle_topk=1, speculative_num_draft_tokens=2, speculative_dflash_block_size=None, speculative_dspark_block_size=None, speculative_dspark_sps_table_path=None, speculative_dspark_confidence_sts_path=None, speculative_dspark_align_verify_tokens_to_graph_tier=False, speculative_accept_threshold_single=1.0, speculative_accept_threshold_acc=1.0, speculative_use_rejection_sampling=False, speculative_token_map=None, speculative_attention_mode='prefill', speculative_draft_attention_backend=None, speculative_draft_window_size=None, speculative_moe_runner_backend='flashinfer_trtllm', speculative_moe_a2a_backend=None, speculative_draft_model_quantization=None, speculative_skip_dp_mlp_sync=False, enable_multi_layer_eagle=False, speculative_adaptive=False, speculative_adaptive_config=None, decoupled_spec_bind_endpoint=None, decoupled_spec_connect_endpoints=None, decoupled_spec_rank=None, decoupled_spec_role='null', spec_trace_dir=None, speculative_ngram_min_bfs_breadth=1, speculative_ngram_max_bfs_breadth=10, speculative_ngram_match_type='BFS', speculative_ngram_max_trie_depth=18, speculative_ngram_capacity=10000000, speculative_ngram_external_corpus_path=None, speculative_ngram_external_sam_budget=0, speculative_ngram_external_corpus_max_tokens=10000000, ep_size=1, moe_a2a_backend='none', moe_runner_backend='flashinfer_trtllm', flashinfer_mxfp4_moe_precision='default', deepep_mode='auto', fuseep_mode=2, deepep_dispatcher_output_dtype='auto', ep_num_redundant_experts=0, ep_dispatch_algorithm=None, init_expert_location='trivial', enable_eplb=False, eplb_algorithm='auto', eplb_rebalance_num_iterations=1000, eplb_rebalance_layers_per_chunk=None, eplb_min_rebalancing_utilization_threshold=1.0, expert_distribution_recorder_mode=None, expert_distribution_recorder_buffer_size=1000, enable_expert_distribution_metrics=False, deepep_config=None, moe_dense_tp_size=None, elastic_ep_backend=None, enable_elastic_expert_backup=False, mooncake_ib_device=None, enable_waterfill=False, ep_join_mode=None, ep_join_rank_offset=0, elastic_ep_initial_size=None, max_ep_size=None, elastic_ep_scale_timeout=600, elastic_ep_rejoin=False, disable_flashinfer_cutlass_moe_fp4_allgather=False, disable_shared_experts_fusion=True, enforce_shared_experts_fusion=False, max_mamba_cache_size=None, mamba_ssm_dtype=None, mamba_max_states_per_path=-1, enable_mamba_cache_stochastic_rounding=False, mamba_cache_philox_rounds=0, mamba_full_memory_ratio=0.9, mamba_radix_cache_strategy='extra_buffer', uses_mamba_radix_cache=True, mamba_track_interval=256, enable_int8_mamba_checkpoint=False, int8_mamba_ckpt_size=None, linear_attn_backend='triton', linear_attn_decode_backend=None, linear_attn_prefill_backend=None, linear_attn_verify_backend=None, enable_linear_replayssm=False, linear_replayssm_cache_len=16, enable_linear_replayssm_spec=False, enable_hierarchical_cache=False, hicache_ratio=2.0, hicache_size=0, hicache_write_policy='write_through', hicache_io_backend='kernel', hicache_mem_layout='page_first', hicache_storage_backend=None, hicache_storage_prefetch_policy='timeout', hicache_storage_backend_extra_config=None, enable_hisparse=False, hisparse_config=None, enable_broadcast_mm_inputs_process=False, enable_prefix_mm_cache=False, mm_enable_dp_encoder=False, mm_process_config={}, mm_processor_worker_num=0, mm_io_worker_num=0, limit_mm_data_per_request=None, enable_mm_global_cache=False, disable_fast_image_processor=False, mm_feature_transport='cuda_ipc', keep_mm_feature_on_device=False, enable_lora=None, enable_lora_overlap_loading=None, max_lora_rank=None, lora_target_modules=None, lora_paths=None, max_loaded_loras=None, max_loras_per_batch=8, lora_eviction_policy='lru', lora_backend='csgmv', max_lora_chunk_size=16, experts_shared_outer_loras=None, lora_use_virtual_experts=False, lora_strict_loading=False, lora_drain_wait_threshold=0.0, enable_two_batch_overlap=False, enable_single_batch_overlap=False, tbo_token_distribution_threshold=0.48, cpu_offload_gb=0, offload_group_size=-1, offload_num_in_group=1, offload_prefetch_step=1, offload_mode='cpu', enable_lmcache=False, lmcache_config_file=None, enable_flexkv=False, flexkv_config_file=None, kt_weight_path=None, kt_method='AMXINT4', kt_cpuinfer=None, kt_threadpool_count=2, kt_num_gpu_experts=None, kt_max_deferred_experts_per_token=None, dllm_algorithm=None, dllm_algorithm_config=None, dllm_fdfo=True, disaggregation_mode='null', disaggregation_transfer_backend='mooncake', disaggregation_bootstrap_port=8998, disaggregation_ib_device=None, disaggregation_decode_enable_radix_cache=False, disaggregation_decode_enable_offload_kvcache=False, num_reserved_decode_tokens=512, disaggregation_decode_extra_slots=None, disaggregation_decode_polling_interval=1, optimistic_prefill_attempts=0, encoder_only=False, language_only=False, encoder_transfer_backend='zmq_to_scheduler', encoder_urls=[], encoder_bootstrap_port=8997, encoder_register_urls=[], enable_adaptive_dispatch_to_encoder=False, enable_pdmux=False, pdmux_config_path=None, sm_group_num=8, custom_weight_loader=[], weight_loader_disable_mmap=False, weight_loader_prefetch_checkpoints=False, weight_loader_prefetch_num_threads=4, weight_loader_drop_cache_after_load=False, remote_instance_weight_loader_seed_instance_ip=None, remote_instance_weight_loader_seed_instance_service_port=None, remote_instance_weight_loader_send_weights_group_ports=None, remote_instance_weight_loader_backend='nccl', remote_instance_weight_loader_start_seed_via_transfer_engine=False, engine_info_bootstrap_port=6789, modelexpress_config=None, download_dir=None, model_checksum=None, delete_ckpt_after_loading=False, decrypted_config_file=None, decrypted_draft_config_file=None, checkpoint_engine_wait_weights_before_ready=False, enable_prefill_delayer=False, prefill_delayer_max_delay_passes=30, prefill_delayer_token_usage_low_watermark=None, prefill_delayer_forward_passes_buckets=None, prefill_delayer_wait_seconds_buckets=None, prefill_delayer_queue_min_ratio=None, prefill_delayer_max_delay_ms=None, min_free_slots_delay=None, enable_deterministic_inference=False, rl_on_policy_target=None, kv_canary='none', kv_canary_real_data='none', kv_canary_sweep_interval=0, enable_dynamic_batch_tokenizer=False, dynamic_batch_tokenizer_batch_size=32, dynamic_batch_tokenizer_batch_timeout=0.002, enable_tokenizer_batch_encode=False, disable_tokenizer_batch_decode=False, debug_tensor_dump_output_folder=None, debug_tensor_dump_layers=None, debug_tensor_dump_input_file=None, enable_memory_saver=False, enable_weights_cpu_backup=False, enable_draft_weights_cpu_backup=False, enable_custom_logit_processor=False, enable_return_hidden_states=False, return_hidden_states_mode=None, enable_return_routed_experts=False, enable_return_indexer_topk=False, disable_outlines_disk_cache=False, enable_mis=False, weight_cache_mode='off', weight_cache_socket=None, weight_cache_timeout=1800, forward_hooks=None, msprobe_dump_config=None)
+>>> Запускаю бенчмарки (run_id=p-code-v4-all-s43-v1)
+    .venv/bin/python    scripts/benchmarks/pavel/run_all_benchmarks.py    --benchmarks    aime26    hmmt26    imo_answerbench    --pipeline    code_agent    --prompt    conf/base/prompts/pavel/code-agent-v4.yml    --model    Qwen/Qwen3.5-9B    --base-url    http://127.0.0.1:8112/v1    --api-key    EMPTY    --seed    43    --max-tokens    65536    --concurrency    80    --max-repairs    5    --execution-timeout    10    --timeout    7200    --reasoning-parser    qwen3    --vllm-max-num-seqs    96    --vllm-max-model-len    131072
+2026-08-16T04:20:38+0300 INFO run_all_started run_id=p-code-v4-all-s43-v1 model=Qwen/Qwen3.5-9B benchmarks=run_aime26,run_hmmt26,run_imo_answerbench
+2026-08-16T04:20:38+0300 INFO benchmark_process_started script=run_aime26
+2026-08-16T04:20:43+0300 INFO run_started run_id=p-code-v4-all-s43-v1 model=Qwen/Qwen3.5-9B benchmark=AIME26
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-08-16T04:20:46+0300 INFO benchmark_started benchmark=AIME26 total=30 skipped=0 concurrency=80 output=/home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/results/runs/p-code-v4-all-s43-v1/aime26.jsonl
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=1
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=2
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=3
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=4
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=5
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=6
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=7
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=8
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=9
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=10
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=11
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=12
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=13
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=14
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=15
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=16
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=17
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=18
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=19
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=20
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=21
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=22
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=23
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=24
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=25
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=26
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=27
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=28
+2026-08-16T04:20:46+0300 INFO task_submitted benchmark=AIME26 task_id=29
+2026-08-16T04:20:47+0300 INFO task_submitted benchmark=AIME26 task_id=30
+2026-08-16T04:23:07+0300 INFO task_completed benchmark=AIME26 task_id=4 progress=1/30 latency=141.207 output_tokens=9306 finish_reason=None
+2026-08-16T04:23:11+0300 INFO task_completed benchmark=AIME26 task_id=3 progress=2/30 latency=144.674 output_tokens=9942 finish_reason=None
+2026-08-16T04:23:12+0300 INFO task_completed benchmark=AIME26 task_id=1 progress=3/30 latency=145.994 output_tokens=10073 finish_reason=None
+2026-08-16T04:23:15+0300 INFO task_completed benchmark=AIME26 task_id=7 progress=4/30 latency=149.121 output_tokens=10991 finish_reason=None
+2026-08-16T04:23:19+0300 INFO task_completed benchmark=AIME26 task_id=22 progress=5/30 latency=152.560 output_tokens=11617 finish_reason=None
+2026-08-16T04:23:21+0300 INFO task_completed benchmark=AIME26 task_id=20 progress=6/30 latency=154.622 output_tokens=12155 finish_reason=None
+2026-08-16T04:23:31+0300 INFO task_completed benchmark=AIME26 task_id=5 progress=7/30 latency=165.075 output_tokens=14047 finish_reason=None
+2026-08-16T04:23:31+0300 INFO task_completed benchmark=AIME26 task_id=2 progress=8/30 latency=165.434 output_tokens=14341 finish_reason=None
+2026-08-16T04:23:39+0300 INFO task_completed benchmark=AIME26 task_id=29 progress=9/30 latency=172.226 output_tokens=15328 finish_reason=None
+2026-08-16T04:23:43+0300 INFO task_completed benchmark=AIME26 task_id=30 progress=10/30 latency=176.818 output_tokens=16440 finish_reason=None
+2026-08-16T04:23:47+0300 INFO task_completed benchmark=AIME26 task_id=13 progress=11/30 latency=180.964 output_tokens=17557 finish_reason=None
+2026-08-16T04:23:48+0300 INFO task_completed benchmark=AIME26 task_id=6 progress=12/30 latency=182.269 output_tokens=17582 finish_reason=None
+2026-08-16T04:23:51+0300 INFO task_completed benchmark=AIME26 task_id=8 progress=13/30 latency=184.944 output_tokens=18794 finish_reason=None
+2026-08-16T04:23:52+0300 INFO task_completed benchmark=AIME26 task_id=12 progress=14/30 latency=185.901 output_tokens=18699 finish_reason=None
+2026-08-16T04:23:57+0300 INFO task_completed benchmark=AIME26 task_id=11 progress=15/30 latency=190.466 output_tokens=19121 finish_reason=None
+2026-08-16T04:24:00+0300 INFO task_completed benchmark=AIME26 task_id=25 progress=16/30 latency=193.727 output_tokens=20397 finish_reason=None
+2026-08-16T04:24:18+0300 INFO task_completed benchmark=AIME26 task_id=27 progress=17/30 latency=211.831 output_tokens=24235 finish_reason=None
+2026-08-16T04:24:19+0300 INFO task_completed benchmark=AIME26 task_id=19 progress=18/30 latency=212.570 output_tokens=23938 finish_reason=None
+2026-08-16T04:24:29+0300 INFO task_completed benchmark=AIME26 task_id=24 progress=19/30 latency=223.168 output_tokens=26742 finish_reason=None
+2026-08-16T04:24:42+0300 INFO task_completed benchmark=AIME26 task_id=23 progress=20/30 latency=235.773 output_tokens=30279 finish_reason=None
+2026-08-16T04:24:46+0300 INFO task_completed benchmark=AIME26 task_id=16 progress=21/30 latency=239.557 output_tokens=29945 finish_reason=None
+2026-08-16T04:24:54+0300 INFO task_completed benchmark=AIME26 task_id=10 progress=22/30 latency=248.250 output_tokens=32389 finish_reason=None
+2026-08-16T04:25:03+0300 INFO task_completed benchmark=AIME26 task_id=14 progress=23/30 latency=256.579 output_tokens=33824 finish_reason=None
+2026-08-16T04:25:20+0300 INFO task_completed benchmark=AIME26 task_id=18 progress=24/30 latency=273.866 output_tokens=36888 finish_reason=None
+2026-08-16T04:25:47+0300 INFO task_completed benchmark=AIME26 task_id=9 progress=25/30 latency=301.295 output_tokens=42885 finish_reason=None
+2026-08-16T04:26:06+0300 INFO task_completed benchmark=AIME26 task_id=26 progress=26/30 latency=319.696 output_tokens=46341 finish_reason=None
+2026-08-16T04:26:17+0300 INFO task_completed benchmark=AIME26 task_id=21 progress=27/30 latency=331.240 output_tokens=48249 finish_reason=None
+2026-08-16T04:26:20+0300 INFO task_completed benchmark=AIME26 task_id=17 progress=28/30 latency=333.437 output_tokens=49511 finish_reason=None
+2026-08-16T04:27:21+0300 INFO task_completed benchmark=AIME26 task_id=28 progress=29/30 latency=394.062 output_tokens=64017 finish_reason=None
+2026-08-16T04:27:24+0300 INFO task_completed benchmark=AIME26 task_id=15 progress=30/30 latency=398.311 output_tokens=64568 finish_reason=None
+2026-08-16T04:27:24+0300 INFO benchmark_finished benchmark=AIME26 status=completed successful=30 failed=0 remaining=0 wall_time=398.443 output=/home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/results/runs/p-code-v4-all-s43-v1/aime26.jsonl
+2026-08-16T04:27:27+0300 INFO benchmark_process_started script=run_hmmt26
+2026-08-16T04:27:32+0300 INFO run_started run_id=p-code-v4-all-s43-v1 model=Qwen/Qwen3.5-9B benchmark=HMMT26
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-08-16T04:27:35+0300 INFO benchmark_started benchmark=HMMT26 total=33 skipped=0 concurrency=80 output=/home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/results/runs/p-code-v4-all-s43-v1/hmmt26.jsonl
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=1
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=2
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=3
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=4
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=5
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=6
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=7
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=8
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=9
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=10
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=11
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=12
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=13
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=14
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=15
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=16
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=17
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=18
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=19
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=20
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=21
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=22
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=23
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=24
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=25
+2026-08-16T04:27:35+0300 INFO task_submitted benchmark=HMMT26 task_id=26
+2026-08-16T04:27:36+0300 INFO task_submitted benchmark=HMMT26 task_id=27
+2026-08-16T04:27:36+0300 INFO task_submitted benchmark=HMMT26 task_id=28
+2026-08-16T04:27:36+0300 INFO task_submitted benchmark=HMMT26 task_id=29
+2026-08-16T04:27:36+0300 INFO task_submitted benchmark=HMMT26 task_id=30
+2026-08-16T04:27:36+0300 INFO task_submitted benchmark=HMMT26 task_id=31
+2026-08-16T04:27:36+0300 INFO task_submitted benchmark=HMMT26 task_id=32
+2026-08-16T04:27:36+0300 INFO task_submitted benchmark=HMMT26 task_id=33
+2026-08-16T04:27:56+0300 INFO task_completed benchmark=HMMT26 task_id=3 progress=1/33 latency=21.076 output_tokens=3663 finish_reason=None
+2026-08-16T04:28:33+0300 INFO task_completed benchmark=HMMT26 task_id=1 progress=2/33 latency=58.386 output_tokens=11565 finish_reason=None
+2026-08-16T04:28:36+0300 INFO task_completed benchmark=HMMT26 task_id=11 progress=3/33 latency=60.324 output_tokens=11908 finish_reason=None
+2026-08-16T04:28:42+0300 INFO task_completed benchmark=HMMT26 task_id=21 progress=4/33 latency=67.161 output_tokens=13644 finish_reason=None
+2026-08-16T04:28:48+0300 INFO task_completed benchmark=HMMT26 task_id=4 progress=5/33 latency=72.591 output_tokens=14702 finish_reason=None
+2026-08-16T04:29:07+0300 INFO task_completed benchmark=HMMT26 task_id=23 progress=6/33 latency=91.257 output_tokens=18923 finish_reason=None
+2026-08-16T04:29:11+0300 INFO task_completed benchmark=HMMT26 task_id=24 progress=7/33 latency=95.490 output_tokens=19603 finish_reason=None
+2026-08-16T04:29:11+0300 INFO task_completed benchmark=HMMT26 task_id=13 progress=8/33 latency=96.286 output_tokens=19398 finish_reason=None
+2026-08-16T04:29:17+0300 INFO task_completed benchmark=HMMT26 task_id=14 progress=9/33 latency=101.747 output_tokens=20701 finish_reason=None
+2026-08-16T04:29:21+0300 INFO task_completed benchmark=HMMT26 task_id=27 progress=10/33 latency=105.786 output_tokens=21819 finish_reason=None
+2026-08-16T04:29:22+0300 INFO task_completed benchmark=HMMT26 task_id=6 progress=11/33 latency=107.039 output_tokens=22285 finish_reason=None
+2026-08-16T04:29:28+0300 INFO task_completed benchmark=HMMT26 task_id=12 progress=12/33 latency=113.267 output_tokens=22735 finish_reason=None
+2026-08-16T04:29:36+0300 INFO task_completed benchmark=HMMT26 task_id=33 progress=13/33 latency=120.342 output_tokens=24896 finish_reason=None
+2026-08-16T04:29:39+0300 INFO task_completed benchmark=HMMT26 task_id=22 progress=14/33 latency=123.434 output_tokens=25857 finish_reason=None
+2026-08-16T04:30:07+0300 INFO task_completed benchmark=HMMT26 task_id=30 progress=15/33 latency=150.897 output_tokens=32830 finish_reason=None
+2026-08-16T04:30:10+0300 INFO task_completed benchmark=HMMT26 task_id=15 progress=16/33 latency=155.182 output_tokens=33010 finish_reason=None
+2026-08-16T04:30:15+0300 INFO task_completed benchmark=HMMT26 task_id=9 progress=17/33 latency=159.673 output_tokens=34064 finish_reason=None
+2026-08-16T04:30:16+0300 INFO task_completed benchmark=HMMT26 task_id=16 progress=18/33 latency=160.507 output_tokens=34530 finish_reason=None
+2026-08-16T04:30:18+0300 INFO task_completed benchmark=HMMT26 task_id=28 progress=19/33 latency=161.924 output_tokens=34470 finish_reason=None
+2026-08-16T04:30:25+0300 INFO task_completed benchmark=HMMT26 task_id=8 progress=20/33 latency=170.220 output_tokens=37082 finish_reason=None
+2026-08-16T04:30:42+0300 INFO task_completed benchmark=HMMT26 task_id=31 progress=21/33 latency=186.615 output_tokens=38563 finish_reason=None
+2026-08-16T04:30:42+0300 INFO task_completed benchmark=HMMT26 task_id=5 progress=22/33 latency=187.283 output_tokens=40905 finish_reason=None
+2026-08-16T04:30:47+0300 INFO task_completed benchmark=HMMT26 task_id=25 progress=23/33 latency=191.525 output_tokens=41093 finish_reason=None
+2026-08-16T04:30:49+0300 INFO task_completed benchmark=HMMT26 task_id=10 progress=24/33 latency=193.584 output_tokens=42172 finish_reason=None
+2026-08-16T04:30:55+0300 INFO task_completed benchmark=HMMT26 task_id=32 progress=25/33 latency=199.781 output_tokens=43570 finish_reason=None
+2026-08-16T04:30:58+0300 INFO task_completed benchmark=HMMT26 task_id=18 progress=26/33 latency=202.665 output_tokens=43928 finish_reason=None
+2026-08-16T04:31:17+0300 INFO task_completed benchmark=HMMT26 task_id=19 progress=27/33 latency=222.207 output_tokens=48737 finish_reason=None
+2026-08-16T04:31:31+0300 INFO task_completed benchmark=HMMT26 task_id=20 progress=28/33 latency=235.566 output_tokens=49264 finish_reason=None
+2026-08-16T04:31:31+0300 INFO task_completed benchmark=HMMT26 task_id=7 progress=29/33 latency=235.839 output_tokens=50810 finish_reason=None
+2026-08-16T04:31:44+0300 INFO task_completed benchmark=HMMT26 task_id=29 progress=30/33 latency=248.290 output_tokens=55089 finish_reason=None
+2026-08-16T04:31:47+0300 INFO task_completed benchmark=HMMT26 task_id=2 progress=31/33 latency=251.992 output_tokens=48007 finish_reason=None
+2026-08-16T04:32:27+0300 INFO task_completed benchmark=HMMT26 task_id=17 progress=32/33 latency=291.713 output_tokens=63810 finish_reason=None
+2026-08-16T04:32:54+0300 INFO task_completed benchmark=HMMT26 task_id=26 progress=33/33 latency=318.311 output_tokens=62938 finish_reason=None
+2026-08-16T04:32:54+0300 INFO benchmark_finished benchmark=HMMT26 status=completed successful=33 failed=0 remaining=0 wall_time=318.506 output=/home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/results/runs/p-code-v4-all-s43-v1/hmmt26.jsonl
+2026-08-16T04:32:55+0300 INFO benchmark_process_started script=run_imo_answerbench
+2026-08-16T04:32:59+0300 INFO run_started run_id=p-code-v4-all-s43-v1 model=Qwen/Qwen3.5-9B benchmark=IMOAnswerBench
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Using the latest cached version of the dataset since OpenEvals/IMO-AnswerBench couldn't be found on the Hugging Face Hub
+Found the latest cached dataset configuration 'default' at /home/ykapushev/mathagent/cache/huggingface/datasets/OpenEvals___imo-answer_bench/default/0.0.0/c5ca5519eff2921c18f365385f858715f92d0ff0 (last modified on Wed Aug 12 14:38:38 2026).
+2026-08-16T04:33:02+0300 INFO benchmark_started benchmark=IMOAnswerBench total=400 skipped=0 concurrency=80 output=/home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/results/runs/p-code-v4-all-s43-v1/imo_answerbench.jsonl
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-001
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-002
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-003
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-004
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-005
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-006
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-007
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-008
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-009
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-010
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-011
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-012
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-013
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-014
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-015
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-016
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-017
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-018
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-019
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-020
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-021
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-022
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-023
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-024
+2026-08-16T04:33:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-025
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-026
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-027
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-028
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-029
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-030
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-031
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-032
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-033
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-034
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-035
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-036
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-037
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-038
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-039
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-040
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-041
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-042
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-043
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-044
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-045
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-046
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-047
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-048
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-049
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-050
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-051
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-052
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-053
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-054
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-055
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-056
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-057
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-058
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-059
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-060
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-061
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-062
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-063
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-064
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-065
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-066
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-067
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-068
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-069
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-070
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-071
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-072
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-073
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-074
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-075
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-076
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-077
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-078
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-079
+2026-08-16T04:33:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-080
+2026-08-16T04:33:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-071 progress=1/400 latency=21.562 output_tokens=2193 finish_reason=None
+2026-08-16T04:33:25+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-081
+2026-08-16T04:33:27+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-041 progress=2/400 latency=24.027 output_tokens=2583 finish_reason=None
+2026-08-16T04:33:27+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-082
+2026-08-16T04:34:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-018 progress=3/400 latency=80.239 output_tokens=10210 finish_reason=None
+2026-08-16T04:34:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-083
+2026-08-16T04:34:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-083 progress=4/400 latency=31.177 output_tokens=3699 finish_reason=None
+2026-08-16T04:34:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-084
+2026-08-16T04:35:00+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-076 progress=5/400 latency=116.999 output_tokens=14566 finish_reason=None
+2026-08-16T04:35:00+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-085
+2026-08-16T04:35:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-054 progress=6/400 latency=121.165 output_tokens=14798 finish_reason=None
+2026-08-16T04:35:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-086
+2026-08-16T04:35:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-006 progress=7/400 latency=128.943 output_tokens=15928 finish_reason=None
+2026-08-16T04:35:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-087
+2026-08-16T04:35:18+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-077 progress=8/400 latency=134.466 output_tokens=16265 finish_reason=None
+2026-08-16T04:35:18+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-088
+2026-08-16T04:35:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-025 progress=9/400 latency=142.283 output_tokens=17383 finish_reason=None
+2026-08-16T04:35:25+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-089
+2026-08-16T04:35:26+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-034 progress=10/400 latency=143.058 output_tokens=17649 finish_reason=None
+2026-08-16T04:35:26+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-090
+2026-08-16T04:35:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-079 progress=11/400 latency=145.065 output_tokens=17360 finish_reason=None
+2026-08-16T04:35:28+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-091
+2026-08-16T04:35:38+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-049 progress=12/400 latency=155.166 output_tokens=19364 finish_reason=None
+2026-08-16T04:35:38+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-092
+2026-08-16T04:35:47+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-070 progress=13/400 latency=164.309 output_tokens=20076 finish_reason=None
+2026-08-16T04:35:47+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-093
+2026-08-16T04:35:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-063 progress=14/400 latency=167.385 output_tokens=20670 finish_reason=None
+2026-08-16T04:35:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-094
+2026-08-16T04:35:51+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-080 progress=15/400 latency=167.622 output_tokens=18939 finish_reason=None
+2026-08-16T04:35:51+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-095
+2026-08-16T04:35:51+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-047 progress=16/400 latency=167.948 output_tokens=20280 finish_reason=None
+2026-08-16T04:35:51+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-096
+2026-08-16T04:35:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-039 progress=17/400 latency=169.494 output_tokens=20567 finish_reason=None
+2026-08-16T04:35:52+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-097
+2026-08-16T04:35:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-044 progress=18/400 latency=171.331 output_tokens=20706 finish_reason=None
+2026-08-16T04:35:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-098
+2026-08-16T04:35:55+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-020 progress=19/400 latency=172.695 output_tokens=21089 finish_reason=None
+2026-08-16T04:35:55+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-099
+2026-08-16T04:35:56+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-007 progress=20/400 latency=173.131 output_tokens=21243 finish_reason=None
+2026-08-16T04:35:56+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-algebra-100
+2026-08-16T04:35:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-048 progress=21/400 latency=174.804 output_tokens=20979 finish_reason=None
+2026-08-16T04:35:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-001
+2026-08-16T04:36:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-019 progress=22/400 latency=181.223 output_tokens=21943 finish_reason=None
+2026-08-16T04:36:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-002
+2026-08-16T04:36:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-073 progress=23/400 latency=188.262 output_tokens=22818 finish_reason=None
+2026-08-16T04:36:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-003
+2026-08-16T04:36:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-082 progress=24/400 latency=181.235 output_tokens=21204 finish_reason=None
+2026-08-16T04:36:28+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-004
+2026-08-16T04:36:32+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-036 progress=25/400 latency=209.415 output_tokens=25035 finish_reason=None
+2026-08-16T04:36:32+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-005
+2026-08-16T04:36:33+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-014 progress=26/400 latency=210.674 output_tokens=24472 finish_reason=None
+2026-08-16T04:36:33+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-006
+2026-08-16T04:36:36+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-074 progress=27/400 latency=212.780 output_tokens=25089 finish_reason=None
+2026-08-16T04:36:36+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-007
+2026-08-16T04:36:38+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-061 progress=28/400 latency=214.753 output_tokens=24901 finish_reason=None
+2026-08-16T04:36:38+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-008
+2026-08-16T04:36:40+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-043 progress=29/400 latency=216.743 output_tokens=25268 finish_reason=None
+2026-08-16T04:36:40+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-009
+2026-08-16T04:36:43+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-021 progress=30/400 latency=220.642 output_tokens=25469 finish_reason=None
+2026-08-16T04:36:43+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-010
+2026-08-16T04:36:44+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-057 progress=31/400 latency=221.068 output_tokens=25393 finish_reason=None
+2026-08-16T04:36:44+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-011
+2026-08-16T04:36:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-013 progress=32/400 latency=223.157 output_tokens=26091 finish_reason=None
+2026-08-16T04:36:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-012
+2026-08-16T04:36:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-037 progress=33/400 latency=230.351 output_tokens=26412 finish_reason=None
+2026-08-16T04:36:53+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-013
+2026-08-16T04:36:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-067 progress=34/400 latency=235.107 output_tokens=27078 finish_reason=None
+2026-08-16T04:36:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-014
+2026-08-16T04:37:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-062 progress=35/400 latency=246.397 output_tokens=28257 finish_reason=None
+2026-08-16T04:37:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-015
+2026-08-16T04:37:21+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-046 progress=36/400 latency=258.537 output_tokens=30247 finish_reason=None
+2026-08-16T04:37:21+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-016
+2026-08-16T04:37:22+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-069 progress=37/400 latency=259.121 output_tokens=29779 finish_reason=None
+2026-08-16T04:37:22+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-017
+2026-08-16T04:37:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-035 progress=38/400 latency=260.440 output_tokens=29466 finish_reason=None
+2026-08-16T04:37:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-018
+2026-08-16T04:37:26+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-058 progress=39/400 latency=263.444 output_tokens=30206 finish_reason=None
+2026-08-16T04:37:26+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-019
+2026-08-16T04:37:29+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-024 progress=40/400 latency=266.100 output_tokens=30814 finish_reason=None
+2026-08-16T04:37:29+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-020
+2026-08-16T04:37:34+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-060 progress=41/400 latency=270.784 output_tokens=31466 finish_reason=None
+2026-08-16T04:37:34+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-021
+2026-08-16T04:37:37+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-022 progress=42/400 latency=274.681 output_tokens=31523 finish_reason=None
+2026-08-16T04:37:37+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-022
+2026-08-16T04:37:44+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-065 progress=43/400 latency=280.969 output_tokens=32579 finish_reason=None
+2026-08-16T04:37:44+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-023
+2026-08-16T04:37:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-009 progress=44/400 latency=287.416 output_tokens=33521 finish_reason=None
+2026-08-16T04:37:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-024
+2026-08-16T04:37:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-052 progress=45/400 latency=288.720 output_tokens=33454 finish_reason=None
+2026-08-16T04:37:52+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-025
+2026-08-16T04:37:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-088 progress=46/400 latency=160.220 output_tokens=16778 finish_reason=None
+2026-08-16T04:37:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-026
+2026-08-16T04:38:08+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-051 progress=47/400 latency=305.070 output_tokens=32898 finish_reason=None
+2026-08-16T04:38:08+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-027
+2026-08-16T04:38:18+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-045 progress=48/400 latency=314.943 output_tokens=36631 finish_reason=None
+2026-08-16T04:38:18+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-028
+2026-08-16T04:38:20+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-006 progress=49/400 latency=107.090 output_tokens=11147 finish_reason=None
+2026-08-16T04:38:20+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-029
+2026-08-16T04:38:21+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-068 progress=50/400 latency=317.520 output_tokens=35997 finish_reason=None
+2026-08-16T04:38:21+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-030
+2026-08-16T04:38:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-040 progress=51/400 latency=320.376 output_tokens=37088 finish_reason=None
+2026-08-16T04:38:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-031
+2026-08-16T04:38:29+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-002 progress=52/400 latency=145.197 output_tokens=15175 finish_reason=None
+2026-08-16T04:38:29+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-032
+2026-08-16T04:38:29+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-020 progress=53/400 latency=60.305 output_tokens=6244 finish_reason=None
+2026-08-16T04:38:29+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-033
+2026-08-16T04:38:31+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-010 progress=54/400 latency=328.187 output_tokens=36685 finish_reason=None
+2026-08-16T04:38:31+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-034
+2026-08-16T04:38:31+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-003 progress=55/400 latency=328.462 output_tokens=37635 finish_reason=None
+2026-08-16T04:38:31+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-035
+2026-08-16T04:38:33+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-011 progress=56/400 latency=331.050 output_tokens=37377 finish_reason=None
+2026-08-16T04:38:33+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-036
+2026-08-16T04:38:38+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-086 progress=57/400 latency=213.653 output_tokens=22549 finish_reason=None
+2026-08-16T04:38:38+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-037
+2026-08-16T04:38:38+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-008 progress=58/400 latency=335.839 output_tokens=37991 finish_reason=None
+2026-08-16T04:38:38+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-038
+2026-08-16T04:38:42+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-072 progress=59/400 latency=339.226 output_tokens=38310 finish_reason=None
+2026-08-16T04:38:42+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-039
+2026-08-16T04:38:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-005 progress=60/400 latency=343.383 output_tokens=37785 finish_reason=None
+2026-08-16T04:38:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-040
+2026-08-16T04:38:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-087 progress=61/400 latency=218.480 output_tokens=23172 finish_reason=None
+2026-08-16T04:38:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-041
+2026-08-16T04:38:51+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-005 progress=62/400 latency=138.910 output_tokens=14784 finish_reason=None
+2026-08-16T04:38:51+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-042
+2026-08-16T04:38:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-095 progress=63/400 latency=183.486 output_tokens=19055 finish_reason=None
+2026-08-16T04:38:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-043
+2026-08-16T04:38:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-023 progress=64/400 latency=355.372 output_tokens=39397 finish_reason=None
+2026-08-16T04:38:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-044
+2026-08-16T04:38:59+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-029 progress=65/400 latency=356.174 output_tokens=39946 finish_reason=None
+2026-08-16T04:38:59+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-045
+2026-08-16T04:39:00+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-001 progress=66/400 latency=357.557 output_tokens=38499 finish_reason=None
+2026-08-16T04:39:00+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-046
+2026-08-16T04:39:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-029 progress=67/400 latency=50.696 output_tokens=4905 finish_reason=None
+2026-08-16T04:39:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-047
+2026-08-16T04:39:13+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-008 progress=68/400 latency=154.800 output_tokens=15954 finish_reason=None
+2026-08-16T04:39:13+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-048
+2026-08-16T04:39:15+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-053 progress=69/400 latency=372.418 output_tokens=41568 finish_reason=None
+2026-08-16T04:39:15+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-049
+2026-08-16T04:39:17+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-027 progress=70/400 latency=373.807 output_tokens=42319 finish_reason=None
+2026-08-16T04:39:17+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-050
+2026-08-16T04:39:24+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-078 progress=71/400 latency=380.867 output_tokens=43664 finish_reason=None
+2026-08-16T04:39:24+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-051
+2026-08-16T04:39:24+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-099 progress=72/400 latency=209.077 output_tokens=22244 finish_reason=None
+2026-08-16T04:39:24+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-052
+2026-08-16T04:39:29+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-059 progress=73/400 latency=385.802 output_tokens=44036 finish_reason=None
+2026-08-16T04:39:29+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-053
+2026-08-16T04:39:33+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-094 progress=74/400 latency=222.912 output_tokens=23150 finish_reason=None
+2026-08-16T04:39:33+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-054
+2026-08-16T04:39:43+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-028 progress=75/400 latency=400.596 output_tokens=44835 finish_reason=None
+2026-08-16T04:39:43+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-055
+2026-08-16T04:39:44+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-004 progress=76/400 latency=195.737 output_tokens=20480 finish_reason=None
+2026-08-16T04:39:44+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-056
+2026-08-16T04:39:44+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-089 progress=77/400 latency=259.487 output_tokens=27465 finish_reason=None
+2026-08-16T04:39:44+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-057
+2026-08-16T04:39:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-002 progress=78/400 latency=403.344 output_tokens=43715 finish_reason=None
+2026-08-16T04:39:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-058
+2026-08-16T04:39:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-075 progress=79/400 latency=402.980 output_tokens=45990 finish_reason=None
+2026-08-16T04:39:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-059
+2026-08-16T04:39:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-096 progress=80/400 latency=243.011 output_tokens=25515 finish_reason=None
+2026-08-16T04:39:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-060
+2026-08-16T04:39:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-038 progress=81/400 latency=411.041 output_tokens=45797 finish_reason=None
+2026-08-16T04:39:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-061
+2026-08-16T04:39:56+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-003 progress=82/400 latency=224.948 output_tokens=23186 finish_reason=None
+2026-08-16T04:39:56+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-062
+2026-08-16T04:40:01+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-031 progress=83/400 latency=418.133 output_tokens=46163 finish_reason=None
+2026-08-16T04:40:01+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-063
+2026-08-16T04:40:12+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-085 progress=84/400 latency=311.463 output_tokens=32821 finish_reason=None
+2026-08-16T04:40:12+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-064
+2026-08-16T04:40:14+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-084 progress=85/400 latency=320.137 output_tokens=33987 finish_reason=None
+2026-08-16T04:40:14+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-065
+2026-08-16T04:40:19+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-016 progress=86/400 latency=436.153 output_tokens=48230 finish_reason=None
+2026-08-16T04:40:19+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-066
+2026-08-16T04:40:20+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-100 progress=87/400 latency=264.344 output_tokens=27338 finish_reason=None
+2026-08-16T04:40:20+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-067
+2026-08-16T04:40:24+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-091 progress=88/400 latency=295.554 output_tokens=31826 finish_reason=None
+2026-08-16T04:40:24+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-068
+2026-08-16T04:40:26+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-066 progress=89/400 latency=443.335 output_tokens=49402 finish_reason=None
+2026-08-16T04:40:26+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-069
+2026-08-16T04:40:37+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-081 progress=90/400 latency=432.455 output_tokens=49619 finish_reason=None
+2026-08-16T04:40:37+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-070
+2026-08-16T04:40:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-097 progress=91/400 latency=293.822 output_tokens=31828 finish_reason=None
+2026-08-16T04:40:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-071
+2026-08-16T04:40:48+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-015 progress=92/400 latency=465.195 output_tokens=52225 finish_reason=None
+2026-08-16T04:40:48+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-072
+2026-08-16T04:40:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-037 progress=93/400 latency=135.186 output_tokens=13714 finish_reason=None
+2026-08-16T04:40:53+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-073
+2026-08-16T04:40:55+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-024 progress=94/400 latency=185.461 output_tokens=19606 finish_reason=None
+2026-08-16T04:40:55+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-074
+2026-08-16T04:40:56+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-064 progress=95/400 latency=472.875 output_tokens=53128 finish_reason=None
+2026-08-16T04:40:56+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-075
+2026-08-16T04:40:59+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-007 progress=96/400 latency=262.811 output_tokens=27261 finish_reason=None
+2026-08-16T04:40:59+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-076
+2026-08-16T04:41:26+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-050 progress=97/400 latency=503.467 output_tokens=55463 finish_reason=None
+2026-08-16T04:41:26+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-077
+2026-08-16T04:41:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-047 progress=98/400 latency=155.319 output_tokens=16272 finish_reason=None
+2026-08-16T04:41:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-078
+2026-08-16T04:41:48+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-012 progress=99/400 latency=302.237 output_tokens=31548 finish_reason=None
+2026-08-16T04:41:48+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-079
+2026-08-16T04:41:48+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-042 progress=100/400 latency=525.204 output_tokens=57793 finish_reason=None
+2026-08-16T04:41:48+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-080
+2026-08-16T04:41:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-053 progress=101/400 latency=143.297 output_tokens=14860 finish_reason=None
+2026-08-16T04:41:52+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-081
+2026-08-16T04:41:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-045 progress=102/400 latency=174.116 output_tokens=17965 finish_reason=None
+2026-08-16T04:41:53+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-082
+2026-08-16T04:41:59+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-093 progress=103/400 latency=372.125 output_tokens=38620 finish_reason=None
+2026-08-16T04:41:59+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-083
+2026-08-16T04:42:00+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-004 progress=104/400 latency=537.663 output_tokens=59259 finish_reason=None
+2026-08-16T04:42:00+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-084
+2026-08-16T04:42:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-021 progress=105/400 latency=275.156 output_tokens=28975 finish_reason=None
+2026-08-16T04:42:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-085
+2026-08-16T04:42:19+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-012 progress=106/400 latency=556.959 output_tokens=64114 finish_reason=None
+2026-08-16T04:42:19+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-086
+2026-08-16T04:42:20+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-017 progress=107/400 latency=557.233 output_tokens=62277 finish_reason=None
+2026-08-16T04:42:20+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-087
+2026-08-16T04:42:21+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-032 progress=108/400 latency=557.823 output_tokens=61657 finish_reason=None
+2026-08-16T04:42:21+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-088
+2026-08-16T04:42:24+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-052 progress=109/400 latency=179.728 output_tokens=18489 finish_reason=None
+2026-08-16T04:42:24+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-089
+2026-08-16T04:42:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-036 progress=110/400 latency=231.325 output_tokens=23588 finish_reason=None
+2026-08-16T04:42:25+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-090
+2026-08-16T04:42:35+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-038 progress=111/400 latency=236.683 output_tokens=24855 finish_reason=None
+2026-08-16T04:42:35+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-091
+2026-08-16T04:42:43+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-063 progress=112/400 latency=161.827 output_tokens=16384 finish_reason=None
+2026-08-16T04:42:43+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-092
+2026-08-16T04:42:43+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-048 progress=113/400 latency=210.506 output_tokens=22371 finish_reason=None
+2026-08-16T04:42:43+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-093
+2026-08-16T04:42:43+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-055 progress=114/400 latency=580.240 output_tokens=63701 finish_reason=None
+2026-08-16T04:42:43+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-094
+2026-08-16T04:42:47+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-043 progress=115/400 latency=232.764 output_tokens=24086 finish_reason=None
+2026-08-16T04:42:47+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-095
+2026-08-16T04:42:47+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-011 progress=116/400 latency=363.453 output_tokens=38434 finish_reason=None
+2026-08-16T04:42:47+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-096
+2026-08-16T04:42:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-013 progress=117/400 latency=360.862 output_tokens=37690 finish_reason=None
+2026-08-16T04:42:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-097
+2026-08-16T04:42:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-030 progress=118/400 latency=591.302 output_tokens=63428 finish_reason=None
+2026-08-16T04:42:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-098
+2026-08-16T04:42:56+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-070 progress=119/400 latency=138.790 output_tokens=13646 finish_reason=None
+2026-08-16T04:42:56+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-099
+2026-08-16T04:43:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-019 progress=120/400 latency=337.558 output_tokens=35254 finish_reason=None
+2026-08-16T04:43:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-100
+2026-08-16T04:43:05+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-009 progress=121/400 latency=385.630 output_tokens=39918 finish_reason=None
+2026-08-16T04:43:05+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-001
+2026-08-16T04:43:10+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-010 progress=122/400 latency=387.236 output_tokens=37742 finish_reason=None
+2026-08-16T04:43:10+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-002
+2026-08-16T04:43:19+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-056 progress=123/400 latency=616.376 output_tokens=67439 finish_reason=None
+2026-08-16T04:43:19+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-003
+2026-08-16T04:43:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-041 progress=124/400 latency=275.110 output_tokens=27641 finish_reason=None
+2026-08-16T04:43:25+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-004
+2026-08-16T04:43:32+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-023 progress=125/400 latency=348.050 output_tokens=36018 finish_reason=None
+2026-08-16T04:43:32+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-005
+2026-08-16T04:43:36+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-033 progress=126/400 latency=633.585 output_tokens=66529 finish_reason=None
+2026-08-16T04:43:36+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-006
+2026-08-16T04:43:47+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-028 progress=127/400 latency=329.272 output_tokens=34863 finish_reason=None
+2026-08-16T04:43:47+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-007
+2026-08-16T04:43:48+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-058 progress=128/400 latency=242.584 output_tokens=24807 finish_reason=None
+2026-08-16T04:43:48+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-008
+2026-08-16T04:43:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-087 progress=129/400 latency=93.728 output_tokens=8919 finish_reason=None
+2026-08-16T04:43:53+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-009
+2026-08-16T04:43:57+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-091 progress=130/400 latency=82.548 output_tokens=8124 finish_reason=None
+2026-08-16T04:43:57+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-010
+2026-08-16T04:44:00+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-018 progress=131/400 latency=396.954 output_tokens=40894 finish_reason=None
+2026-08-16T04:44:00+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-011
+2026-08-16T04:44:01+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-001 progress=132/400 latency=482.862 output_tokens=50036 finish_reason=None
+2026-08-16T04:44:01+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-012
+2026-08-16T04:44:05+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-035 progress=133/400 latency=334.195 output_tokens=34127 finish_reason=None
+2026-08-16T04:44:05+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-013
+2026-08-16T04:44:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-046 progress=134/400 latency=311.150 output_tokens=32265 finish_reason=None
+2026-08-16T04:44:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-014
+2026-08-16T04:44:33+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-050 progress=135/400 latency=316.033 output_tokens=32185 finish_reason=None
+2026-08-16T04:44:33+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-015
+2026-08-16T04:44:33+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-066 progress=136/400 latency=254.911 output_tokens=25919 finish_reason=None
+2026-08-16T04:44:33+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-016
+2026-08-16T04:44:34+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-040 progress=137/400 latency=348.520 output_tokens=35228 finish_reason=None
+2026-08-16T04:44:34+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-017
+2026-08-16T04:44:39+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-025 progress=138/400 latency=406.909 output_tokens=41867 finish_reason=None
+2026-08-16T04:44:39+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-018
+2026-08-16T04:44:49+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-065 progress=139/400 latency=274.475 output_tokens=27926 finish_reason=None
+2026-08-16T04:44:49+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-019
+2026-08-16T04:44:49+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-033 progress=140/400 latency=379.887 output_tokens=38955 finish_reason=None
+2026-08-16T04:44:49+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-020
+2026-08-16T04:45:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-059 progress=141/400 latency=317.510 output_tokens=32790 finish_reason=None
+2026-08-16T04:45:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-021
+2026-08-16T04:45:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-034 progress=142/400 latency=393.659 output_tokens=40580 finish_reason=None
+2026-08-16T04:45:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-022
+2026-08-16T04:45:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-092 progress=143/400 latency=148.545 output_tokens=15209 finish_reason=None
+2026-08-16T04:45:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-023
+2026-08-16T04:45:12+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-098 progress=144/400 latency=137.822 output_tokens=13807 finish_reason=None
+2026-08-16T04:45:12+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-024
+2026-08-16T04:45:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-095 progress=145/400 latency=161.008 output_tokens=16441 finish_reason=None
+2026-08-16T04:45:28+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-025
+2026-08-16T04:45:32+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-073 progress=146/400 latency=278.783 output_tokens=28568 finish_reason=None
+2026-08-16T04:45:32+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-026
+2026-08-16T04:45:37+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-064 progress=147/400 latency=325.947 output_tokens=33664 finish_reason=None
+2026-08-16T04:45:37+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-027
+2026-08-16T04:45:38+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-039 progress=148/400 latency=416.208 output_tokens=42824 finish_reason=None
+2026-08-16T04:45:38+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-028
+2026-08-16T04:45:41+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-079 progress=149/400 latency=233.051 output_tokens=23307 finish_reason=None
+2026-08-16T04:45:41+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-029
+2026-08-16T04:45:49+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-056 progress=150/400 latency=365.276 output_tokens=37438 finish_reason=None
+2026-08-16T04:45:49+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-030
+2026-08-16T04:45:51+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-088 progress=151/400 latency=210.066 output_tokens=21037 finish_reason=None
+2026-08-16T04:45:51+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-031
+2026-08-16T04:45:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-098 progress=152/400 latency=599.556 output_tokens=63526 finish_reason=None
+2026-08-16T04:45:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-032
+2026-08-16T04:45:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-002 progress=153/400 latency=163.765 output_tokens=17039 finish_reason=None
+2026-08-16T04:45:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-033
+2026-08-16T04:46:05+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-015 progress=154/400 latency=535.976 output_tokens=53726 finish_reason=None
+2026-08-16T04:46:05+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-034
+2026-08-16T04:46:07+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-049 progress=155/400 latency=411.295 output_tokens=41506 finish_reason=None
+2026-08-16T04:46:07+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-035
+2026-08-16T04:46:07+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-051 progress=156/400 latency=403.190 output_tokens=41174 finish_reason=None
+2026-08-16T04:46:07+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-036
+2026-08-16T04:46:08+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-089 progress=157/400 latency=223.741 output_tokens=22191 finish_reason=None
+2026-08-16T04:46:08+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-037
+2026-08-16T04:46:13+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-081 progress=158/400 latency=261.333 output_tokens=25988 finish_reason=None
+2026-08-16T04:46:13+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-038
+2026-08-16T04:46:17+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-055 progress=159/400 latency=393.265 output_tokens=39189 finish_reason=None
+2026-08-16T04:46:17+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-039
+2026-08-16T04:46:21+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-036 progress=160/400 latency=14.062 output_tokens=1399 finish_reason=None
+2026-08-16T04:46:21+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-040
+2026-08-16T04:46:22+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-032 progress=161/400 latency=27.895 output_tokens=2833 finish_reason=None
+2026-08-16T04:46:22+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-041
+2026-08-16T04:46:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-006 progress=162/400 latency=166.917 output_tokens=17100 finish_reason=None
+2026-08-16T04:46:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-042
+2026-08-16T04:46:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-075 progress=163/400 latency=327.499 output_tokens=32900 finish_reason=None
+2026-08-16T04:46:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-043
+2026-08-16T04:46:29+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-085 progress=164/400 latency=260.458 output_tokens=25667 finish_reason=None
+2026-08-16T04:46:29+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-044
+2026-08-16T04:46:30+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-008 progress=165/400 latency=162.148 output_tokens=16227 finish_reason=None
+2026-08-16T04:46:30+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-045
+2026-08-16T04:46:32+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-017 progress=166/400 latency=549.512 output_tokens=57489 finish_reason=None
+2026-08-16T04:46:32+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-046
+2026-08-16T04:46:33+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-044 progress=167/400 latency=455.212 output_tokens=46038 finish_reason=None
+2026-08-16T04:46:33+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-047
+2026-08-16T04:46:37+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-016 progress=168/400 latency=556.018 output_tokens=56473 finish_reason=None
+2026-08-16T04:46:37+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-048
+2026-08-16T04:46:47+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-027 progress=169/400 latency=69.619 output_tokens=6660 finish_reason=None
+2026-08-16T04:46:47+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-049
+2026-08-16T04:46:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-097 progress=170/400 latency=235.669 output_tokens=22950 finish_reason=None
+2026-08-16T04:46:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-050
+2026-08-16T04:46:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-083 progress=171/400 latency=293.609 output_tokens=29574 finish_reason=None
+2026-08-16T04:46:53+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-051
+2026-08-16T04:46:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-061 progress=172/400 latency=424.257 output_tokens=44648 finish_reason=None
+2026-08-16T04:46:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-052
+2026-08-16T04:47:05+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-072 progress=173/400 latency=377.454 output_tokens=38748 finish_reason=None
+2026-08-16T04:47:05+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-053
+2026-08-16T04:47:10+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-076 progress=174/400 latency=371.197 output_tokens=37776 finish_reason=None
+2026-08-16T04:47:10+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-054
+2026-08-16T04:47:10+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-090 progress=175/400 latency=703.970 output_tokens=70138 finish_reason=None
+2026-08-16T04:47:10+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-055
+2026-08-16T04:47:17+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-080 progress=176/400 latency=329.310 output_tokens=33447 finish_reason=None
+2026-08-16T04:47:17+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-056
+2026-08-16T04:47:19+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-092 progress=177/400 latency=700.567 output_tokens=73090 finish_reason=None
+2026-08-16T04:47:19+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-057
+2026-08-16T04:47:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-030 progress=178/400 latency=542.268 output_tokens=54809 finish_reason=None
+2026-08-16T04:47:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-058
+2026-08-16T04:47:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-014 progress=179/400 latency=624.810 output_tokens=64128 finish_reason=None
+2026-08-16T04:47:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-059
+2026-08-16T04:47:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-027 progress=180/400 latency=557.069 output_tokens=56830 finish_reason=None
+2026-08-16T04:47:25+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-060
+2026-08-16T04:47:26+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-078 progress=181/400 latency=339.788 output_tokens=34154 finish_reason=None
+2026-08-16T04:47:26+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-061
+2026-08-16T04:47:27+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-007 progress=182/400 latency=220.119 output_tokens=22070 finish_reason=None
+2026-08-16T04:47:27+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-062
+2026-08-16T04:47:40+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-096 progress=183/400 latency=292.061 output_tokens=29018 finish_reason=None
+2026-08-16T04:47:40+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-063
+2026-08-16T04:47:40+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-033 progress=184/400 latency=105.470 output_tokens=10636 finish_reason=None
+2026-08-16T04:47:40+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-064
+2026-08-16T04:47:43+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-026 progress=185/400 latency=584.896 output_tokens=61168 finish_reason=None
+2026-08-16T04:47:43+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-065
+2026-08-16T04:47:55+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-022 progress=186/400 latency=618.263 output_tokens=63463 finish_reason=None
+2026-08-16T04:47:55+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-066
+2026-08-16T04:47:59+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-014 progress=187/400 latency=228.275 output_tokens=23365 finish_reason=None
+2026-08-16T04:47:59+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-067
+2026-08-16T04:48:00+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-084 progress=188/400 latency=359.518 output_tokens=35321 finish_reason=None
+2026-08-16T04:48:00+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-068
+2026-08-16T04:48:00+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-049 progress=189/400 latency=72.993 output_tokens=6904 finish_reason=None
+2026-08-16T04:48:00+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-069
+2026-08-16T04:48:03+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-algebra-026 progress=190/400 latency=900.160 output_tokens=86955 finish_reason=None
+2026-08-16T04:48:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-070
+2026-08-16T04:48:16+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-042 progress=191/400 latency=565.148 output_tokens=58551 finish_reason=None
+2026-08-16T04:48:16+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-071
+2026-08-16T04:48:21+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-074 progress=192/400 latency=445.282 output_tokens=45112 finish_reason=None
+2026-08-16T04:48:21+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-072
+2026-08-16T04:48:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-054 progress=193/400 latency=532.105 output_tokens=52483 finish_reason=None
+2026-08-16T04:48:25+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-073
+2026-08-16T04:48:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-067 progress=194/400 latency=488.029 output_tokens=48315 finish_reason=None
+2026-08-16T04:48:28+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-074
+2026-08-16T04:48:37+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-015 progress=195/400 latency=243.956 output_tokens=24770 finish_reason=None
+2026-08-16T04:48:37+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-075
+2026-08-16T04:48:42+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-038 progress=196/400 latency=148.136 output_tokens=14911 finish_reason=None
+2026-08-16T04:48:42+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-076
+2026-08-16T04:48:42+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-071 progress=197/400 latency=475.736 output_tokens=47704 finish_reason=None
+2026-08-16T04:48:42+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-077
+2026-08-16T04:48:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-034 progress=198/400 latency=164.781 output_tokens=17071 finish_reason=None
+2026-08-16T04:48:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-078
+2026-08-16T04:48:56+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-068 progress=199/400 latency=512.125 output_tokens=51842 finish_reason=None
+2026-08-16T04:48:56+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-079
+2026-08-16T04:48:56+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-032 progress=200/400 latency=627.241 output_tokens=63554 finish_reason=None
+2026-08-16T04:48:56+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-080
+2026-08-16T04:49:03+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-012 progress=201/400 latency=302.045 output_tokens=29655 finish_reason=None
+2026-08-16T04:49:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-081
+2026-08-16T04:49:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-035 progress=202/400 latency=177.494 output_tokens=17945 finish_reason=None
+2026-08-16T04:49:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-082
+2026-08-16T04:49:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-005 progress=203/400 latency=337.329 output_tokens=33655 finish_reason=None
+2026-08-16T04:49:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-083
+2026-08-16T04:49:10+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-018 progress=204/400 latency=271.835 output_tokens=28045 finish_reason=None
+2026-08-16T04:49:10+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-084
+2026-08-16T04:49:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-031 progress=205/400 latency=647.331 output_tokens=63400 finish_reason=None
+2026-08-16T04:49:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-085
+2026-08-16T04:49:24+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-083 progress=206/400 latency=14.989 output_tokens=1492 finish_reason=None
+2026-08-16T04:49:24+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-086
+2026-08-16T04:49:29+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-013 progress=207/400 latency=323.961 output_tokens=33077 finish_reason=None
+2026-08-16T04:49:29+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-087
+2026-08-16T04:49:39+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-061 progress=208/400 latency=133.112 output_tokens=13756 finish_reason=None
+2026-08-16T04:49:39+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-088
+2026-08-16T04:49:42+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-050 progress=209/400 latency=171.863 output_tokens=17952 finish_reason=None
+2026-08-16T04:49:42+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-089
+2026-08-16T04:49:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-037 progress=210/400 latency=225.481 output_tokens=22893 finish_reason=None
+2026-08-16T04:49:53+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-090
+2026-08-16T04:49:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-016 progress=211/400 latency=320.444 output_tokens=32921 finish_reason=None
+2026-08-16T04:49:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-091
+2026-08-16T04:49:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-099 progress=212/400 latency=422.402 output_tokens=42647 finish_reason=None
+2026-08-16T04:49:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-092
+2026-08-16T04:50:01+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-065 progress=213/400 latency=138.490 output_tokens=14447 finish_reason=None
+2026-08-16T04:50:01+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-093
+2026-08-16T04:50:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-019 progress=214/400 latency=315.596 output_tokens=32379 finish_reason=None
+2026-08-16T04:50:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-094
+2026-08-16T04:50:08+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-001 progress=215/400 latency=422.903 output_tokens=43022 finish_reason=None
+2026-08-16T04:50:08+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-095
+2026-08-16T04:50:10+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-029 progress=216/400 latency=268.756 output_tokens=27322 finish_reason=None
+2026-08-16T04:50:10+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-096
+2026-08-16T04:50:10+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-057 progress=217/400 latency=625.671 output_tokens=63406 finish_reason=None
+2026-08-16T04:50:10+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-097
+2026-08-16T04:50:12+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-060 progress=218/400 latency=618.419 output_tokens=63543 finish_reason=None
+2026-08-16T04:50:12+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-010 progress=219/400 latency=374.829 output_tokens=39332 finish_reason=None
+2026-08-16T04:50:12+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-098
+2026-08-16T04:50:12+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-099
+2026-08-16T04:50:26+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-067 progress=220/400 latency=146.338 output_tokens=14990 finish_reason=None
+2026-08-16T04:50:26+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-geometry-100
+2026-08-16T04:50:31+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-046 progress=221/400 latency=239.173 output_tokens=24112 finish_reason=None
+2026-08-16T04:50:31+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-001
+2026-08-16T04:50:32+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-053 progress=222/400 latency=206.878 output_tokens=21422 finish_reason=None
+2026-08-16T04:50:32+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-002
+2026-08-16T04:50:38+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-020 progress=223/400 latency=349.690 output_tokens=35213 finish_reason=None
+2026-08-16T04:50:38+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-003
+2026-08-16T04:50:39+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-073 progress=224/400 latency=134.017 output_tokens=13708 finish_reason=None
+2026-08-16T04:50:39+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-004
+2026-08-16T04:50:47+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-100 progress=225/400 latency=463.295 output_tokens=46752 finish_reason=None
+2026-08-16T04:50:47+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-005
+2026-08-16T04:50:49+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-009 progress=226/400 latency=415.332 output_tokens=41490 finish_reason=None
+2026-08-16T04:50:49+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-006
+2026-08-16T04:50:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-030 progress=227/400 latency=300.720 output_tokens=30128 finish_reason=None
+2026-08-16T04:50:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-007
+2026-08-16T04:50:51+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-017 progress=228/400 latency=376.924 output_tokens=37815 finish_reason=None
+2026-08-16T04:50:51+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-008
+2026-08-16T04:50:57+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-069 progress=229/400 latency=630.802 output_tokens=64004 finish_reason=None
+2026-08-16T04:50:57+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-009
+2026-08-16T04:51:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-060 progress=230/400 latency=223.621 output_tokens=22741 finish_reason=None
+2026-08-16T04:51:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-010
+2026-08-16T04:51:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-057 progress=231/400 latency=230.558 output_tokens=24136 finish_reason=None
+2026-08-16T04:51:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-011
+2026-08-16T04:51:10+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-054 progress=232/400 latency=240.623 output_tokens=24511 finish_reason=None
+2026-08-16T04:51:10+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-012
+2026-08-16T04:51:13+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-004 progress=233/400 latency=467.861 output_tokens=47447 finish_reason=None
+2026-08-16T04:51:13+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-013
+2026-08-16T04:51:13+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-043 progress=234/400 latency=289.607 output_tokens=29291 finish_reason=None
+2026-08-16T04:51:13+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-014
+2026-08-16T04:51:51+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-044 progress=235/400 latency=321.152 output_tokens=32824 finish_reason=None
+2026-08-16T04:51:51+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-015
+2026-08-16T04:51:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-093 progress=236/400 latency=550.663 output_tokens=53944 finish_reason=None
+2026-08-16T04:51:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-016
+2026-08-16T04:52:02+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-047 progress=237/400 latency=328.977 output_tokens=32360 finish_reason=None
+2026-08-16T04:52:02+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-017
+2026-08-16T04:52:03+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-070 progress=238/400 latency=240.521 output_tokens=24653 finish_reason=None
+2026-08-16T04:52:03+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-018
+2026-08-16T04:52:06+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-081 progress=239/400 latency=183.172 output_tokens=18870 finish_reason=None
+2026-08-16T04:52:06+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-019
+2026-08-16T04:52:14+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-082 progress=240/400 latency=621.183 output_tokens=60797 finish_reason=None
+2026-08-16T04:52:14+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-020
+2026-08-16T04:52:17+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-086 progress=241/400 latency=597.133 output_tokens=59820 finish_reason=None
+2026-08-16T04:52:17+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-021
+2026-08-16T04:52:18+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-077 progress=242/400 latency=651.933 output_tokens=65470 finish_reason=None
+2026-08-16T04:52:18+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-022
+2026-08-16T04:52:20+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-055 progress=243/400 latency=309.766 output_tokens=31692 finish_reason=None
+2026-08-16T04:52:20+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-023
+2026-08-16T04:52:20+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-042 progress=244/400 latency=356.576 output_tokens=36836 finish_reason=None
+2026-08-16T04:52:20+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-024
+2026-08-16T04:52:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-084 progress=245/400 latency=197.566 output_tokens=20318 finish_reason=None
+2026-08-16T04:52:28+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-025
+2026-08-16T04:52:31+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-058 progress=246/400 latency=308.050 output_tokens=32200 finish_reason=None
+2026-08-16T04:52:31+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-026
+2026-08-16T04:52:34+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-024 progress=247/400 latency=441.598 output_tokens=44526 finish_reason=None
+2026-08-16T04:52:34+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-027
+2026-08-16T04:52:37+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-079 progress=248/400 latency=220.821 output_tokens=22682 finish_reason=None
+2026-08-16T04:52:37+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-028
+2026-08-16T04:52:40+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-066 progress=249/400 latency=284.661 output_tokens=29032 finish_reason=None
+2026-08-16T04:52:40+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-029
+2026-08-16T04:52:44+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-069 progress=250/400 latency=283.890 output_tokens=29105 finish_reason=None
+2026-08-16T04:52:44+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-030
+2026-08-16T04:52:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-098 progress=251/400 latency=154.134 output_tokens=15760 finish_reason=None
+2026-08-16T04:52:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-031
+2026-08-16T04:52:48+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-062 progress=252/400 latency=320.993 output_tokens=33281 finish_reason=None
+2026-08-16T04:52:48+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-032
+2026-08-16T04:52:49+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-092 progress=253/400 latency=170.243 output_tokens=16777 finish_reason=None
+2026-08-16T04:52:49+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-033
+2026-08-16T04:52:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-089 progress=254/400 latency=188.425 output_tokens=19336 finish_reason=None
+2026-08-16T04:52:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-034
+2026-08-16T04:52:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-093 progress=255/400 latency=176.536 output_tokens=17611 finish_reason=None
+2026-08-16T04:52:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-035
+2026-08-16T04:53:00+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-039 progress=256/400 latency=403.666 output_tokens=40634 finish_reason=None
+2026-08-16T04:53:00+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-036
+2026-08-16T04:53:06+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-090 progress=257/400 latency=640.960 output_tokens=63716 finish_reason=None
+2026-08-16T04:53:06+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-037
+2026-08-16T04:53:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-028 progress=258/400 latency=450.830 output_tokens=46030 finish_reason=None
+2026-08-16T04:53:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-038
+2026-08-16T04:53:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-051 progress=259/400 latency=376.260 output_tokens=38867 finish_reason=None
+2026-08-16T04:53:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-039
+2026-08-16T04:53:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-077 progress=260/400 latency=269.246 output_tokens=27316 finish_reason=None
+2026-08-16T04:53:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-040
+2026-08-16T04:53:14+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-087 progress=261/400 latency=224.534 output_tokens=22938 finish_reason=None
+2026-08-16T04:53:14+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-041
+2026-08-16T04:53:22+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-076 progress=262/400 latency=280.205 output_tokens=28805 finish_reason=None
+2026-08-16T04:53:22+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-042
+2026-08-16T04:53:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-071 progress=263/400 latency=308.618 output_tokens=31688 finish_reason=None
+2026-08-16T04:53:25+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-043
+2026-08-16T04:53:27+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-003 progress=264/400 latency=168.280 output_tokens=17310 finish_reason=None
+2026-08-16T04:53:27+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-044
+2026-08-16T04:53:30+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-094 progress=265/400 latency=646.897 output_tokens=63713 finish_reason=None
+2026-08-16T04:53:30+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-045
+2026-08-16T04:53:34+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-011 progress=266/400 latency=573.451 output_tokens=57074 finish_reason=None
+2026-08-16T04:53:34+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-046
+2026-08-16T04:53:37+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-003 progress=267/400 latency=618.064 output_tokens=63712 finish_reason=None
+2026-08-16T04:53:37+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-047
+2026-08-16T04:53:48+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-094 progress=268/400 latency=223.895 output_tokens=22376 finish_reason=None
+2026-08-16T04:53:48+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-048
+2026-08-16T04:53:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-063 progress=269/400 latency=370.029 output_tokens=38633 finish_reason=None
+2026-08-16T04:53:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-049
+2026-08-16T04:53:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-075 progress=270/400 latency=312.983 output_tokens=31521 finish_reason=None
+2026-08-16T04:53:50+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-050
+2026-08-16T04:53:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-043 progress=271/400 latency=28.428 output_tokens=2585 finish_reason=None
+2026-08-16T04:53:53+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-051
+2026-08-16T04:54:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-082 progress=272/400 latency=299.860 output_tokens=30745 finish_reason=None
+2026-08-16T04:54:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-052
+2026-08-16T04:54:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-059 progress=273/400 latency=405.871 output_tokens=40271 finish_reason=None
+2026-08-16T04:54:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-053
+2026-08-16T04:54:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-045 progress=274/400 latency=460.070 output_tokens=46109 finish_reason=None
+2026-08-16T04:54:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-054
+2026-08-16T04:54:22+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-020 progress=275/400 latency=127.641 output_tokens=13352 finish_reason=None
+2026-08-16T04:54:22+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-055
+2026-08-16T04:54:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-022 progress=276/400 latency=564.124 output_tokens=58246 finish_reason=None
+2026-08-16T04:54:28+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-056
+2026-08-16T04:54:35+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-099 progress=277/400 latency=262.794 output_tokens=26833 finish_reason=None
+2026-08-16T04:54:35+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-057
+2026-08-16T04:54:40+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-095 progress=278/400 latency=271.357 output_tokens=23849 finish_reason=None
+2026-08-16T04:54:40+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-058
+2026-08-16T04:54:41+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-025 progress=279/400 latency=553.463 output_tokens=54127 finish_reason=None
+2026-08-16T04:54:41+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-059
+2026-08-16T04:54:45+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-096 progress=280/400 latency=275.819 output_tokens=28479 finish_reason=None
+2026-08-16T04:54:45+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-060
+2026-08-16T04:54:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-023 progress=281/400 latency=574.893 output_tokens=58210 finish_reason=None
+2026-08-16T04:54:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-061
+2026-08-16T04:54:51+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-068 progress=282/400 latency=411.086 output_tokens=42478 finish_reason=None
+2026-08-16T04:54:51+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-062
+2026-08-16T04:54:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-007 progress=283/400 latency=243.542 output_tokens=24788 finish_reason=None
+2026-08-16T04:54:53+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-063
+2026-08-16T04:55:18+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-014 progress=284/400 latency=244.698 output_tokens=24294 finish_reason=None
+2026-08-16T04:55:18+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-064
+2026-08-16T04:55:19+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-001 progress=285/400 latency=287.795 output_tokens=29249 finish_reason=None
+2026-08-16T04:55:19+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-065
+2026-08-16T04:55:19+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-048 progress=286/400 latency=521.869 output_tokens=54051 finish_reason=None
+2026-08-16T04:55:19+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-066
+2026-08-16T04:55:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-004 progress=287/400 latency=283.719 output_tokens=30005 finish_reason=None
+2026-08-16T04:55:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-067
+2026-08-16T04:55:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-056 progress=288/400 latency=485.861 output_tokens=49706 finish_reason=None
+2026-08-16T04:55:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-068
+2026-08-16T04:55:26+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-041 progress=289/400 latency=131.987 output_tokens=13700 finish_reason=None
+2026-08-16T04:55:26+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-069
+2026-08-16T04:55:27+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-046 progress=290/400 latency=113.105 output_tokens=11557 finish_reason=None
+2026-08-16T04:55:27+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-070
+2026-08-16T04:55:27+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-021 progress=291/400 latency=623.826 output_tokens=63485 finish_reason=None
+2026-08-16T04:55:27+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-071
+2026-08-16T04:55:36+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-013 progress=292/400 latency=263.512 output_tokens=27073 finish_reason=None
+2026-08-16T04:55:36+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-072
+2026-08-16T04:55:37+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-091 progress=293/400 latency=342.695 output_tokens=35681 finish_reason=None
+2026-08-16T04:55:37+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-073
+2026-08-16T04:55:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-006 progress=294/400 latency=297.048 output_tokens=30296 finish_reason=None
+2026-08-16T04:55:46+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-074
+2026-08-16T04:55:49+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-combinatorics-062 progress=295/400 latency=953.201 output_tokens=91130 finish_reason=None
+2026-08-16T04:55:49+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-075
+2026-08-16T04:55:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-086 progress=296/400 latency=387.488 output_tokens=39669 finish_reason=None
+2026-08-16T04:55:52+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-076
+2026-08-16T04:55:57+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-072 progress=297/400 latency=456.903 output_tokens=45999 finish_reason=None
+2026-08-16T04:55:57+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-077
+2026-08-16T04:55:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-040 progress=298/400 latency=167.086 output_tokens=17702 finish_reason=None
+2026-08-16T04:55:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-078
+2026-08-16T04:55:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-097 progress=299/400 latency=348.541 output_tokens=35499 finish_reason=None
+2026-08-16T04:55:58+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-079
+2026-08-16T04:56:08+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-019 progress=300/400 latency=242.527 output_tokens=25385 finish_reason=None
+2026-08-16T04:56:08+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-080
+2026-08-16T04:56:09+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-080 progress=301/400 latency=433.141 output_tokens=44610 finish_reason=None
+2026-08-16T04:56:09+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-081
+2026-08-16T04:56:12+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-078 progress=302/400 latency=442.258 output_tokens=44767 finish_reason=None
+2026-08-16T04:56:12+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-082
+2026-08-16T04:56:15+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-026 progress=303/400 latency=643.645 output_tokens=66190 finish_reason=None
+2026-08-16T04:56:15+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-083
+2026-08-16T04:56:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-049 progress=304/400 latency=153.258 output_tokens=15400 finish_reason=None
+2026-08-16T04:56:23+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-084
+2026-08-16T04:56:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-030 progress=305/400 latency=221.078 output_tokens=23135 finish_reason=None
+2026-08-16T04:56:25+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-085
+2026-08-16T04:56:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-005 progress=306/400 latency=340.822 output_tokens=35534 finish_reason=None
+2026-08-16T04:56:28+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-086
+2026-08-16T04:56:30+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-031 progress=307/400 latency=639.404 output_tokens=63561 finish_reason=None
+2026-08-16T04:56:30+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-087
+2026-08-16T04:56:35+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-038 progress=308/400 latency=205.694 output_tokens=20931 finish_reason=None
+2026-08-16T04:56:35+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-088
+2026-08-16T04:56:39+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-009 progress=309/400 latency=341.776 output_tokens=35720 finish_reason=None
+2026-08-16T04:56:39+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-089
+2026-08-16T04:56:43+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-048 progress=310/400 latency=174.478 output_tokens=18147 finish_reason=None
+2026-08-16T04:56:43+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-090
+2026-08-16T04:56:44+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-011 progress=311/400 latency=334.966 output_tokens=35591 finish_reason=None
+2026-08-16T04:56:44+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-091
+2026-08-16T04:56:47+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-066 progress=312/400 latency=87.336 output_tokens=8822 finish_reason=None
+2026-08-16T04:56:47+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-092
+2026-08-16T04:56:47+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-044 progress=313/400 latency=200.152 output_tokens=20625 finish_reason=None
+2026-08-16T04:56:47+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-093
+2026-08-16T04:56:48+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-012 progress=314/400 latency=337.598 output_tokens=34666 finish_reason=None
+2026-08-16T04:56:48+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-094
+2026-08-16T04:56:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-052 progress=315/400 latency=169.646 output_tokens=17402 finish_reason=None
+2026-08-16T04:56:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-095
+2026-08-16T04:56:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-039 progress=316/400 latency=224.972 output_tokens=23498 finish_reason=None
+2026-08-16T04:56:54+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-096
+2026-08-16T04:56:57+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-042 progress=317/400 latency=215.579 output_tokens=22529 finish_reason=None
+2026-08-16T04:56:57+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-097
+2026-08-16T04:57:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-088 progress=318/400 latency=444.530 output_tokens=44993 finish_reason=None
+2026-08-16T04:57:04+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-098
+2026-08-16T04:57:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-058 progress=319/400 latency=151.000 output_tokens=15132 finish_reason=None
+2026-08-16T04:57:11+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-099
+2026-08-16T04:57:12+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-036 progress=320/400 latency=251.814 output_tokens=25755 finish_reason=None
+2026-08-16T04:57:12+0300 INFO task_submitted benchmark=IMOAnswerBench task_id=imo-bench-number_theory-100
+2026-08-16T04:57:13+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-052 progress=321/400 latency=614.357 output_tokens=63912 finish_reason=None
+2026-08-16T04:57:14+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-010 progress=322/400 latency=365.690 output_tokens=37250 finish_reason=None
+2026-08-16T04:57:20+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-029 progress=323/400 latency=279.779 output_tokens=29009 finish_reason=None
+2026-08-16T04:57:21+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-062 progress=324/400 latency=150.046 output_tokens=15595 finish_reason=None
+2026-08-16T04:57:25+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-024 progress=325/400 latency=304.557 output_tokens=31975 finish_reason=None
+2026-08-16T04:57:27+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-074 progress=326/400 latency=539.292 output_tokens=55693 finish_reason=None
+2026-08-16T04:57:31+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-008 progress=327/400 latency=400.195 output_tokens=42157 finish_reason=None
+2026-08-16T04:57:32+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-031 progress=328/400 latency=285.245 output_tokens=28494 finish_reason=None
+2026-08-16T04:57:44+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-027 progress=329/400 latency=310.495 output_tokens=32599 finish_reason=None
+2026-08-16T04:57:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-016 progress=330/400 latency=352.616 output_tokens=37085 finish_reason=None
+2026-08-16T04:57:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-069 progress=331/400 latency=146.648 output_tokens=15532 finish_reason=None
+2026-08-16T04:57:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-054 progress=332/400 latency=223.236 output_tokens=22939 finish_reason=None
+2026-08-16T04:57:59+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-021 progress=333/400 latency=342.656 output_tokens=33253 finish_reason=None
+2026-08-16T04:58:02+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-089 progress=334/400 latency=82.700 output_tokens=8928 finish_reason=None
+2026-08-16T04:58:06+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-073 progress=335/400 latency=148.962 output_tokens=15691 finish_reason=None
+2026-08-16T04:58:11+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-033 progress=336/400 latency=322.431 output_tokens=33983 finish_reason=None
+2026-08-16T04:58:13+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-055 progress=337/400 latency=231.179 output_tokens=20801 finish_reason=None
+2026-08-16T04:58:16+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-061 progress=338/400 latency=210.205 output_tokens=22545 finish_reason=None
+2026-08-16T04:58:17+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-018 progress=339/400 latency=374.267 output_tokens=40012 finish_reason=None
+2026-08-16T04:58:19+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-032 progress=340/400 latency=331.012 output_tokens=35169 finish_reason=None
+2026-08-16T04:58:24+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-064 progress=341/400 latency=186.136 output_tokens=20245 finish_reason=None
+2026-08-16T04:58:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-078 progress=342/400 latency=149.528 output_tokens=16423 finish_reason=None
+2026-08-16T04:58:29+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-023 progress=343/400 latency=369.533 output_tokens=38548 finish_reason=None
+2026-08-16T04:58:32+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-047 progress=344/400 latency=294.085 output_tokens=31371 finish_reason=None
+2026-08-16T04:58:33+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-097 progress=345/400 latency=95.474 output_tokens=10786 finish_reason=None
+2026-08-16T04:58:34+0300 ERROR task_failed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-076 category=fatal error=BadRequestError: Error code: 400 - {'object': 'error', 'message': "The input (150801 tokens) is longer than the model's context length (131072 tokens).", 'type': 'BadRequestError', 'param': None, 'code': 400}
+2026-08-16T04:58:34+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=54
+2026-08-16T04:58:36+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-041 progress=347/400 latency=734.027 output_tokens=79659 finish_reason=None
+2026-08-16T04:58:36+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=53
+2026-08-16T04:58:41+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-067 progress=348/400 latency=197.356 output_tokens=21793 finish_reason=None
+2026-08-16T04:58:41+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=52
+2026-08-16T04:58:50+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-002 progress=349/400 latency=498.471 output_tokens=52882 finish_reason=None
+2026-08-16T04:58:50+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=51
+2026-08-16T04:58:51+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-075 progress=350/400 latency=181.315 output_tokens=20462 finish_reason=None
+2026-08-16T04:58:51+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=50
+2026-08-16T04:58:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-056 progress=351/400 latency=263.718 output_tokens=28664 finish_reason=None
+2026-08-16T04:58:52+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=49
+2026-08-16T04:58:53+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-063 progress=352/400 latency=239.419 output_tokens=26115 finish_reason=None
+2026-08-16T04:58:53+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=48
+2026-08-16T04:58:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-050 progress=353/400 latency=304.112 output_tokens=33035 finish_reason=None
+2026-08-16T04:58:54+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=47
+2026-08-16T04:58:55+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-090 progress=354/400 latency=132.915 output_tokens=15124 finish_reason=None
+2026-08-16T04:58:55+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=46
+2026-08-16T04:58:57+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-060 progress=355/400 latency=251.646 output_tokens=27479 finish_reason=None
+2026-08-16T04:58:57+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=45
+2026-08-16T04:59:04+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-064 progress=356/400 latency=684.324 output_tokens=69218 finish_reason=None
+2026-08-16T04:59:04+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=44
+2026-08-16T04:59:05+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-068 progress=357/400 latency=221.525 output_tokens=25055 finish_reason=None
+2026-08-16T04:59:05+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=43
+2026-08-16T04:59:16+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-053 progress=358/400 latency=306.997 output_tokens=34368 finish_reason=None
+2026-08-16T04:59:16+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=42
+2026-08-16T04:59:20+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-085 progress=359/400 latency=609.876 output_tokens=63852 finish_reason=None
+2026-08-16T04:59:20+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=41
+2026-08-16T04:59:21+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-095 progress=360/400 latency=147.245 output_tokens=16802 finish_reason=None
+2026-08-16T04:59:21+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=40
+2026-08-16T04:59:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-085 progress=361/400 latency=178.373 output_tokens=20969 finish_reason=None
+2026-08-16T04:59:23+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=39
+2026-08-16T04:59:27+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-077 progress=362/400 latency=209.547 output_tokens=24424 finish_reason=None
+2026-08-16T04:59:27+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=38
+2026-08-16T04:59:31+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-087 progress=363/400 latency=180.969 output_tokens=19438 finish_reason=None
+2026-08-16T04:59:31+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=37
+2026-08-16T04:59:33+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-071 progress=364/400 latency=245.414 output_tokens=28486 finish_reason=None
+2026-08-16T04:59:33+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=36
+2026-08-16T04:59:38+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-090 progress=365/400 latency=584.757 output_tokens=63376 finish_reason=None
+2026-08-16T04:59:38+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=35
+2026-08-16T04:59:38+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-025 progress=366/400 latency=430.212 output_tokens=48443 finish_reason=None
+2026-08-16T04:59:38+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=34
+2026-08-16T04:59:45+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-100 progress=367/400 latency=559.594 output_tokens=63478 finish_reason=None
+2026-08-16T04:59:45+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=33
+2026-08-16T04:59:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-065 progress=368/400 latency=273.362 output_tokens=32848 finish_reason=None
+2026-08-16T04:59:52+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=32
+2026-08-16T04:59:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-051 progress=369/400 latency=360.332 output_tokens=41351 finish_reason=None
+2026-08-16T04:59:54+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=31
+2026-08-16T04:59:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-088 progress=370/400 latency=198.763 output_tokens=24634 finish_reason=None
+2026-08-16T04:59:54+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=30
+2026-08-16T04:59:54+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-026 progress=371/400 latency=442.979 output_tokens=50937 finish_reason=None
+2026-08-16T04:59:54+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=29
+2026-08-16T04:59:55+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-034 progress=372/400 latency=424.680 output_tokens=48053 finish_reason=None
+2026-08-16T04:59:55+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=28
+2026-08-16T04:59:57+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-017 progress=373/400 latency=475.194 output_tokens=54329 finish_reason=None
+2026-08-16T04:59:57+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=27
+2026-08-16T05:00:01+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-093 progress=374/400 latency=193.847 output_tokens=25027 finish_reason=None
+2026-08-16T05:00:01+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=26
+2026-08-16T05:00:01+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-022 progress=375/400 latency=463.109 output_tokens=53625 finish_reason=None
+2026-08-16T05:00:01+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=25
+2026-08-16T05:00:02+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-035 progress=376/400 latency=423.924 output_tokens=49299 finish_reason=None
+2026-08-16T05:00:02+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=24
+2026-08-16T05:00:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-037 progress=377/400 latency=437.595 output_tokens=52001 finish_reason=None
+2026-08-16T05:00:23+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=23
+2026-08-16T05:00:28+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-geometry-040 progress=378/400 latency=847.062 output_tokens=88175 finish_reason=None
+2026-08-16T05:00:28+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=22
+2026-08-16T05:00:30+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-059 progress=379/400 latency=348.603 output_tokens=43034 finish_reason=None
+2026-08-16T05:00:30+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=21
+2026-08-16T05:00:31+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-072 progress=380/400 latency=295.141 output_tokens=37746 finish_reason=None
+2026-08-16T05:00:31+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=20
+2026-08-16T05:00:41+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-045 progress=381/400 latency=431.257 output_tokens=42619 finish_reason=None
+2026-08-16T05:00:41+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=19
+2026-08-16T05:00:44+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-094 progress=382/400 latency=235.868 output_tokens=32607 finish_reason=None
+2026-08-16T05:00:44+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=18
+2026-08-16T05:00:46+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-092 progress=383/400 latency=239.400 output_tokens=33358 finish_reason=None
+2026-08-16T05:00:46+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=17
+2026-08-16T05:00:48+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-057 progress=384/400 latency=372.414 output_tokens=46106 finish_reason=None
+2026-08-16T05:00:48+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=16
+2026-08-16T05:00:49+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-084 progress=385/400 latency=265.884 output_tokens=35767 finish_reason=None
+2026-08-16T05:00:49+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=15
+2026-08-16T05:00:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-099 progress=386/400 latency=221.001 output_tokens=32235 finish_reason=None
+2026-08-16T05:00:52+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=14
+2026-08-16T05:00:58+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-083 progress=387/400 latency=282.866 output_tokens=38227 finish_reason=None
+2026-08-16T05:00:58+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=13
+2026-08-16T05:01:03+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-028 progress=388/400 latency=505.978 output_tokens=63757 finish_reason=None
+2026-08-16T05:01:03+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=12
+2026-08-16T05:01:10+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-079 progress=389/400 latency=311.667 output_tokens=43266 finish_reason=None
+2026-08-16T05:01:10+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=11
+2026-08-16T05:01:18+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-096 progress=390/400 latency=264.045 output_tokens=37458 finish_reason=None
+2026-08-16T05:01:18+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=10
+2026-08-16T05:01:21+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-082 progress=391/400 latency=308.234 output_tokens=43006 finish_reason=None
+2026-08-16T05:01:21+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=9
+2026-08-16T05:01:26+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-080 progress=392/400 latency=317.093 output_tokens=44496 finish_reason=None
+2026-08-16T05:01:26+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=8
+2026-08-16T05:01:34+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-100 progress=393/400 latency=261.830 output_tokens=39390 finish_reason=None
+2026-08-16T05:01:34+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=7
+2026-08-16T05:02:15+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-070 progress=394/400 latency=408.187 output_tokens=59309 finish_reason=None
+2026-08-16T05:02:15+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=6
+2026-08-16T05:02:23+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-091 progress=395/400 latency=338.647 output_tokens=52703 finish_reason=None
+2026-08-16T05:02:23+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=5
+2026-08-16T05:02:41+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-015 progress=396/400 latency=650.238 output_tokens=78863 finish_reason=None
+2026-08-16T05:02:41+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=4
+2026-08-16T05:02:52+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-086 progress=397/400 latency=383.586 output_tokens=59818 finish_reason=None
+2026-08-16T05:02:52+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=3
+2026-08-16T05:03:30+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-074 progress=398/400 latency=463.926 output_tokens=65098 finish_reason=None
+2026-08-16T05:03:30+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=2
+2026-08-16T05:03:39+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-098 progress=399/400 latency=395.616 output_tokens=63880 finish_reason=None
+2026-08-16T05:03:39+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=1
+2026-08-16T05:04:41+0300 INFO task_completed benchmark=IMOAnswerBench task_id=imo-bench-number_theory-081 progress=400/400 latency=512.079 output_tokens=79562 finish_reason=None
+2026-08-16T05:04:41+0300 ERROR circuit_breaker_open benchmark=IMOAnswerBench status=failed remaining=0
+2026-08-16T05:04:41+0300 INFO benchmark_finished benchmark=IMOAnswerBench status=failed successful=399 failed=1 remaining=0 wall_time=1899.050 output=/home/ykapushev/mathagent/work/p-code-v4-all-s43-v1/results/runs/p-code-v4-all-s43-v1/imo_answerbench.jsonl
+2026-08-16T05:04:43+0300 ERROR benchmark_process_failed script=run_imo_answerbench returncode=2
+2026-08-16T05:04:43+0300 ERROR run_all_finished status=failed failed=run_imo_answerbench
+>>> Команда завершилась с кодом 2
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю sglang...
+Requesting graceful shutdown of supervisor PID 3138449...
+SGLang stopped.
+=== 2026-08-16T02:04:54.705105+00:00 status=failed exit_code=2 duration=2864.5s
