@@ -962,15 +962,20 @@ def _solve_with_graph(graph, problem: str, args: argparse.Namespace,
             # знания бенчмарка: решение из одного-двух шагов на олимпиадной задаче
             # подозрительно коротко.
             too_short = bool(min_steps) and steps <= min_steps
+            # threshold == 0 означает «добирать всегда» (так написано в справке
+            # флага). Раньше здесь стояло `threshold and ...`, и ноль как ложное
+            # значение ВЫКЛЮЧАЛ проверку расхода целиком — то есть 0 давал прямо
+            # противоположное: добор только у сдавшихся и безответных.
+            over_budget = m.get("tokens_used", 0) > threshold if threshold else True
             shaky = (m.get("gave_up") or not (answer or "").strip()
-                     or (threshold and m.get("tokens_used", 0) > threshold)
-                     or too_short)
+                     or over_budget or too_short)
             if not shaky:
                 print(f"  [samples] первый сэмпл уверенный — добор не нужен.")
                 break
             why = ("сдался" if m.get("gave_up") else
                    "нет ответа" if not (answer or "").strip() else
                    f"шагов {steps} ≤ {min_steps}" if too_short else
+                   "порог 0 — добираем всегда" if not threshold else
                    f"токенов {m.get('tokens_used', 0):,} > {threshold:,}")
             print(f"  [samples] первый сэмпл ненадёжен ({why}) — добираю.")
 
