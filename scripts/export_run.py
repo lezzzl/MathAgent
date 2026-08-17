@@ -385,6 +385,65 @@ def export_benchmark(bench: str, trajectory: Path, run_id: str, out_dir: Path
     }
 
 
+def run_meta_from_log(log: Path) -> Dict[str, Any]:
+    """Достаёт параметры прогона из строки `=== command:` в runner.log диспетчера.
+
+    Зачем. Выгрузка из JSONL (когда траектории нет) оставляла manifest.json почти
+    пустым: модель, зерно, число сэмплов, движок — всё по нулям. Пустой манифест
+    хуже отсутствующего: на дашборде он выглядит заполненным. А команда прогона
+    записана диспетчером дословно, и в ней есть всё нужное.
+    """
+    import shlex
+
+    text = log.read_text(encoding="utf-8", errors="replace")
+    lines = [l for l in text.splitlines() if l.startswith("=== command:")]
+    if not lines:
+        return {}
+    argv = shlex.split(lines[-1].split("=== command:", 1)[1].strip())
+    env = {a.split("=", 1)[0]: a.split("=", 1)[1] for a in argv
+           if "=" in a and not a.startswith("-") and a.split("=", 1)[0].isupper()}
+
+    def opt(flag: str, cast=str, default=None):
+        return cast(argv[argv.index(flag) + 1]) if flag in argv else default
+
+    prompt = opt("--prompt", str, "")
+    meta: Dict[str, Any] = {
+        "model": env.get("MODEL") or opt("--model", str, ""),
+        "pipeline": opt("--pipeline", str, ""),
+        "prompt": prompt,
+        "temperature": opt("--temperature", float),
+        "workers": opt("--workers", int),
+        "timeout": opt("--timeout", float),
+        "branch_mode": opt("--branch-mode", str),
+        "k_branches": opt("--k-branches", int, 3),
+        "token_budget": opt("--token-budget", int),
+        "seed": opt("--seed", int),
+        "samples": opt("--samples", int, 1),
+        "resample_token_threshold": opt("--resample-token-threshold", int),
+        "finish_at": opt("--finish-at", float, 0.85),
+        "max_recoveries": opt("--max-recoveries", int, 15),
+        "max_step_attempts": opt("--max-step-attempts", int, 3),
+        "verifier_enabled": "--no-verify-step" not in argv,
+        "evaluator_min_depth": opt("--evaluator-min-depth", int, 0),
+        "evaluator_mode": opt("--evaluator-mode", str, "llm"),
+        "engine": env.get("ENGINE", "sglang"),   # дефолт run_benchmarks.sh
+        "max_model_len": int(env["MAX_MODEL_LEN"]) if "MAX_MODEL_LEN" in env else None,
+    }
+    # thinking режимом управляет yaml: --thinking в командах не задаём, а auto
+    # означает per-role значение. Берём фактическое у генератора.
+    if prompt:
+        path = ROOT / prompt
+        if path.exists():
+            try:
+                import yaml
+                roles = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("roles", {})
+                meta["generator_thinking"] = (roles.get("generator") or {}).get("enable_thinking")
+                meta["temperature"] = meta["temperature"] or (roles.get("generator") or {}).get("temperature")
+            except Exception:  # noqa: BLE001 — метаданные не должны ронять выгрузку
+                pass
+    return meta
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -397,6 +456,11 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=ROOT / "results" / "runs",
                     help="куда класть папку (по умолчанию results/runs)")
     ap.add_argument("--status", default="completed", choices=["completed", "partial"])
+    ap.add_argument("--meta-log", type=Path,
+                    help="runner.log прогона: из строки '=== command:' берутся "
+                         "модель, зерно, сэмплы, движок и флаги для manifest.json. "
+                         "Нужен, когда выгрузка идёт из JSONL и траектории нет — "
+                         "иначе манифест выйдет пустым, но с виду заполненным.")
     args = ap.parse_args()
 
     out_dir = args.out / args.run_id
@@ -422,6 +486,10 @@ def main() -> int:
         else:
             info = export_benchmark(bench, source, args.run_id, out_dir)
         run_meta = info.pop("_run") or run_meta
+    if args.meta_log:
+        # Явные метаданные важнее выведенных: команда прогона — источник правды.
+        run_meta = {**run_meta, **{k: v for k, v in run_meta_from_log(args.meta_log).items()
+                                   if v is not None}}
         info.pop("_correct", None)
         benchmarks[bench] = info
 
@@ -464,7 +532,9 @@ def main() -> int:
             "timeout": run_meta.get("timeout"),
             "max_retries": 1,
         },
-        "serving": {"engine": "vllm", "reasoning_parser": "qwen3"},
+        "serving": {"engine": run_meta.get("engine", "vllm"),
+                    "reasoning_parser": "qwen3",
+                    "max_model_len": run_meta.get("max_model_len")},
         "agent": {
             "branch_mode": run_meta.get("branch_mode"),
             "k_branches": run_meta.get("k_branches"),
@@ -485,6 +555,11 @@ def main() -> int:
             "max_recoveries": run_meta.get("max_recoveries"),
             "max_step_attempts": run_meta.get("max_step_attempts"),
             "verifier_enabled": run_meta.get("verifier_enabled"),
+            # Стадия оценки шага: с какой глубины она включается и чем судит.
+            # Прогоны с --evaluator-min-depth 1 дешевле базовых почти на треть,
+            # и без этих полей они в манифесте выглядят одинаково.
+            "evaluator_min_depth": run_meta.get("evaluator_min_depth"),
+            "evaluator_mode": run_meta.get("evaluator_mode"),
             "roles": run_meta.get("roles"),
         },
         "status": args.status,

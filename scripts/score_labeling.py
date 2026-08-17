@@ -85,7 +85,15 @@ def fisher_exact(a: int, b: int, c: int, d: int) -> float:
                         if prob(x) <= observed * (1 + 1e-9)))
 
 
-def report(depth_label: str, rows: List[dict]) -> None:
+def report(depth_label: str, rows: List[dict], accept_rate: float | None = None) -> None:
+    """accept_rate — доля принятых шагов В ГЕНЕРАЛЬНОЙ СОВОКУПНОСТИ на этой глубине.
+
+    Без неё recall и specificity считать нельзя. Выборка стратифицирована 25/25
+    по вердикту, а на самом деле оценщик принимает ~40%; наивные recall и
+    specificity молча предполагают 50/50 и потому смещены. Условные величины —
+    precision = P(хорош | принят) и доля хороших среди отвергнутых — от этого не
+    страдают: внутри каждого слоя выборка случайна.
+    """
     tp = sum(1 for r in rows if r["accepted"] and r["label"] == "good")
     fp = sum(1 for r in rows if r["accepted"] and r["label"] == "bad")
     fn = sum(1 for r in rows if not r["accepted"] and r["label"] == "good")
@@ -95,17 +103,25 @@ def report(depth_label: str, rows: List[dict]) -> None:
         print(f"  {depth_label}: размечено слишком мало ({total})")
         return
     prec = tp / (tp + fp) if tp + fp else float("nan")
-    rec = tp / (tp + fn) if tp + fn else float("nan")
-    spec = tn / (tn + fp) if tn + fp else float("nan")
+    good_in_rejected = fn / (fn + tn) if fn + tn else float("nan")
     p = fisher_exact(tp, fp, fn, tn)
     print(f"  {depth_label}")
     print(f"    таблица: принят+хорош {tp}, принят+плох {fp}, "
           f"отвергнут+хорош {fn}, отвергнут+плох {tn}")
-    print(f"    precision {prec:.0%}  recall {rec:.0%}  specificity {spec:.0%}"
-          f"   Фишер p = {p:.3f}")
-    if fn:
-        print(f"    ЗАРУБЛЕНО ХОРОШИХ: {fn} из {fn + tp} "
-              f"({fn / (fn + tp):.0%} всех хороших шагов)")
+    print(f"    precision = P(хорош|принят)   {prec:.0%}")
+    print(f"    доля хороших среди отвергнутых {good_in_rejected:.0%}   "
+          f"(={fn} из {fn + tn})")
+    print(f"    Фишер p = {p:.3f}")
+    if accept_rate is not None:
+        # Пересчёт на истинное соотношение слоёв: доля хороших в популяции и
+        # производные от неё recall/specificity.
+        a = accept_rate
+        p_good = a * prec + (1 - a) * good_in_rejected
+        rec = a * prec / p_good if p_good else float("nan")
+        spec = ((1 - a) * (1 - good_in_rejected) / (1 - p_good)
+                if p_good < 1 else float("nan"))
+        print(f"    с поправкой на реальную долю принятых ({a:.0%}): "
+              f"хороших шагов {p_good:.0%}, recall {rec:.0%}, specificity {spec:.0%}")
 
 
 def main() -> int:
@@ -113,7 +129,22 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--form", type=Path, default=ROOT / "labeling/steps_to_label.md")
     ap.add_argument("--key", type=Path, default=ROOT / "labeling/steps_key.json")
+    ap.add_argument("--trajectory", type=Path,
+                    default=ROOT / "results/aime26/agent_20260806T011449Z_trajectory.json",
+                    help="откуда брать реальную долю принятых шагов по глубинам: "
+                         "выборка стратифицирована, и без неё recall/specificity смещены")
     args = ap.parse_args()
+
+    accept: dict = {}
+    if args.trajectory.exists():
+        data = json.loads(args.trajectory.read_text(encoding="utf-8"))
+        for task in data.get("tasks", []):
+            for rec in task.get("records") or []:
+                if rec.get("stage") != "evaluate_result":
+                    continue
+                d = int(rec.get("depth") or 0)
+                a, n = accept.get(d, (0, 0))
+                accept[d] = (a + (1 if float(rec.get("score") or 0) >= 0.5 else 0), n + 1)
 
     labels = read_labels(args.form)
     key = {item["idx"]: item for item in json.loads(args.key.read_text(encoding="utf-8"))}
@@ -133,7 +164,9 @@ def main() -> int:
     print("\nПО ГЛУБИНАМ")
     depths = sorted({r["depth"] for r in graded})
     for d in depths:
-        report(f"глубина {d}", [r for r in graded if r["depth"] == d])
+        a, n = accept.get(d, (0, 0))
+        report(f"глубина {d}", [r for r in graded if r["depth"] == d],
+               a / n if n else None)
 
     if len(depths) >= 2:
         print("\nСРАВНЕНИЕ ГЛУБИН — доля хороших шагов среди ОТВЕРГНУТЫХ")

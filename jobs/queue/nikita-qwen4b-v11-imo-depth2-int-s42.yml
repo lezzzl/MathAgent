@@ -1,0 +1,52 @@
+# IMO, целочисленное подмножество (228 задач), оценщик с глубины 2. Зерно 42.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v11-imo-depth2-int-s42/.
+#
+# Третья точка кривой на IMO. Первые две уже есть, на тех же 228 задачах и том
+# же зерне:
+#
+#   база (оценщик со всех глубин)        109/228   259M токенов
+#   --evaluator-min-depth 1              100/228   189M токенов
+#   --evaluator-min-depth 2              ???
+#
+# Зачем. На AIME кривая имеет форму «база = глубина 1 > глубина 2»: отключение
+# нулевой глубины бесплатно, отключение первой стоит задач. На IMO первая точка
+# уже повела себя иначе — глубина 1 стоила девяти задач (28 потеряно, 19 взято,
+# p = 0.24). Третья точка показывает, продолжается ли падение линейно или
+# глубина 2 обваливает результат: во втором случае вывод «вся польза оценщика
+# сидит на глубине 1 и глубже» подтверждается на большой выборке.
+#
+# Целочисленное подмножество, а не все 400: там вердикт ставит math_verify, и
+# сравнение чистое. На символьной половине судит LLM, который у нас и в золотом
+# прогоне повёл себя по-разному, так что она для сравнения не годится.
+#
+# Ожидаемый расход ниже базового: глубина 2 на AIME стоила -48% против базы.
+command: >-
+  MODEL=Qwen/Qwen3.5-4B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-4B
+  CONCURRENCY=96
+  MAX_MODEL_LEN=65536
+  KV_CACHE_DTYPE=auto
+  MTP=0
+  TOOL_CALL_PARSER=qwen3_coder
+  scripts/run_benchmarks.sh --
+  .venv/bin/python -u scripts/benchmarks/run_imo_answerbench.py
+  --integer-only
+  --model {SERVED_MODEL_NAME}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --pipeline qwen4b
+  --prompt conf/base/prompts/agent-step-qwen4b-v11.yml
+  --branch-mode single
+  --seed 42
+  --samples 3
+  --resample-token-threshold 250000
+  --vote-tiebreak-samples 0
+  --evaluator-min-depth 2
+  --no-verify-step
+  --token-budget 800000
+  --timeout 1200
+  --workers 96
+  --verify-timeout 10800
+  --output results/runs/{RUN_ID}/imo_answerbench.jsonl
+gpus: 1
+timeout_minutes: 2880
