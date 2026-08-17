@@ -1,0 +1,52 @@
+# AIME26: промпт v12 (правило для первого шага у оценщика). Зерно 43.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v12-aime26-s43/.
+#
+# Отличие от базовой линии nikita-qwen4b-v11-aime26-sglang-s43b (23/30) ровно
+# одно: --prompt ...v12.yml вместо v11. Конфигурация базовая — оценщик работает
+# со всех глубин, включая нулевую. В этом весь смысл: правка должна ЗАСТАВИТЬ его
+# работать на первом шаге, а не отключить его там.
+#
+# Что правит v12. В v11 есть правило «TRIVIAL or STAGNANT: merely introducing a
+# variable ... Zero-progress steps must fail». Оно описывает ровно то, чем
+# является нормальный первый шаг олимпиадного решения: ввести обозначения и
+# выписать уравнения. Исключение для финального шага в v11 уже было; v12 добавляет
+# такое же для стартового.
+#
+# Основание — три независимых замера:
+#   по счёту:     отключение оценщика на глубине 0 не стоило ни одной задачи;
+#   по вердиктам: lift над случайным оценщиком на глубине 0 равен +0%
+#                 (интервал [-13, +14]), на глубине 1 +35% ([+19, +51]);
+#   по разметке:  52% зарубленного на глубине 0 было хорошим, Фишер p = 0.107,
+#                 при этом хороших шагов там 64% против 49% на глубине 1.
+#
+# Как читать. Счёт выше базы означает, что дефект был в формулировке и оценщик
+# на первом шаге починен — тогда отключать его там больше не нужно, и глубина 1
+# как дефолт отменяется. Счёт на уровне базы означает, что дело не в правиле о
+# тривиальности, и надо искать дальше.
+command: >-
+  MODEL=Qwen/Qwen3.5-4B
+  SERVED_MODEL_NAME=Qwen/Qwen3.5-4B
+  CONCURRENCY=96
+  MAX_MODEL_LEN=65536
+  KV_CACHE_DTYPE=auto
+  MTP=0
+  TOOL_CALL_PARSER=qwen3_coder
+  scripts/run_benchmarks.sh --
+  .venv/bin/python -u scripts/benchmarks/run_aime26.py
+  --model {SERVED_MODEL_NAME}
+  --base-url {BASE_URL}
+  --api-key EMPTY
+  --pipeline qwen4b
+  --prompt conf/base/prompts/agent-step-qwen4b-v12.yml
+  --branch-mode single
+  --seed 43
+  --samples 3
+  --resample-token-threshold 250000
+  --vote-tiebreak-samples 0
+  --no-verify-step
+  --token-budget 800000
+  --timeout 1200
+  --workers 30
+  --output results/runs/{RUN_ID}/aime26.jsonl
+gpus: 1
+timeout_minutes: 720
