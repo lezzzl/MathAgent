@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "run_id": "yeahrmek-base-4b-a26-s45-v1",
+  "model": "Qwen/Qwen3.5-4B",
+  "pipeline": "solver",
+  "prompt": "/home/ykapushev/mathagent/work/yeahrmek-base-4b-a26-s45-v1/conf/base/prompts/pavel/solver-v0.yml",
+  "prompt_version": "solver-v0",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 45,
+    "max_tokens": 65536
+  },
+  "node_generation": {
+    "solver": {
+      "thinking": true,
+      "max_tokens": 65536
+    }
+  },
+  "runtime": {
+    "concurrency": 80,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 96,
+    "max_model_len": 131072
+  },
+  "status": "completed",
+  "created_at": "2026-08-17T07:59:56.078481+00:00",
+  "updated_at": "2026-08-17T08:06:54.569446+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/yeahrmek-base-4b-a26-s45-v1/results/runs/yeahrmek-base-4b-a26-s45-v1/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-17T08:06:52.948365+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 30,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 5443,
+        "output_tokens": 954510,
+        "total_tokens": 959953,
+        "wall_time_seconds": 416.865,
+        "tasks_per_second": 0.072
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 416.865,
+          "tasks_per_second": 0.072,
+          "status": "completed",
+          "updated_at": "2026-08-17T08:06:52.948338+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 30,
+    "successful_tasks": 30,
+    "failed_tasks": 0,
+    "remaining_tasks": 0,
+    "input_tokens": 5443,
+    "output_tokens": 954510,
+    "total_tokens": 959953,
+    "wall_time_seconds": 416.865,
+    "tasks_per_second": 0.072
+  }
+}
