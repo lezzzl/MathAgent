@@ -1,0 +1,52 @@
+=== 2026-08-18T15:51:41.127868+00:00 run_id=ilya-react-all-v5 branch=Ilya/agentic_loop@a46d261467aa gpus=1 devices=3 isolation=bwrap
+=== command: ENGINE=sglang MAX_MODEL_LEN=131072 CONCURRENCY=32 scripts/run_benchmarks.sh -- .venv/bin/kedro run --pipeline benchmarks --params benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.react.tools=all,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[aime26;hmmt26;imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=32,benchmarks.serving.vllm_max_num_seqs=48,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}
+>>> Стартую sglang: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 3, порт 8106
+>>> Лог: /home/ykapushev/mathagent/work/ilya-react-all-v5/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/ilya-react-all-v5/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 870663
+Log: /home/ykapushev/mathagent/work/ilya-react-all-v5/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/ilya-react-all-v5/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8106/v1 (лог: /home/ykapushev/mathagent/work/ilya-react-all-v5/scripts/qwen35-vllm-bench/bench-server.log)
+sglang не поднялся за 1800s. Хвост лога:
+Traceback (most recent call last):
+  File "/home/ykapushev/mathagent/work/ilya-react-all-v5/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchcodec/_internally_replaced_utils.py", line 93, in load_torchcodec_shared_libraries
+    torch.ops.load_library(core_library_path)
+  File "/home/ykapushev/mathagent/work/ilya-react-all-v5/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_ops.py", line 1505, in load_library
+    raise OSError(f"Could not load this library: {path}") from e
+OSError: Could not load this library: /home/ykapushev/mathagent/MathAgent/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchcodec/libtorchcodec_core4.so
+[end of libtorchcodec loading traceback].
+[2026-08-18 19:04:41] Multimodal data loading enabled with 16 worker threads (auto).
+[2026-08-18 19:04:46] Init torch distributed begin.
+[2026-08-18 19:04:46] Init torch distributed ends. elapsed=0.32 s, mem usage=0.10 GB
+[2026-08-18 19:04:48] Load weight begin. avail mem=175.92 GB
+[2026-08-18 19:04:50] Multimodal attention backend not set. Use fa4.
+[2026-08-18 19:04:50] Using fa4 as multimodal attention backend.
+[2026-08-18 19:04:50] using attn output gate!
+[2026-08-18 19:04:51] Found local HF snapshot for Qwen/Qwen3.5-9B at /home/ykapushev/mathagent/cache/huggingface/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a; skipping download.
+Multi-thread loading shards:   0% Completed | 0/4 [00:00<?, ?it/s]Multi-thread loading shards:  25% Completed | 1/4 [00:17<00:52, 17.37s/it]Multi-thread loading shards:  50% Completed | 2/4 [00:30<00:29, 14.81s/it]Multi-thread loading shards:  75% Completed | 3/4 [00:45<00:15, 15.08s/it]Multi-thread loading shards: 100% Completed | 4/4 [00:57<00:00, 13.84s/it]Multi-thread loading shards: 100% Completed | 4/4 [00:57<00:00, 14.44s/it]
+[2026-08-18 19:05:50] Using FP8 KV cache but no scaling factors provided. Defaulting to scaling factors of 1.0. This may lead to less accurate results!
+[2026-08-18 19:05:51] Load weight end. elapsed=62.35 s, type=Qwen3_5ForConditionalGeneration, avail mem=158.31 GB, mem usage=17.62 GB.
+[2026-08-18 19:06:14] Init torch distributed begin.
+[2026-08-18 19:06:14] Init torch distributed ends. elapsed=0.00 s, mem usage=0.00 GB
+[2026-08-18 19:06:14] Load weight begin. avail mem=158.29 GB
+[2026-08-18 19:06:14] Found local HF snapshot for Qwen/Qwen3.5-9B at /home/ykapushev/mathagent/cache/huggingface/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a; skipping download.
+Multi-thread loading shards:   0% Completed | 0/4 [00:00<?, ?it/s]Multi-thread loading shards:  50% Completed | 2/4 [00:01<00:01,  1.37it/s]Multi-thread loading shards:  75% Completed | 3/4 [00:02<00:00,  1.23it/s]Multi-thread loading shards: 100% Completed | 4/4 [00:02<00:00,  1.50it/s]Multi-thread loading shards: 100% Completed | 4/4 [00:02<00:00,  1.42it/s]
+[2026-08-18 19:06:18] Using FP8 KV cache but no scaling factors provided. Defaulting to scaling factors of 1.0. This may lead to less accurate results!
+[2026-08-18 19:06:18] Load weight end. elapsed=3.27 s, type=Qwen3_5ForCausalLMMTP, avail mem=154.04 GB, mem usage=4.24 GB.
+[2026-08-18 19:06:18] Mamba Cache is allocated. max_mamba_cache_size: 960, conv_state size: 1.06GB, ssm_state size: 45.05GB intermediate_ssm_state_cache size: 4.59GB intermediate_conv_window_cache size: 0.07GB 
+[2026-08-18 19:06:31] KV Cache is allocated. dtype: torch.float8_e4m3fn, #tokens: 5612352, K size: 42.82 GB, V size: 42.82 GB
+[2026-08-18 19:06:32] Memory pool end. avail mem=17.59 GB
+[2026-08-18 19:06:32] KV Cache is allocated. dtype: torch.float8_e4m3fn, #tokens: 5612352, K size: 5.35 GB, V size: 5.35 GB
+[2026-08-18 19:06:32] Memory pool end. avail mem=6.88 GB
+[2026-08-18 19:06:35] Linear attention kernel backend: decode=triton, prefill=triton, verify=triton
+[2026-08-18 19:06:35] Using hybrid linear attention backend for hybrid GDN models.
+[2026-08-18 19:06:35] GDN kernel dispatcher: decode=TritonGDNKernel, extend=TritonGDNKernel, verify=TritonGDNKernel packed_decode=True
+[2026-08-18 19:06:35] Linear attention kernel backend: decode=triton, prefill=triton, verify=triton
+[2026-08-18 19:06:35] Using hybrid linear attention backend for hybrid GDN models.
+[2026-08-18 19:06:35] GDN kernel dispatcher: decode=TritonGDNKernel, extend=TritonGDNKernel, verify=TritonGDNKernel packed_decode=True
+[2026-08-18 19:06:36] Running FlashInfer autotune with cache: /home/ykapushev/mathagent/work/ilya-react-all-v5/.cache/sglang/flashinfer/autotune/0.6.15.post1/sm100/b5dcb1b338af2101/rank_tp0_pp0_dp0.json
+[2026-08-18 19:20:42] FlashInfer autotune completed.
+[2026-08-18 19:20:42] Capture target prefill CUDA graph begin. backend=breakable, num_tokens=[4, 8, 12, 16, 20, 24, 28, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 288, 320, 352, 384, 416, 448, 480, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840, 4096, 4608, 5120, 5632, 6144, 6656, 7168, 7680, 8192], avail mem=9.34 GB
+  0%|          | 0/58 [00:00<?, ?it/s]Capturing num tokens (num_tokens=8192 avail_mem=9.27 GB):   0%|          | 0/58 [00:00<?, ?it/s]>>> Останавливаю sglang...
+Requesting graceful shutdown of supervisor PID 870663...
+SGLang stopped.
+=== 2026-08-18T16:21:53.160266+00:00 status=failed exit_code=1 duration=1812.0s
