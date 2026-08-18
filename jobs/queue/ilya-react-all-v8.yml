@@ -1,0 +1,13 @@
+# A/B промпта v2 — v8, фолбэк на vLLM. sglang (v5/v6/v7) стабильно падал на ноде
+# sm100: v5 не поднялся, v6/v7 — движок умирал под инференсом (APIConnectionError
+# на всех задачах). Пробуем ДРУГОЙ движок — vLLM: возможно, он переживёт sm100.
+#
+# MAX_NUM_SEQS=16 — проверенное значение (на нём vLLM стабильно отработал full-v1
+# и hmmt-v1-2); при 48/96 vLLM ловил OOM даже на a100. CONCURRENCY=16 под него.
+# STARTUP_TIMEOUT=5400 сохраняем на случай медленного старта. Остальное как в v7:
+# react + tester + tools=all, промпт v2, все 3 бенча.
+#
+# ЦЕНА: 16 seqs заметно медленнее 48 → imo ~3-4 ч, всё вместе ~4-5 ч. timeout 2400.
+command: "ENGINE=vllm STARTUP_TIMEOUT=5400 MAX_NUM_SEQS=16 MAX_MODEL_LEN=131072 CONCURRENCY=16 scripts/run_benchmarks.sh -- .venv/bin/kedro run --pipeline benchmarks --params benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.react.tools=all,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[aime26;hmmt26;imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=16,benchmarks.serving.vllm_max_num_seqs=16,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}"
+gpus: 1
+timeout_minutes: 2400
