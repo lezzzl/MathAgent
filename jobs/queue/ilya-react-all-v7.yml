@@ -1,0 +1,14 @@
+# Повтор A/B промпта v2 — v7. v6 поднялся (STARTUP_TIMEOUT помог), но СЕРВЕР УПАЛ
+# во время инференса: все 30 задач aime26 разом словили APIConnectionError
+# (~8 мин в прогон) → circuit breaker → 0 успешных, пустые ответы. Промпт ни при
+# чём — движок sglang умер под нагрузкой на ноде sm100 (память была впритык: после
+# KV-кэша ~7 ГБ свободно при 48 seqs × 131072).
+#
+# Фикс: снижаем давление на память —
+#   MAX_NUM_SEQS=32 (было 48) — меньше KV-кэша под нагрузкой;
+#   GPU_MEMORY_UTILIZATION=0.85 — оставляем запас, чтобы не ловить OOM.
+# STARTUP_TIMEOUT=5400 сохраняем (медленный autotune на sm100).
+# Остальное как в v6: react + tester + tools=all, промпт v2, все 3 бенча.
+command: "ENGINE=sglang STARTUP_TIMEOUT=5400 GPU_MEMORY_UTILIZATION=0.85 MAX_NUM_SEQS=32 MAX_MODEL_LEN=131072 CONCURRENCY=32 scripts/run_benchmarks.sh -- .venv/bin/kedro run --pipeline benchmarks --params benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.react.tools=all,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[aime26;hmmt26;imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=32,benchmarks.serving.vllm_max_num_seqs=32,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}"
+gpus: 1
+timeout_minutes: 240
