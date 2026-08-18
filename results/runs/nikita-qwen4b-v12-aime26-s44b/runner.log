@@ -1,0 +1,52 @@
+=== 2026-08-18T13:10:19.381196+00:00 run_id=nikita-qwen4b-v12-aime26-s44b branch=Nikita/ToT@b43641ab5d09 gpus=1 devices=2 isolation=bwrap
+=== command: MODEL=Qwen/Qwen3.5-4B SERVED_MODEL_NAME=Qwen/Qwen3.5-4B CONCURRENCY=96 MAX_MODEL_LEN=65536 KV_CACHE_DTYPE=auto MTP=0 TOOL_CALL_PARSER=qwen3_coder scripts/run_benchmarks.sh -- .venv/bin/python -u scripts/benchmarks/run_aime26.py --model {SERVED_MODEL_NAME} --base-url {BASE_URL} --api-key EMPTY --pipeline qwen4b --prompt conf/base/prompts/agent-step-qwen4b-v12.yml --branch-mode single --seed 44 --samples 3 --resample-token-threshold 250000 --vote-tiebreak-samples 0 --no-verify-step --token-budget 800000 --timeout 1200 --workers 30 --output results/runs/{RUN_ID}/aime26.jsonl
+>>> Стартую sglang: Qwen/Qwen3.5-4B как 'Qwen/Qwen3.5-4B' на GPU 2, порт 8104
+>>> Лог: /home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started SGLang supervisor PID 36444
+Log: /home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/scripts/qwen35-vllm-bench/serve_sglang.sh --stop
+>>> Жду готовности http://127.0.0.1:8104/v1 (лог: /home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/scripts/qwen35-vllm-bench/bench-server.log)
+sglang не поднялся за 1800s. Хвост лога:
+OSError: Could not load this library: /home/ykapushev/mathagent/MathAgent/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchcodec/libtorchcodec_core5.so
+
+FFmpeg version 4:
+Traceback (most recent call last):
+  File "/home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_ops.py", line 1503, in load_library
+    ctypes.CDLL(path)
+  File "/usr/lib/python3.12/ctypes/__init__.py", line 379, in __init__
+    self._handle = _dlopen(self._name, mode)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: libavutil.so.56: cannot open shared object file: No such file or directory
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchcodec/_internally_replaced_utils.py", line 93, in load_torchcodec_shared_libraries
+    torch.ops.load_library(core_library_path)
+  File "/home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torch/_ops.py", line 1505, in load_library
+    raise OSError(f"Could not load this library: {path}") from e
+OSError: Could not load this library: /home/ykapushev/mathagent/MathAgent/scripts/qwen35-vllm-bench/.venv/lib/python3.12/site-packages/torchcodec/libtorchcodec_core4.so
+[end of libtorchcodec loading traceback].
+[2026-08-18 16:27:08] Multimodal data loading enabled with 16 worker threads (auto).
+[2026-08-18 16:27:17] Init torch distributed begin.
+[2026-08-18 16:27:18] Init torch distributed ends. elapsed=0.71 s, mem usage=0.10 GB
+[2026-08-18 16:27:21] Load weight begin. avail mem=175.92 GB
+[2026-08-18 16:27:24] Multimodal attention backend not set. Use fa4.
+[2026-08-18 16:27:24] Using fa4 as multimodal attention backend.
+[2026-08-18 16:27:26] using attn output gate!
+[2026-08-18 16:27:28] Found local HF snapshot for Qwen/Qwen3.5-4B at /home/ykapushev/mathagent/cache/huggingface/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a; skipping download.
+Multi-thread loading shards:   0% Completed | 0/2 [00:00<?, ?it/s]Multi-thread loading shards:  50% Completed | 1/2 [01:04<01:04, 64.98s/it]Multi-thread loading shards: 100% Completed | 2/2 [01:50<00:00, 53.32s/it]Multi-thread loading shards: 100% Completed | 2/2 [01:50<00:00, 55.09s/it]
+[2026-08-18 16:29:21] Load weight end. elapsed=119.95 s, type=Qwen3_5ForConditionalGeneration, avail mem=167.30 GB, mem usage=8.62 GB.
+[2026-08-18 16:29:50] Mamba Cache is allocated. max_mamba_cache_size: 1477, conv_state size: 1.62GB, ssm_state size: 69.28GB 
+[2026-08-18 16:29:51] KV Cache is allocated. dtype: torch.bfloat16, #tokens: 2581958, K size: 39.40 GB, V size: 39.40 GB
+[2026-08-18 16:29:51] Memory pool end. avail mem=17.52 GB
+[2026-08-18 16:29:56] Linear attention kernel backend: decode=triton, prefill=triton, verify=triton
+[2026-08-18 16:29:56] Using hybrid linear attention backend for hybrid GDN models.
+[2026-08-18 16:29:56] GDN kernel dispatcher: decode=TritonGDNKernel, extend=TritonGDNKernel, verify=TritonGDNKernel packed_decode=True
+[2026-08-18 16:29:56] Running FlashInfer autotune with cache: /home/ykapushev/mathagent/work/nikita-qwen4b-v12-aime26-s44b/.cache/sglang/flashinfer/autotune/0.6.15.post1/sm100/4661a3e39f9be761/rank_tp0_pp0_dp0.json
+[2026-08-18 16:39:30] FlashInfer autotune completed.
+[2026-08-18 16:39:30] Capture target prefill CUDA graph begin. backend=breakable, num_tokens=[4, 8, 12, 16, 20, 24, 28, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 288, 320, 352, 384, 416, 448, 480, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840, 4096, 4608, 5120, 5632, 6144, 6656, 7168, 7680, 8192], avail mem=17.30 GB
+  0%|          | 0/58 [00:00<?, ?it/s]Capturing num tokens (num_tokens=8192 avail_mem=17.26 GB):   0%|          | 0/58 [00:00<?, ?it/s]>>> Останавливаю sglang...
+Requesting graceful shutdown of supervisor PID 36444...
+SGLang stopped.
+=== 2026-08-18T13:40:28.209540+00:00 status=failed exit_code=1 duration=1808.8s
