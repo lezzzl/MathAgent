@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "run_id": "ilya-react-all-v7",
+  "model": "qwen35-9b",
+  "pipeline": "react",
+  "prompt": "/home/ykapushev/mathagent/work/ilya-react-all-v7/conf/base/prompts/react-tools.yml",
+  "prompt_version": "react-tools-v2",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 90112
+  },
+  "runtime": {
+    "concurrency": 32,
+    "timeout": 4000.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 8
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 32,
+    "max_model_len": 131072
+  },
+  "status": "interrupted",
+  "created_at": "2026-08-18T19:49:53.299741+00:00",
+  "updated_at": "2026-08-18T19:58:24.522204+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-all-v7/results/runs/ilya-react-all-v7/aime26.jsonl",
+      "status": "interrupted",
+      "updated_at": "2026-08-18T19:58:14.560229+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 0,
+        "failed_tasks": 30,
+        "remaining_tasks": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "wall_time_seconds": 498.694,
+        "tasks_per_second": 0.0602
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 498.694,
+          "tasks_per_second": 0.0602,
+          "status": "interrupted",
+          "updated_at": "2026-08-18T19:58:14.560208+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 30,
+    "successful_tasks": 0,
+    "failed_tasks": 30,
+    "remaining_tasks": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "wall_time_seconds": 498.694,
+    "tasks_per_second": 0.0602
+  }
+}
