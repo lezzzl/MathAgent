@@ -1,0 +1,25 @@
+# Прогон react-агента на всех трёх бенчах разом (aime26 + hmmt26 +
+# imo_answerbench, 30+33+400=463 задачи) — v5. Имя файла = run_id →
+# results/runs/ilya-react-all-v5/{aime26,hmmt26,imo_answerbench}.jsonl.
+#
+# ГЛАВНАЯ ЦЕЛЬ этого прогона: проверить фикс react-tools-v2 (conf/base/prompts/
+# react-tools.yml + TOOL_PROTOCOL в src/mathagent/agent/react.py) — в
+# ilya-react-imo-v4 модель ни разу не позвала sympy_check/solve_equation/
+# closed_form/test_claim, всегда только run_python (302/302 вызовов). Причина:
+# ```python — единственный пример в протоколе, run_python универсален (есть
+# sympy), персона не говорила предпочитать узкие тулы. v2 явно расставляет
+# приоритеты (узкие тулы вместо ручного кода) и даёт второй пример вызова
+# (```sympy_check) в самом протоколе, чтобы сбить якорение на python.
+#
+# MAX_NUM_SEQS=16 — единственный ПРОВЕРЕННЫЙ порог (v2 96 и v3 48 ловили OOM на
+# инициализации engine core). CONCURRENCY=32 — тот же, что и в v4.
+#
+# ЦЕНА: ilya-react-imo-v4 (только imo_answerbench, 400 задач, тот же
+# MAX_NUM_SEQS=16) прошёл 225/400 за таймаут 2100 мин (~35ч) — не осилил всё.
+# aime26+hmmt26 (63 задачи) добавляют часы, но не доминируют. timeout 2880 мин
+# (48ч) — с запасом под все 463 задачи при текущем темпе (~9 мин/задача на
+# 16-way); если снова не уложимся — диспетчер коммитит частичное, добьём
+# resume-джобом.
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 CONCURRENCY=32 scripts/run_benchmarks.sh
+gpus: 1
+timeout_minutes: 2880
