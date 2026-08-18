@@ -1,5 +1,5 @@
 # AIME26: промпт v12 (правило для первого шага у оценщика). Зерно 43.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v12-aime26-s43/.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v12-aime26-s43b/.
 #
 # Отличие от базовой линии nikita-qwen4b-v11-aime26-sglang-s43b (23/30) ровно
 # одно: --prompt ...v12.yml вместо v11. Конфигурация базовая — оценщик работает

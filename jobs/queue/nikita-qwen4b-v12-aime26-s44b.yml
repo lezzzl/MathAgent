@@ -1,7 +1,7 @@
-# AIME26: промпт v12 (правило для первого шага у оценщика). Зерно 42.
-# Имя файла = run_id → results/runs/nikita-qwen4b-v12-aime26-s42/.
+# AIME26: промпт v12 (правило для первого шага у оценщика). Зерно 44.
+# Имя файла = run_id → results/runs/nikita-qwen4b-v12-aime26-s44b/.
 #
-# Отличие от базовой линии nikita-qwen4b-v11-aime26-sglang-s42b (23/30) ровно
+# Отличие от базовой линии nikita-qwen4b-v11-aime26-sglang-s44b (23/30) ровно
 # одно: --prompt ...v12.yml вместо v11. Конфигурация базовая — оценщик работает
 # со всех глубин, включая нулевую. В этом весь смысл: правка должна ЗАСТАВИТЬ его
 # работать на первом шаге, а не отключить его там.
@@ -39,7 +39,7 @@ command: >-
   --pipeline qwen4b
   --prompt conf/base/prompts/agent-step-qwen4b-v12.yml
   --branch-mode single
-  --seed 42
+  --seed 44
   --samples 3
   --resample-token-threshold 250000
   --vote-tiebreak-samples 0
