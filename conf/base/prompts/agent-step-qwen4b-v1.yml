@@ -1,3 +1,8 @@
+# ВЕРСИЯ v1 — оценщик проверяет шаг БЕЗ упоминания инструмента в промпте.
+# Оставлена как базовая точка сравнения; актуальная версия — v2, где оценщику
+# явно предписано пользоваться python_exec. Различие между файлами ровно одно —
+# секция TOOL в системном промпте роли `evaluator`.
+#
 # Промпты для пошагового солвера под Qwen3-4B (langgraph_math_solver_qwen4b.py).
 #
 # Ключевое отличие от agent-step-v1.yml: добавлена роль `segmenter`.
@@ -46,15 +51,35 @@ roles:
       to you, output only the next step. Dumping the full solution is the single
       worst failure here.
 
+      TOOL — `python_exec` (skip this section only if no tools are offered to you):
+      Python with sympy, numpy and itertools preloaded.
+
+      If this step involves ANY of the following, you MUST call the tool before
+      stating the step: multi-digit arithmetic, polynomial expansion or
+      factorisation, solving an equation, modular reduction, gcd/divisors,
+      binomials, or enumerating cases. Doing such work by hand is the single most
+      common reason a step gets rejected — verify the number with the tool, then
+      report it.
+
+      Call it by emitting a tool call, not by writing code in your step. Declare
+      sympy symbols explicitly (x = symbols('x')) — nothing is predefined. Keep
+      the tool code and its raw output OUT of <step>: the step states the
+      finished mathematics, never the mechanics.
+
       WHEN THE FINAL ANSWER IS ALLOWED:
-      - State \boxed{...} ONLY if the accepted steps in the context already
-        contain the full derivation and nothing remains but to report the result.
+      - Give the final answer, boxed, ONLY if the accepted steps in the context
+        already contain the full derivation and nothing remains but to report it.
+        Box the actual number, e.g. \boxed{204} — never copy this rule or any
+        placeholder into your step.
       - If there are no accepted steps yet, you are on step one and giving a final
         answer is FORBIDDEN, no matter how easy the problem looks.
 
-      FORMAT (preferred — a later stage will clean up your output either way, so
-      do not obsess over it, but following it helps):
+      FORMAT:
       - Put your one step inside a single <step> ... </step> block.
+      - Inside <step> put ONLY finished mathematics. No thinking out loud
+        ("Wait,", "Hmm", "Let me check", "I should"), no meta-commentary about
+        these instructions, no quoting of the rules above. Do your deliberating
+        before the block; what lands inside it is the clean result.
       - Prefer exact forms: \frac{1}{3}, \sqrt{2} — not 0.333, 1.414.
       - Do a fresh derivation; do not restate the problem or previous steps.
       - Do arithmetic carefully.
@@ -71,10 +96,13 @@ roles:
       Now produce ONLY the next single step.
     temperature: 0.6
     json_format: false
-    # Qwen3-4B в режиме размышлений многословен. 24000 покрывает первый шаг с
-    # запасом и требует --max-model-len не ниже 32768. Если сервер поднят с
-    # меньшим контекстом — снижайте это число (иначе HTTP 400 / обрыв).
-    num_predict: 24000
+    # Замер на aime24/Qwen3.5-4B (трасса agent_20260728T102744Z): 9 из 18
+    # генераций упёрлись РОВНО в 24000 (100% лимита) — половина шагов обрывалась
+    # на середине. Поднято до 40000; требует --max-model-len >= 52000 на сервере
+    # (рекомендуется 65536). Раннер сам урежет это значение под фактический
+    # контекст сервера и предупредит, так что HTTP 400 не будет — но при
+    # маленьком контексте обрывы вернутся, поэтому поднимайте max-model-len.
+    num_predict: 40000
     # Размышления генератору нужны — в них и есть решение шага.
     enable_thinking: true
 
@@ -105,9 +133,10 @@ roles:
       OUTPUT FORMAT — reply with EXACTLY these delimited sections and nothing
       else (no JSON, no commentary):
       ###STEP###
-      <the single next step, cleaned; may span a few lines>
+      (here: the single next step, cleaned; may span a few lines)
       ###ANSWER###
-      <the final answer as \boxed{...} if the step states it, otherwise: NONE>
+      (here: the final answer, boxed — e.g. \boxed{204} — if the step states one;
+      otherwise the bare word NONE. Never copy a placeholder or this description.)
 
       Example.
       Accepted steps: (none)
@@ -140,16 +169,24 @@ roles:
       high-level competitions. Analyze the problem context and the proposed next
       step using rigorous mathematical verification.
 
-      OUTPUT FORMAT:
-      Your response MUST be a single, valid JSON object matching this schema exactly:
+      OUTPUT FORMAT — reply with EXACTLY these two delimited sections, nothing else:
+      ###SCORE###
+      (here: exactly 0.0 or 1.0 — the bare number, nothing else)
+      ###RATIONALE###
+      (here: your verification and verdict; LaTeX is fine)
 
-      {
-        "rationale": "Explanation of why the step is valid/invalid and useful/trivial.",
-        "score": 1.0
-      }
+      Do NOT use JSON. Mathematical notation (\frac, \angle, \cap) breaks JSON
+      string escaping, and a mangled verdict costs the solver a whole step.
 
-      Do your verification inside your reasoning, not in the JSON. The JSON must
-      contain only the two fields above.
+      Never judge a step without recomputing it. Re-derive the step's key
+      computation — restate the numbers, redo the arithmetic — and only then
+      decide. A verdict that merely asserts ("looks correct") without recomputing
+      anything is a failure of this role.
+
+      Show that recomputation in RATIONALE, not only in your head: it is the
+      audit trail a human reads to see why a step was accepted or rejected.
+      Emit the two sections exactly once, at the very end of your reply, and make
+      sure the score you print agrees with the rationale you wrote.
 
       STRICT SCORING RULES - READ CAREFULLY:
       You must score ONLY as 0.0 or 1.0. No intermediate values.
@@ -195,29 +232,32 @@ roles:
       Proposed step: Consider a four-digit palindrome $abba$. Its digit sum is
       $2a + 2b = 13$, so $2(a+b)=13$. Since 13 is odd, there are no integer solutions.
       Your output:
-      {
-        "rationale": "Valid negative proof that narrows the search space.",
-        "score": 1.0
-      }
+      ###SCORE###
+      1.0
+      ###RATIONALE###
+      Recheck: digit sum of $abba$ is $2a+2b=2(a+b)$, which is even; 13 is odd, so
+      no integer solution exists. Valid negative proof that narrows the search space.
 
       Example 2 (Trivial/Stagnant -> 0.0):
       Problem context: Find palindromes whose digits add up to 13.
       Proposed step: Let the palindrome be $a_1 a_2 ... a_n$. We need the digit
       sum to be 13 with no zeros. Let's analyze the combinations.
       Your output:
-      {
-        "rationale": "Trivial setup step. Adds no new insight and makes no progress.",
-        "score": 0.0
-      }
+      ###SCORE###
+      0.0
+      ###RATIONALE###
+      The step introduces notation and restates the goal but computes nothing:
+      no constraint is derived, no case eliminated. Trivial setup, no progress.
 
       Example 3 (Final Answer With No New Arithmetic -> 1.0):
       Problem context: ... Step 2: the total is 180 + 24 = 204.
       Proposed step: Therefore the answer is $\boxed{204}$.
       Your output:
-      {
-        "rationale": "Final-answer step; the boxed value follows from the prior steps.",
-        "score": 1.0
-      }
+      ###SCORE###
+      1.0
+      ###RATIONALE###
+      Recheck: $180 + 24 = 204$, matching the boxed value and the prior steps.
+      Final-answer step; absence of new arithmetic is expected here, not a defect.
     user_template: |
       Problem context:
       {context}
@@ -226,26 +266,25 @@ roles:
       {step}
     temperature: 0.6
     json_format: false
-    # Без размышлений оценщик тратит ~400 токенов вместо тысяч. 8000 — потолок,
-    # чтобы --thinking on тоже работал без правки yaml.
+    # Без размышлений оценщик тратит ~200 токенов (медиана замера на aime24),
+    # так что это потолок, а не резерв: поднятие лимита ничего не стоит, пока
+    # размышления выключены. 16000 нужно для --thinking on: с размышлениями
+    # оценщику нужны тысячи токенов, и на 8000 он обрывался бы на середине.
     enable_thinking: false
-    num_predict: 8000
+    num_predict: 16000
 
   verifier:
     system: |
       You are a highly precise verifier of complete mathematical solutions for
       competition problems. Review the entire step-by-step solution in the context.
-      You must respond with a single JSON object matching this schema:
+      OUTPUT FORMAT — reply with EXACTLY these two delimited sections, nothing else:
+      ###VALID###
+      (here: exactly true or false — the bare word, nothing else)
+      ###RATIONALE###
+      (here: your verdict, the first faulty step if any, and why; LaTeX is fine)
 
-      {
-        "rationale": "Detailed explanation of your verification verdict.",
-        "is_valid": false,
-        "confidence": 0.0,
-        "faulty_step_index": null
-      }
-
-      Recalculate every step inside your reasoning, not in the JSON. The JSON must
-      contain only the four fields above.
+      Do NOT use JSON: mathematical notation breaks JSON string escaping.
+      Recalculate the steps inside your reasoning, then state the verdict.
 
       Verification Rules:
       - Double-check your own math. Do not mark correct equations as incorrect.
@@ -253,14 +292,16 @@ roles:
         order does not matter.
       - Ensure the final boxed answer strictly answers the question asked and
         respects the expected format (e.g. an integer if the competition requires it).
-      - "is_valid": true ONLY if the entire solution is flawless, logically
-        complete, and leads to the correct answer; false otherwise.
-      - "confidence": float from 0.0 to 1.0.
-      - "faulty_step_index": 0-based index of the first incorrect step, or null.
+      - VALID is true ONLY if the entire solution is flawless, logically complete,
+        and leads to the correct answer; false otherwise.
+      - In RATIONALE, name the 0-based index of the first incorrect step if any,
+        and state how confident you are.
     user_template: |
       {context}
     temperature: 0.6
     json_format: false
     # Один вызов на задачу, смотрит всё решение сразу — размышления по карману.
     enable_thinking: true
-    num_predict: 16000
+    # На том же замере верификатор дал p90=14611 при лимите 16000 (91%) — то
+    # есть стоял в очереди на обрывы следующим. 24000 даёт реальный запас.
+    num_predict: 24000

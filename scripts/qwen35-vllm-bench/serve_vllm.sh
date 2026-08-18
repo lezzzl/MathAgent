@@ -27,6 +27,12 @@ ENABLE_PREFIX_CACHING="${ENABLE_PREFIX_CACHING:-0}"
 ENABLE_ASYNC_SCHEDULING="${ENABLE_ASYNC_SCHEDULING:-1}"
 SPECULATIVE_CONFIG="${SPECULATIVE_CONFIG:-}"
 
+# Серверный разбор вызовов инструментов. Пусто (по умолчанию) — как раньше:
+# сервер отдаёт вызов текстом, а разбирает его клиент. Пошаговому агенту на
+# Qwen3.5 нужен qwen3_coder: на hermes сервер не разобрал НИ ОДНОГО вызова
+# (100% уходило в клиентский фоллбек), на qwen3_coder — все.
+TOOL_CALL_PARSER="${TOOL_CALL_PARSER:-}"
+
 export CUDA_VISIBLE_DEVICES
 
 if [[ -x "${SCRIPT_DIR}/.venv/bin/vllm" ]]; then
@@ -67,6 +73,12 @@ fi
 
 if [[ -n "${SPECULATIVE_CONFIG}" ]]; then
   args+=(--speculative-config "${SPECULATIVE_CONFIG}")
+fi
+
+# --enable-auto-tool-choice обязателен: без него vLLM игнорирует --tool-call-parser
+# и молча продолжает отдавать вызовы текстом.
+if [[ -n "${TOOL_CALL_PARSER}" ]]; then
+  args+=(--enable-auto-tool-choice --tool-call-parser "${TOOL_CALL_PARSER}")
 fi
 
 get_managed_pid() {

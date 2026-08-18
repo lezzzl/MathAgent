@@ -1,0 +1,581 @@
+"""Готовит папку прогона в общем формате results/runs/<run-id>/ для сравнения.
+
+    python scripts/export_run.py --run-id nikita-qwen35-4b-all-v1 \
+        AIME24=results/aime24/agent_..._trajectory.json \
+        AIME25=results/aime25/agent_..._trajectory.json
+
+Для каждого бенчмарка нужен файл траектории (--trajectory у раннера); рядом
+автоматически ищется <тот же префикс>_verified.jsonl или _imoverified.jsonl.
+
+На выходе — <bench>.jsonl в формате коллег (run_id / benchmark_name /
+model_name / task_id / solution / reasoning / ground_truth / metadata) и
+manifest.json с теми же полями, что у baseline-* и ilya-* прогонов.
+
+Пошаговый пайплайн отличается от их «solver» тем, что решение собирается из
+принятых шагов, а не приходит одним куском, поэтому:
+  * solution  — принятые шаги по порядку плюс финальный ответ в \\boxed{};
+  * reasoning — сырые генерации по шагам (аналог их <think>-трассы).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
+from answer_utils import extract_answer
+
+# Как называются файлы в папке прогона (у коллег это aime26.jsonl и т.п.).
+FILE_NAMES = {
+    "AIME24": "aime24", "AIME25": "aime25", "AIME26": "aime26",
+    "HMMT25": "hmmt25", "HMMT26": "hmmt26",
+    "HMMT_Feb2025": "hmmt25", "HMMT_Feb2026": "hmmt26",
+    "IMOAnswerBench": "imo_answerbench", "IMOAnswer": "imo_answerbench",
+    "MATH500": "math500", "GSM8K": "gsm8k",
+}
+
+
+def _txt(rec: Optional[dict], key: str = "content") -> str:
+    return ((rec or {}).get(key) or {}).get("text", "") or ""
+
+
+def find_verified(trajectory: Path) -> Optional[Path]:
+    """Ищет рядом файл со сверенными ответами."""
+    stem = trajectory.stem.replace("_trajectory", "")
+    for suffix in ("_verified.jsonl", "_imoverified.jsonl"):
+        candidate = trajectory.with_name(stem + suffix)
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def build_solution(task: dict) -> str:
+    """Собирает читаемое решение из принятых шагов.
+
+    У коллег в `solution` лежит цельный текст решения, из которого сайт
+    сравнения достаёт \\boxed{}. Пошаговый пайплайн хранит шаги по отдельности,
+    поэтому склеиваем их и в конце обязательно повторяем ответ в \\boxed{}.
+    """
+    steps = [r for r in task.get("records", []) if r.get("stage") == "commit"]
+    steps.sort(key=lambda r: (r.get("depth") if r.get("depth") is not None else 0))
+    parts = [f"Step {i}: {_txt(r).strip()}" for i, r in enumerate(steps, 1) if _txt(r).strip()]
+    answer = str(task.get("final_answer") or "").strip()
+    if answer:
+        # Если ответ уже стоит в \boxed внутри последнего шага, второй раз не дублируем.
+        tail = parts[-1] if parts else ""
+        if not extract_answer(tail):
+            parts.append(f"Final answer: \\boxed{{{answer}}}")
+    return "\n\n".join(parts)
+
+
+def build_reasoning(task: dict) -> str:
+    """Сырые генерации по шагам — аналог <think>-трассы у коллег."""
+    chunks: List[str] = []
+    for r in task.get("records", []):
+        if r.get("stage") != "generate":
+            continue
+        body = _txt(r).strip()
+        if not body:
+            continue
+        head = f"[depth {r.get('depth')} branch {r.get('branch')}]"
+        chunks.append(f"{head}\n{body}")
+    return "\n\n".join(chunks)
+
+
+def task_usage(task: dict) -> Dict[str, int]:
+    tin = tout = ttot = 0
+    for r in task.get("records", []):
+        tk = r.get("tokens") or {}
+        tin += tk.get("input", 0) or 0
+        tout += tk.get("output", 0) or 0
+        ttot += tk.get("total", 0) or 0
+    return {"input_tokens": tin, "output_tokens": tout, "total_tokens": ttot}
+
+
+def infer_temperature(tasks: List[dict]) -> Optional[float]:
+    """Базовая температура генератора.
+
+    В прогонах до добавления поля run.temperature её нет в шапке, но она есть в
+    каждой записи вызова; берём минимальную (ветки идут с надбавкой +0.15·i).
+    """
+    temps = [r.get("temperature") for t in tasks for r in t.get("records", [])
+             if r.get("stage") == "generate" and r.get("temperature") is not None]
+    return min(temps) if temps else None
+
+
+def infer_generator_thinking(tasks: List[dict]) -> Optional[bool]:
+    """Реально ли у генератора были включены размышления.
+
+    Флаг `--thinking auto` означает «как в yaml», поэтому по самому флагу режим
+    не восстановить: для v11 auto даёт размышления включёнными, для v9 —
+    выключенными у оценщика. Записи вызовов хранят фактическое значение.
+    """
+    flags = {r.get("enable_thinking") for t in tasks for r in t.get("records", [])
+             if r.get("stage") == "generate" and r.get("enable_thinking") is not None}
+    if not flags:
+        return None
+    return bool(max(flags))
+
+
+def infer_generator_num_predict(tasks: List[dict]) -> Optional[int]:
+    """Потолок генерации у генератора — из записей вызовов.
+
+    В шапке прогона его нет, а различать прогоны по нему нужно: лимит роли
+    поднимается через ROLE_NUM_PREDICT, не меняя версию промпта, и без этого
+    поля два таких прогона выглядят в manifest.json одинаково.
+    """
+    caps = {r.get("num_predict") for t in tasks for r in t.get("records", [])
+            if r.get("stage") == "generate" and r.get("num_predict")}
+    return max(caps) if caps else None
+
+
+def export_from_jsonl(bench: str, source: Path, run_id: str, out_dir: Path
+                      ) -> Dict[str, Any]:
+    """Собирает выгрузку из JSONL прогона, когда траектории уже нет.
+
+    Траектория — основной источник: из неё берутся текст решения по шагам и
+    сырые генерации. Если её потеряли, JSONL всё равно содержит ответ, эталон,
+    метрики и метаданные задачи, и прогон не выпадает из сравнения целиком.
+
+    Отличия такой выгрузки, о которых надо знать читателю:
+      * `solution` — только финальный ответ, без текста шагов;
+      * `reasoning` пуст: сырые генерации жили лишь в траектории.
+    Оба факта помечены в metadata, чтобы никто не принял пустой reasoning за
+    «модель ничего не думала».
+    """
+    name = FILE_NAMES.get(bench, bench.lower())
+    out_path = out_dir / f"{name}.jsonl"
+    rows = [json.loads(l) for l in source.read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    n_ok = 0
+    totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    wall = 0.0
+    model = ""
+    dataset = ""
+
+    with out_path.open("w", encoding="utf-8") as handle:
+        for rec in rows:
+            meta = rec.get("metadata", {}) or {}
+            metrics = meta.get("agent_metrics") or {}
+            model = rec.get("model_name") or model
+            dataset = meta.get("dataset") or dataset
+            used = int(metrics.get("tokens_used") or 0)
+            totals["total_tokens"] += used
+            wall += float(meta.get("latency_seconds") or 0.0)
+            if rec.get("is_correct"):
+                n_ok += 1
+
+            answer = str(rec.get("solution") or "").strip()
+            # Раннер пишет отсутствующий ответ как строку "None" — это не ответ.
+            if answer.lower() == "none":
+                answer = ""
+            # Сайт сравнения достаёт ответ из \boxed{}: голое значение он не
+            # найдёт, поэтому оборачиваем, если обёртки ещё нет.
+            solution = ""
+            if answer:
+                solution = (answer if "\\boxed" in answer
+                            else f"Final answer: \\boxed{{{answer}}}")
+
+            handle.write(json.dumps({
+                "run_id": run_id,
+                "benchmark_name": bench,
+                "model_name": model,
+                "task_id": str(rec.get("task_id")),
+                "solution": solution,
+                "reasoning": "",
+                "ground_truth": str(rec.get("ground_truth") or ""),
+                "metadata": {
+                    "dataset": dataset,
+                    **{k: meta[k] for k in ("Category", "Subcategory", "Source")
+                       if k in meta},
+                    "prompt_version": meta.get("prompt_version"),
+                    "temperature": meta.get("temperature"),
+                    "top_p": None, "top_k": None, "min_p": None,
+                    "presence_penalty": None, "repetition_penalty": None,
+                    "seed": None,
+                    "thinking": None,
+                    "max_tokens": meta.get("max_tokens"),
+                    "latency_seconds": meta.get("latency_seconds"),
+                    "usage": {"input_tokens": 0, "output_tokens": 0,
+                              "total_tokens": used,
+                              "input_token_details": {}, "output_token_details": {},
+                              "finish_reason": None},
+                    "error": meta.get("error") or None,
+                    "agent": {
+                        "steps_count": metrics.get("steps_count"),
+                        "answer_depth": metrics.get("answer_depth"),
+                        "tool_calls": metrics.get("tool_calls"),
+                        "gave_up": metrics.get("gave_up"),
+                        "gave_up_reason": metrics.get("gave_up_reason"),
+                        "samples": metrics.get("samples"),
+                        "sample_answers": metrics.get("sample_answers"),
+                        "votes": metrics.get("votes"),
+                        "agreement": metrics.get("agreement"),
+                        "use_tools": meta.get("use_tools"),
+                    },
+                    # Честная пометка о происхождении записи.
+                    "export_source": "jsonl_without_trajectory",
+                    "verification_method": rec.get("verification_method"),
+                },
+            }, ensure_ascii=False) + "\n")
+
+    n = len(rows)
+    print(f"  {bench:16s} -> {out_path.name:22s} задач={n:4d} верно={n_ok:4d} "
+          f"({100*n_ok/max(n,1):5.1f}%) токенов={totals['total_tokens']:,} "
+          f"[из JSONL, без траектории: solution только ответ, reasoning пуст]")
+    return {
+        "dataset": dataset,
+        "split": "train",
+        "total_tasks": n,
+        "output": str((out_dir / f"{name}.jsonl").as_posix()),
+        "status": "completed",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "total_tasks": n,
+            "successful_tasks": sum(
+                1 for r in rows
+                if str(r.get("solution") or "").strip().lower() not in ("", "none")),
+            "failed_tasks": sum(
+                1 for r in rows
+                if str(r.get("solution") or "").strip().lower() in ("", "none")),
+            "remaining_tasks": 0,
+            "input_tokens": 0, "output_tokens": 0,
+            "total_tokens": totals["total_tokens"],
+            "wall_time_seconds": round(wall, 3),
+            "tasks_per_second": round(n / wall, 4) if wall else 0.0,
+        },
+        "_correct": n_ok,
+        "_run": {},
+        "_note": "экспорт из JSONL: траектория недоступна",
+    }
+
+
+def export_benchmark(bench: str, trajectory: Path, run_id: str, out_dir: Path
+                     ) -> Dict[str, Any]:
+    data = json.loads(trajectory.read_text(encoding="utf-8"))
+    run = data.get("run", {}) or {}
+    tasks = data.get("tasks", []) or []
+    if run.get("temperature") is None:
+        run["temperature"] = infer_temperature(tasks)
+    # Значение из записей вызовов авторитетнее шапки: в траекториях, снятых до
+    # 06.08, шапка собиралась ДО загрузки промптов и хранит аварийный дефолт
+    # (24000 вместо реальных 40000). Записи вызовов всегда содержат то, с чем
+    # прогон реально шёл.
+    inferred = infer_generator_num_predict(tasks)
+    if inferred:
+        run["generator_num_predict"] = inferred
+    thinking = infer_generator_thinking(tasks)
+    if thinking is not None:
+        run["generator_thinking"] = thinking
+
+    verified_path = find_verified(trajectory)
+    verified: Dict[str, dict] = {}
+    if verified_path:
+        for line in verified_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            verified[str(rec.get("task_id"))] = rec
+
+    name = FILE_NAMES.get(bench, bench.lower())
+    out_path = out_dir / f"{name}.jsonl"
+    model = run.get("model", "")
+    n_ok = 0
+    totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    wall = 0.0
+
+    with out_path.open("w", encoding="utf-8") as handle:
+        for task in sorted(tasks, key=lambda t: str(t.get("task_id"))):
+            tid = str(task.get("task_id"))
+            vrec = verified.get(tid, {})
+            usage = task_usage(task)
+            for k in totals:
+                totals[k] += usage[k]
+            wall += task.get("elapsed") or 0.0
+            metrics = task.get("metrics") or {}
+            if vrec.get("is_correct"):
+                n_ok += 1
+
+            record = {
+                "run_id": run_id,
+                "benchmark_name": bench,
+                "model_name": model,
+                "task_id": tid,
+                "solution": build_solution(task),
+                "reasoning": build_reasoning(task),
+                "ground_truth": str(task.get("ground_truth") or vrec.get("ground_truth") or ""),
+                "metadata": {
+                    "dataset": run.get("dataset", ""),
+                    "prompt_version": Path(str(run.get("prompt", ""))).stem,
+                    "temperature": run.get("temperature"),
+                    "top_p": None, "top_k": None, "min_p": None,
+                    "presence_penalty": None, "repetition_penalty": None,
+                    "seed": None,
+                    "thinking": run.get("thinking") == "on",
+                    "max_tokens": run.get("token_budget"),
+                    "latency_seconds": round(task.get("elapsed") or 0.0, 3),
+                    "usage": {
+                        **usage,
+                        "input_token_details": {},
+                        "output_token_details": {},
+                        "finish_reason": None,
+                    },
+                    "error": (task.get("error") or None),
+                    # Специфика пошагового пайплайна: у «solver»-прогонов коллег
+                    # этих полей нет, но лишние ключи в metadata уже встречаются
+                    # (у IMO там Category/Source), так что формат не ломается.
+                    "agent": {
+                        "pipeline": run.get("pipeline"),
+                        "branch_mode": run.get("branch_mode"),
+                        "k_branches": run.get("k_branches"),
+                        "use_tools": run.get("use_tools"),
+                        "steps_count": metrics.get("steps_count"),
+                        "answer_depth": metrics.get("answer_depth"),
+                        "tool_calls": metrics.get("tool_calls"),
+                        "segmenter_calls": metrics.get("segmenter_calls"),
+                        "gave_up": metrics.get("gave_up"),
+                        "gave_up_reason": metrics.get("gave_up_reason"),
+                        "is_valid": metrics.get("is_valid"),
+                        # Голосование: сколько независимых решений было и
+                        # насколько они сошлись. Без этого по записи нельзя
+                        # понять, ответ получен с первого раза или большинством.
+                        "samples": metrics.get("samples"),
+                        "sample_answers": metrics.get("sample_answers"),
+                        "votes": metrics.get("votes"),
+                        "agreement": metrics.get("agreement"),
+                    },
+                },
+            }
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    n = len(tasks)
+    print(f"  {bench:16s} -> {out_path.name:22s} задач={n:4d} верно={n_ok:4d} "
+          f"({100*n_ok/max(n,1):5.1f}%) токенов={totals['total_tokens']:,}")
+    return {
+        "dataset": run.get("dataset", ""),
+        "split": run.get("split", "train"),
+        "total_tasks": n,
+        "output": str((out_dir / f"{name}.jsonl").as_posix()),
+        "status": "completed",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "total_tasks": n,
+            "successful_tasks": sum(1 for t in tasks if str(t.get("final_answer") or "").strip()),
+            "failed_tasks": sum(1 for t in tasks if not str(t.get("final_answer") or "").strip()),
+            "remaining_tasks": 0,
+            "input_tokens": totals["input_tokens"],
+            "output_tokens": totals["output_tokens"],
+            "total_tokens": totals["total_tokens"],
+            "wall_time_seconds": round(wall, 3),
+            "tasks_per_second": round(n / wall, 4) if wall else 0.0,
+        },
+        "_correct": n_ok,
+        "_run": run,
+    }
+
+
+def run_meta_from_log(log: Path) -> Dict[str, Any]:
+    """Достаёт параметры прогона из строки `=== command:` в runner.log диспетчера.
+
+    Зачем. Выгрузка из JSONL (когда траектории нет) оставляла manifest.json почти
+    пустым: модель, зерно, число сэмплов, движок — всё по нулям. Пустой манифест
+    хуже отсутствующего: на дашборде он выглядит заполненным. А команда прогона
+    записана диспетчером дословно, и в ней есть всё нужное.
+    """
+    import shlex
+
+    text = log.read_text(encoding="utf-8", errors="replace")
+    lines = [l for l in text.splitlines() if l.startswith("=== command:")]
+    if not lines:
+        return {}
+    argv = shlex.split(lines[-1].split("=== command:", 1)[1].strip())
+    env = {a.split("=", 1)[0]: a.split("=", 1)[1] for a in argv
+           if "=" in a and not a.startswith("-") and a.split("=", 1)[0].isupper()}
+
+    def opt(flag: str, cast=str, default=None):
+        return cast(argv[argv.index(flag) + 1]) if flag in argv else default
+
+    prompt = opt("--prompt", str, "")
+    meta: Dict[str, Any] = {
+        "model": env.get("MODEL") or opt("--model", str, ""),
+        "pipeline": opt("--pipeline", str, ""),
+        "prompt": prompt,
+        "temperature": opt("--temperature", float),
+        "workers": opt("--workers", int),
+        "timeout": opt("--timeout", float),
+        "branch_mode": opt("--branch-mode", str),
+        "k_branches": opt("--k-branches", int, 3),
+        "token_budget": opt("--token-budget", int),
+        "seed": opt("--seed", int),
+        "samples": opt("--samples", int, 1),
+        "resample_token_threshold": opt("--resample-token-threshold", int),
+        "finish_at": opt("--finish-at", float, 0.85),
+        "max_recoveries": opt("--max-recoveries", int, 15),
+        "max_step_attempts": opt("--max-step-attempts", int, 3),
+        "verifier_enabled": "--no-verify-step" not in argv,
+        "evaluator_min_depth": opt("--evaluator-min-depth", int, 0),
+        "evaluator_mode": opt("--evaluator-mode", str, "llm"),
+        "engine": env.get("ENGINE", "sglang"),   # дефолт run_benchmarks.sh
+        "max_model_len": int(env["MAX_MODEL_LEN"]) if "MAX_MODEL_LEN" in env else None,
+    }
+    # thinking режимом управляет yaml: --thinking в командах не задаём, а auto
+    # означает per-role значение. Берём фактическое у генератора.
+    if prompt:
+        path = ROOT / prompt
+        if path.exists():
+            try:
+                import yaml
+                roles = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("roles", {})
+                meta["generator_thinking"] = (roles.get("generator") or {}).get("enable_thinking")
+                meta["temperature"] = meta["temperature"] or (roles.get("generator") or {}).get("temperature")
+            except Exception:  # noqa: BLE001 — метаданные не должны ронять выгрузку
+                pass
+    return meta
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("specs", nargs="+", metavar="BENCH=путь",
+                    help="пары «имя бенчмарка = путь». Обычно это файл "
+                         "траектории (_trajectory.json); если её потеряли, "
+                         "можно указать JSONL прогона или *_verified.jsonl — "
+                         "тогда в выгрузке не будет текста шагов и reasoning.")
+    ap.add_argument("--run-id", required=True, help="имя папки прогона")
+    ap.add_argument("--out", type=Path, default=ROOT / "results" / "runs",
+                    help="куда класть папку (по умолчанию results/runs)")
+    ap.add_argument("--status", default="completed", choices=["completed", "partial"])
+    ap.add_argument("--meta-log", type=Path,
+                    help="runner.log прогона: из строки '=== command:' берутся "
+                         "модель, зерно, сэмплы, движок и флаги для manifest.json. "
+                         "Нужен, когда выгрузка идёт из JSONL и траектории нет — "
+                         "иначе манифест выйдет пустым, но с виду заполненным.")
+    args = ap.parse_args()
+
+    out_dir = args.out / args.run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Папка прогона: {out_dir}")
+
+    benchmarks: Dict[str, Any] = {}
+    run_meta: Dict[str, Any] = {}
+    for spec in args.specs:
+        if "=" not in spec:
+            print(f"Неверный формат: {spec!r}, нужно BENCH=путь")
+            return 2
+        bench, path = spec.split("=", 1)
+        source = Path(path)
+        if not source.exists():
+            print(f"Не найден файл: {source}")
+            return 2
+        # Траектория — основной источник. JSONL принимается как запасной, когда
+        # траектория потеряна: лучше выгрузить прогон без текста шагов, чем не
+        # выгрузить вовсе.
+        if source.suffix.lower() == ".jsonl":
+            info = export_from_jsonl(bench, source, args.run_id, out_dir)
+        else:
+            info = export_benchmark(bench, source, args.run_id, out_dir)
+        run_meta = info.pop("_run") or run_meta
+    if args.meta_log:
+        # Явные метаданные важнее выведенных: команда прогона — источник правды.
+        run_meta = {**run_meta, **{k: v for k, v in run_meta_from_log(args.meta_log).items()
+                                   if v is not None}}
+        info.pop("_correct", None)
+        benchmarks[bench] = info
+
+    agg = {"total_tasks": 0, "successful_tasks": 0, "failed_tasks": 0,
+           "remaining_tasks": 0, "input_tokens": 0, "output_tokens": 0,
+           "total_tokens": 0, "wall_time_seconds": 0.0}
+    for info in benchmarks.values():
+        s = info["summary"]
+        for k in agg:
+            if k in s:
+                agg[k] += s[k]
+    agg["wall_time_seconds"] = round(agg["wall_time_seconds"], 3)
+    agg["tasks_per_second"] = (round(agg["total_tasks"] / agg["wall_time_seconds"], 4)
+                               if agg["wall_time_seconds"] else 0.0)
+
+    manifest = {
+        "schema_version": 1,
+        "run_id": args.run_id,
+        "model": run_meta.get("model", ""),
+        "pipeline": run_meta.get("pipeline", ""),
+        "prompt": run_meta.get("prompt", ""),
+        "prompt_version": Path(str(run_meta.get("prompt", ""))).stem,
+        "role": "solver",
+        "generation": {
+            # Флаг --thinking может стоять в auto, и тогда режим определяется
+            # per-role значением из yaml. Берём фактическое значение генератора,
+            # если оно есть в шапке, — иначе «auto» ошибочно читался бы как off.
+            "thinking": (
+                run_meta["generator_thinking"]
+                if run_meta.get("generator_thinking") is not None
+                else run_meta.get("thinking") == "on"
+            ),
+            "temperature": run_meta.get("temperature"),
+            "top_p": None, "top_k": None, "min_p": None,
+            "presence_penalty": None, "repetition_penalty": None, "seed": None,
+            "max_tokens": run_meta.get("token_budget"),
+        },
+        "runtime": {
+            "concurrency": run_meta.get("workers"),
+            "timeout": run_meta.get("timeout"),
+            "max_retries": 1,
+        },
+        "serving": {"engine": run_meta.get("engine", "vllm"),
+                    "reasoning_parser": "qwen3",
+                    "max_model_len": run_meta.get("max_model_len")},
+        "agent": {
+            "branch_mode": run_meta.get("branch_mode"),
+            "k_branches": run_meta.get("k_branches"),
+            "score_threshold": run_meta.get("score_threshold"),
+            "use_tools": run_meta.get("use_tools"),
+            "token_budget": run_meta.get("token_budget"),
+            # Потолок одной генерации у роли generator. Поднимается через
+            # ROLE_NUM_PREDICT без смены версии промпта, поэтому без этого поля
+            # два таких прогона неразличимы в манифесте.
+            "generator_num_predict": run_meta.get("generator_num_predict"),
+            # Всё, что делает прогоны сопоставимыми. Без seed нельзя сказать,
+            # законно ли сравнивать два прогона; без samples непонятно, один это
+            # проход или голосование по нескольким.
+            "seed": run_meta.get("seed"),
+            "samples": run_meta.get("samples"),
+            "resample_token_threshold": run_meta.get("resample_token_threshold"),
+            "finish_at": run_meta.get("finish_at"),
+            "max_recoveries": run_meta.get("max_recoveries"),
+            "max_step_attempts": run_meta.get("max_step_attempts"),
+            "verifier_enabled": run_meta.get("verifier_enabled"),
+            # Стадия оценки шага: с какой глубины она включается и чем судит.
+            # Прогоны с --evaluator-min-depth 1 дешевле базовых почти на треть,
+            # и без этих полей они в манифесте выглядят одинаково.
+            "evaluator_min_depth": run_meta.get("evaluator_min_depth"),
+            "evaluator_mode": run_meta.get("evaluator_mode"),
+            "roles": run_meta.get("roles"),
+        },
+        "status": args.status,
+        "created_at": run_meta.get("started_utc", datetime.now(timezone.utc).isoformat()),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "benchmarks": benchmarks,
+        "summary": agg,
+    }
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\nmanifest.json записан. Итого задач: {agg['total_tasks']}, "
+          f"токенов: {agg['total_tokens']:,}")
+    print(f"\nЗагрузка на сервер:\n"
+          f"  scp -r {out_dir} <сервер>:/mnt/storage-1/MathAgent/results/runs/")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
