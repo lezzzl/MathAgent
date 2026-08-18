@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "run_id": "p-v8-planner-50kthink-imo-s42-v2",
+  "model": "Qwen/Qwen3.5-9B",
+  "pipeline": "react_agent",
+  "prompt": "/home/ykapushev/mathagent/work/p-v8-planner-50kthink-imo-s42-v2/conf/base/prompts/pavel/react-agent-v8-planner-50kthink.yml",
+  "prompt_version": "react-agent-v8-planner-50kthink",
+  "generation": {
+    "thinking": true,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 65536
+  },
+  "node_generation": {
+    "agent": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "planner": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "repair": {
+      "thinking": true,
+      "max_tokens": 50000
+    },
+    "cot": {
+      "thinking": true,
+      "max_tokens": 50000
+    }
+  },
+  "node_models": {
+    "planner": {
+      "model": "Qwen/Qwen3.5-9B",
+      "uses_primary_endpoint": true
+    }
+  },
+  "runtime": {
+    "concurrency": 80,
+    "timeout": 7200.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 96,
+    "max_model_len": 131072
+  },
+  "pipeline_config": {
+    "max_tool_calls": 20,
+    "max_format_retries": 3,
+    "format_recovery": "exact-feedback-forced-final-v3",
+    "max_tool_repairs": 5,
+    "execution_diagnostics": "structured-v1",
+    "repair_mode": "separate-node-v1",
+    "python_mode": "notebook",
+    "cot_parser": "tolerant-v1",
+    "execution_tools": [
+      "python",
+      "sympy"
+    ],
+    "notebook_isolation": "shared",
+    "execution_timeout": 20.0
+  },
+  "status": "interrupted",
+  "created_at": "2026-08-18T15:51:56.967647+00:00",
+  "updated_at": "2026-08-18T15:59:42.773407+00:00",
+  "benchmarks": {
+    "IMOAnswerBench": {
+      "dataset": "OpenEvals/IMO-AnswerBench",
+      "split": "train",
+      "total_tasks": 400,
+      "output": "/home/ykapushev/mathagent/work/p-v8-planner-50kthink-imo-s42-v2/results/runs/p-v8-planner-50kthink-imo-s42-v2/imo_answerbench.jsonl",
+      "status": "interrupted",
+      "updated_at": "2026-08-18T15:59:42.766367+00:00",
+      "summary": {
+        "total_tasks": 400,
+        "successful_tasks": 0,
+        "failed_tasks": 81,
+        "remaining_tasks": 319,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "wall_time_seconds": 465.777,
+        "tasks_per_second": 0.1739
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 81,
+          "wall_time_seconds": 465.777,
+          "tasks_per_second": 0.1739,
+          "status": "interrupted",
+          "updated_at": "2026-08-18T15:59:42.766350+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 400,
+    "successful_tasks": 0,
+    "failed_tasks": 81,
+    "remaining_tasks": 319,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "wall_time_seconds": 465.777,
+    "tasks_per_second": 0.1739
+  }
+}
