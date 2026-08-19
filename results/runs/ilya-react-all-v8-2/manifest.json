@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "run_id": "ilya-react-all-v8-2",
+  "model": "qwen35-9b",
+  "pipeline": "react",
+  "prompt": "/home/ykapushev/mathagent/work/ilya-react-all-v8-2/conf/base/prompts/react-tools.yml",
+  "prompt_version": "react-tools-v2",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 90112
+  },
+  "runtime": {
+    "concurrency": 16,
+    "timeout": 4000.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 8
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 16,
+    "max_model_len": 131072
+  },
+  "status": "running",
+  "created_at": "2026-08-19T09:25:40.094973+00:00",
+  "updated_at": "2026-08-19T09:25:40.095002+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-all-v8-2/results/runs/ilya-react-all-v8-2/aime26.jsonl",
+      "status": "running",
+      "updated_at": "2026-08-19T09:25:40.095000+00:00"
+    }
+  },
+  "summary": {}
+}
