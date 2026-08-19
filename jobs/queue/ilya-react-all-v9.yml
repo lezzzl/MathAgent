@@ -1,0 +1,19 @@
+# v9 — возврат на sglang после v8 (vLLM, 16 seqs). Что показал v8 на sm100:
+# 154 ток/с на все 16 запросов, KV-кэш занят на 4.7%, утилизация GPU 0-7%,
+# imo дошёл до 238/400 за 14 часов. Карта простаивала, а не считала.
+#
+# Почему sglang снова можно. Падения v5-v7 («движок умирал под инференсом»,
+# APIConnectionError на всех задачах) — это сторожевой таймер планировщика
+# sglang: он срабатывает на первом же forward'е. Все такие падения (и у Ильи, и
+# у Павла) случались там, где на узле в этот момент поднимался ВТОРОЙ сервер
+# sglang. Запуски sglang в одиночку отрабатывают полностью: imo Павла — 400/400
+# без единой ошибки. Причина не найдена, поэтому правило простое:
+# ДВА sglang'а одновременно на узле поднимать нельзя.
+#
+# MAX_NUM_SEQS=96 вместо 16: предел 16 подбирался против OOM у vLLM на a100
+# (80 ГБ), а здесь sm100 (183 ГБ) — при 16 запросах KV занят на 4.7%, запас
+# восьмикратный. CONCURRENCY=64 под него: полуторный запас до 96 seqs.
+# Остальное как в v8: react + tester + tools=all, промпт v2, все 3 бенча.
+command: ENGINE=sglang STARTUP_TIMEOUT=5400 MAX_NUM_SEQS=96 MAX_MODEL_LEN=131072 CONCURRENCY=64 scripts/run_benchmarks.sh -- .venv/bin/kedro run --pipeline benchmarks --params benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.react.tools=all,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[aime26;hmmt26;imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=64,benchmarks.serving.vllm_max_num_seqs=96,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}
+gpus: 1
+timeout_minutes: 2400
