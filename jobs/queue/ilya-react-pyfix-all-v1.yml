@@ -1,0 +1,16 @@
+# Полный прогон react-агента С ТУЛАМИ и УЛУЧШЕННЫМ run_python на трёх бенчах.
+# Имя файла = run_id → results/runs/ilya-react-pyfix-all-v1/{aime26,hmmt26,imo_answerbench}.jsonl.
+#
+# Фикс run_python (в этой же ветке, src/mathagent/agent/tools.py):
+#   • пред-импорт math/sympy(sp)/numpy(np)/itertools/Fraction/... — убирает главный
+#     класс падений NameError «name 'math' is not defined» (61 из 176 ошибок на imo);
+#   • sys.set_int_max_str_digits — снимает ValueError на больших int→str;
+#   • timeout 10→20с — часть падений была таймаутом на легитимном переборе.
+# Ожидание: доля падений run_python 27% заметно вниз → тулы реже мешают.
+#
+# Сравним с прошлым «с тулами» (aime26 93.3% / hmmt26 51.5% / imo 50%) и с no-tools
+# (aime26 90% / hmmt26 42% / imo 53%) через scripts/analyze_runs.py.
+# Конфиг: sglang 48 seqs, динамический max_tokens, tester=true. timeout 2400 с запасом.
+command: "ENGINE=sglang MAX_MODEL_LEN=131072 CONCURRENCY=32 scripts/run_benchmarks.sh -- .venv/bin/kedro run --pipeline benchmarks --params benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.react.tools=all,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[aime26;hmmt26;imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=32,benchmarks.serving.vllm_max_num_seqs=48,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}"
+gpus: 1
+timeout_minutes: 2400

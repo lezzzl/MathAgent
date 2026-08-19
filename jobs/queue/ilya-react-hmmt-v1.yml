@@ -1,0 +1,18 @@
+# Прогон react-агента только на hmmt26 (33 задачи). Имя файла = run_id →
+# results/runs/ilya-react-hmmt-v1/hmmt26.jsonl.
+#
+# Движок и пайплайн поднимает scripts/run_benchmarks.sh; после `--` команды нет
+# → он сам зовёт kedro-пайплайн benchmarks с дефолтами
+# (pipeline=react, react.tester=true, react.max_steps=8, prompt=react-tools.yml).
+#
+# Фиксы после ilya-react-full-v1 (который упал на circuit breaker и не дошёл до imo):
+#   • run_benchmarks.sh: потолок max_tokens 49152 — режет хвост генераций по 75k
+#     токенов (задачи на ~50 мин), медиана 24k / p90 45k не страдают;
+#   • parameters.yml: timeout 3000→4000с, max_consecutive_api_errors 3→8 —
+#     одиночная долгая задача больше не роняет весь бенч.
+#
+# 33 задачи ≈ одна «волна» ~50 мин → в 120 мин влезает с запасом.
+# MAX_MODEL_LEN=131072 (контекст), из него max_tokens=90112 → срезается до 49152.
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 SELECT=[hmmt26] scripts/run_benchmarks.sh
+gpus: 1
+timeout_minutes: 120

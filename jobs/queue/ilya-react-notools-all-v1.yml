@@ -1,0 +1,13 @@
+# Ablation: react-агент БЕЗ тулов на всех трёх бенчах (aime26 + hmmt26 + imo).
+# benchmarks.react.tools=none → промпт без протокола инструментов (голое reasoning
+# в react-обвязке), tester выключен. Сравним наборы верных против прогонов С тулами
+# (aime26 93.3% / hmmt26 51.5% / imo 50%) через scripts/analyze_runs.py --compare —
+# ответит, решается ли ДРУГОЙ набор задач с тулами.
+# Имя файла = run_id → results/runs/ilya-react-notools-all-v1/{aime26,hmmt26,imo_answerbench}.jsonl.
+#
+# Конфиг как в основных прогонах: динамический max_tokens (max_model_len 131072),
+# sglang 48 seqs, concurrency 32. Без тул-лупа задачи идут одной генерацией →
+# быстрее, чем с тулами. Три бенча (30+33+400) → timeout 2400 мин с большим запасом.
+command: "ENGINE=sglang MAX_MODEL_LEN=131072 CONCURRENCY=32 scripts/run_benchmarks.sh -- .venv/bin/kedro run --pipeline benchmarks --params benchmarks.pipeline=react,benchmarks.react.tools=none,benchmarks.react.tester=false,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[aime26;hmmt26;imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=32,benchmarks.serving.vllm_max_num_seqs=48,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}"
+gpus: 1
+timeout_minutes: 2400

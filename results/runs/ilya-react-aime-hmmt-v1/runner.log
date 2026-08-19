@@ -1,0 +1,180 @@
+=== 2026-08-11T19:29:36.098719+00:00 run_id=ilya-react-aime-hmmt-v1 branch=Ilya/agentic_loop@192b5bd3fe0c gpus=1 devices=1 isolation=bwrap
+=== command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 SELECT=[aime26;hmmt26] scripts/run_benchmarks.sh
+>>> Стартую vllm: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 1, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started vLLM supervisor PID 1276155
+Log: /home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/scripts/qwen35-vllm-bench/serve_vllm.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/scripts/qwen35-vllm-bench/bench-server.log)
+>>> Движок (vllm) готов. Размер KV-кэша:
+(EngineCore pid=1282078) INFO 08-11 22:34:36 [kv_cache_utils.py:2177] GPU KV cache size: 7,561,093 tokens
+(EngineCore pid=1282078) INFO 08-11 22:34:36 [kv_cache_utils.py:2178] Maximum concurrency for 131,072 tokens per request: 57.69x
+>>> Движок поднялся с:
+      speculative_config=SpeculativeConfig(method='mtp'
+      'max_cudagraph_capture_size': 32
+      enable_prefix_caching=True
+      kv_cache_dtype=fp8_e4m3
+>>> Запускаю бенчмарки (run_id=ilya-react-aime-hmmt-v1)
+    /home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/.venv/bin/kedro    run    --pipeline    benchmarks    --params    benchmarks.pipeline=react\,benchmarks.react.tester=true\,benchmarks.prompt=conf/base/prompts/react-tools.yml\,benchmarks.model.name=qwen35-9b\,benchmarks.model.base_url=http://127.0.0.1:8137/v1\,benchmarks.select=\[aime26\;hmmt26\]\,benchmarks.generation.max_tokens=90112\,benchmarks.runtime.concurrency=32\,benchmarks.serving.vllm_max_num_seqs=16\,benchmarks.serving.vllm_max_model_len=131072\,benchmarks.run_id=ilya-react-aime-hmmt-v1
+[08/11/26 22:35:12] INFO     Using                               __init__.py:272
+                             '/home/ykapushev/mathagent/MathAgen                
+                             t/.venv/lib/python3.13/site-package                
+                             s/kedro/framework/project/rich_logg                
+                             ing.yml' as logging configuration.                 
+[08/11/26 22:35:13] INFO     Kedro project                        session.py:329
+                             ilya-react-aime-hmmt-v1                            
+                    INFO     Kedro is sending anonymous usage data plugin.py:273
+                             with the sole purpose of improving                 
+                             the product. No personal data or IP                
+                             addresses are stored on our side. To               
+                             opt out, set the                                   
+                             `KEDRO_DISABLE_TELEMETRY` or                       
+                             `DO_NOT_TRACK` environment variables,              
+                             or create a `.telemetry` file in the               
+                             current working directory with the                 
+                             contents `consent: false`. To hide                 
+                             this message, explicitly grant or                  
+                             deny consent. Read more at                         
+                             https://docs.kedro.org/en/stable/abou              
+                             t/telemetry/                                       
+[08/11/26 22:35:14] INFO     Using synchronous mode for  sequential_runner.py:68
+                             loading and saving data.                           
+                             Use the --async flag for                           
+                             potential performance                              
+                             gains.                                             
+                             https://docs.kedro.org/en/s                        
+                             table/nodes_and_pipelines/r                        
+                             un_a_pipeline.html#load-and                        
+                             -save-asynchronously                               
+                    INFO     Loading data from               data_catalog.py:403
+                             params:benchmarks                                  
+                             (MemoryDataset)...                                 
+                    INFO     Running node: run_benchmarks:           node.py:389
+                             run_benchmarks() ->                                
+2026-08-11T22:35:14+0300 INFO kedro_run_all_started run_id=ilya-react-aime-hmmt-v1 model=qwen35-9b benchmarks=aime26,hmmt26
+2026-08-11T22:35:14+0300 INFO benchmark_process_started benchmark=aime26
+2026-08-11T22:35:18+0300 INFO run_started run_id=ilya-react-aime-hmmt-v1 model=qwen35-9b benchmark=AIME26
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-08-11T22:35:21+0300 INFO benchmark_started benchmark=AIME26 total=30 skipped=0 concurrency=32 output=/home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/results/runs/ilya-react-aime-hmmt-v1/aime26.jsonl
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=1
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=2
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=3
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=4
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=5
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=6
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=7
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=8
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=9
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=10
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=11
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=12
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=13
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=14
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=15
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=16
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=17
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=18
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=19
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=20
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=21
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=22
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=23
+2026-08-11T22:35:21+0300 INFO task_submitted benchmark=AIME26 task_id=24
+2026-08-11T22:35:22+0300 INFO task_submitted benchmark=AIME26 task_id=25
+2026-08-11T22:35:22+0300 INFO task_submitted benchmark=AIME26 task_id=26
+2026-08-11T22:35:22+0300 INFO task_submitted benchmark=AIME26 task_id=27
+2026-08-11T22:35:22+0300 INFO task_submitted benchmark=AIME26 task_id=28
+2026-08-11T22:35:22+0300 INFO task_submitted benchmark=AIME26 task_id=29
+2026-08-11T22:35:22+0300 INFO task_submitted benchmark=AIME26 task_id=30
+2026-08-11T22:41:30+0300 INFO task_completed benchmark=AIME26 task_id=3 progress=1/30 latency=368.336 output_tokens=12668 finish_reason=None
+2026-08-11T22:51:27+0300 INFO task_completed benchmark=AIME26 task_id=11 progress=2/30 latency=965.285 output_tokens=29572 finish_reason=None
+2026-08-11T22:51:57+0300 INFO task_completed benchmark=AIME26 task_id=1 progress=3/30 latency=996.146 output_tokens=9940 finish_reason=None
+2026-08-11T22:53:53+0300 INFO task_completed benchmark=AIME26 task_id=5 progress=4/30 latency=1111.228 output_tokens=17897 finish_reason=None
+2026-08-11T22:54:12+0300 INFO task_completed benchmark=AIME26 task_id=16 progress=5/30 latency=1130.593 output_tokens=14562 finish_reason=None
+2026-08-11T22:54:18+0300 INFO task_completed benchmark=AIME26 task_id=14 progress=6/30 latency=1136.476 output_tokens=25181 finish_reason=None
+2026-08-11T22:57:24+0300 INFO task_completed benchmark=AIME26 task_id=9 progress=7/30 latency=1322.307 output_tokens=27836 finish_reason=None
+2026-08-11T22:57:35+0300 INFO task_completed benchmark=AIME26 task_id=7 progress=8/30 latency=1334.000 output_tokens=14490 finish_reason=None
+2026-08-11T22:57:36+0300 INFO task_completed benchmark=AIME26 task_id=19 progress=9/30 latency=1334.952 output_tokens=15578 finish_reason=None
+2026-08-11T22:58:07+0300 INFO task_completed benchmark=AIME26 task_id=20 progress=10/30 latency=1365.301 output_tokens=19658 finish_reason=None
+2026-08-11T22:58:21+0300 INFO task_completed benchmark=AIME26 task_id=25 progress=11/30 latency=1379.645 output_tokens=18752 finish_reason=None
+2026-08-11T22:58:38+0300 INFO task_completed benchmark=AIME26 task_id=4 progress=12/30 latency=1396.322 output_tokens=13346 finish_reason=None
+2026-08-11T22:59:36+0300 INFO task_completed benchmark=AIME26 task_id=17 progress=13/30 latency=1454.233 output_tokens=28938 finish_reason=None
+2026-08-11T22:59:56+0300 INFO task_completed benchmark=AIME26 task_id=21 progress=14/30 latency=1474.924 output_tokens=25290 finish_reason=None
+2026-08-11T22:59:59+0300 INFO task_completed benchmark=AIME26 task_id=8 progress=15/30 latency=1477.487 output_tokens=20321 finish_reason=None
+2026-08-11T23:00:00+0300 INFO task_completed benchmark=AIME26 task_id=22 progress=16/30 latency=1478.523 output_tokens=21302 finish_reason=None
+2026-08-11T23:01:28+0300 INFO task_completed benchmark=AIME26 task_id=6 progress=17/30 latency=1567.036 output_tokens=25683 finish_reason=None
+2026-08-11T23:02:26+0300 INFO task_completed benchmark=AIME26 task_id=10 progress=18/30 latency=1624.461 output_tokens=45290 finish_reason=None
+2026-08-11T23:02:53+0300 INFO task_completed benchmark=AIME26 task_id=18 progress=19/30 latency=1651.504 output_tokens=36200 finish_reason=None
+2026-08-11T23:03:17+0300 INFO task_completed benchmark=AIME26 task_id=2 progress=20/30 latency=1676.080 output_tokens=35129 finish_reason=None
+2026-08-11T23:04:11+0300 INFO task_completed benchmark=AIME26 task_id=12 progress=21/30 latency=1729.969 output_tokens=31685 finish_reason=None
+2026-08-11T23:07:04+0300 INFO task_completed benchmark=AIME26 task_id=23 progress=22/30 latency=1902.788 output_tokens=34948 finish_reason=None
+2026-08-11T23:07:11+0300 INFO task_completed benchmark=AIME26 task_id=26 progress=23/30 latency=1909.687 output_tokens=30063 finish_reason=None
+2026-08-11T23:07:44+0300 INFO task_completed benchmark=AIME26 task_id=13 progress=24/30 latency=1942.817 output_tokens=42511 finish_reason=None
+2026-08-11T23:07:54+0300 INFO task_completed benchmark=AIME26 task_id=30 progress=25/30 latency=1952.519 output_tokens=24989 finish_reason=None
+2026-08-11T23:09:18+0300 INFO task_completed benchmark=AIME26 task_id=15 progress=26/30 latency=2036.095 output_tokens=56500 finish_reason=None
+2026-08-11T23:14:28+0300 INFO task_completed benchmark=AIME26 task_id=28 progress=27/30 latency=2345.692 output_tokens=41345 finish_reason=None
+2026-08-11T23:14:44+0300 INFO task_completed benchmark=AIME26 task_id=29 progress=28/30 latency=2361.926 output_tokens=39811 finish_reason=None
+2026-08-11T23:16:21+0300 INFO task_completed benchmark=AIME26 task_id=27 progress=29/30 latency=2459.520 output_tokens=42557 finish_reason=None
+2026-08-11T23:28:23+0300 INFO task_completed benchmark=AIME26 task_id=24 progress=30/30 latency=3181.333 output_tokens=21255 finish_reason=None
+2026-08-11T23:28:23+0300 INFO benchmark_finished benchmark=AIME26 status=completed successful=30 failed=0 remaining=0 wall_time=3181.588 output=/home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/results/runs/ilya-react-aime-hmmt-v1/aime26.jsonl
+2026-08-11T23:28:25+0300 INFO benchmark_process_started benchmark=hmmt26
+2026-08-11T23:28:29+0300 INFO run_started run_id=ilya-react-aime-hmmt-v1 model=qwen35-9b benchmark=HMMT26
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-08-11T23:28:32+0300 INFO benchmark_started benchmark=HMMT26 total=33 skipped=0 concurrency=32 output=/home/ykapushev/mathagent/work/ilya-react-aime-hmmt-v1/results/runs/ilya-react-aime-hmmt-v1/hmmt26.jsonl
+2026-08-11T23:28:32+0300 INFO task_submitted benchmark=HMMT26 task_id=1
+2026-08-11T23:28:32+0300 INFO task_submitted benchmark=HMMT26 task_id=2
+2026-08-11T23:28:32+0300 INFO task_submitted benchmark=HMMT26 task_id=3
+2026-08-11T23:28:32+0300 INFO task_submitted benchmark=HMMT26 task_id=4
+2026-08-11T23:28:32+0300 INFO task_submitted benchmark=HMMT26 task_id=5
+2026-08-11T23:28:32+0300 INFO task_submitted benchmark=HMMT26 task_id=6
+2026-08-11T23:28:32+0300 INFO task_submitted benchmark=HMMT26 task_id=7
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=8
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=9
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=10
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=11
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=12
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=13
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=14
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=15
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=16
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=17
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=18
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=19
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=20
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=21
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=22
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=23
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=24
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=25
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=26
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=27
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=28
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=29
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=30
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=31
+2026-08-11T23:28:33+0300 INFO task_submitted benchmark=HMMT26 task_id=32
+2026-08-11T23:34:55+0300 INFO task_completed benchmark=HMMT26 task_id=12 progress=1/33 latency=382.560 output_tokens=12390 finish_reason=None
+2026-08-11T23:34:55+0300 INFO task_submitted benchmark=HMMT26 task_id=33
+2026-08-11T23:55:48+0300 INFO task_completed benchmark=HMMT26 task_id=22 progress=2/33 latency=1635.570 output_tokens=15025 finish_reason=None
+2026-08-11T23:56:28+0300 INFO task_completed benchmark=HMMT26 task_id=17 progress=3/33 latency=1675.445 output_tokens=38282 finish_reason=None
+2026-08-11T23:58:40+0300 INFO task_completed benchmark=HMMT26 task_id=14 progress=4/33 latency=1806.950 output_tokens=4875 finish_reason=None
+2026-08-12T00:01:54+0300 INFO task_completed benchmark=HMMT26 task_id=8 progress=5/33 latency=2001.841 output_tokens=22996 finish_reason=None
+2026-08-12T00:03:21+0300 INFO task_completed benchmark=HMMT26 task_id=11 progress=6/33 latency=2088.095 output_tokens=16091 finish_reason=None
+2026-08-12T00:04:59+0300 INFO task_completed benchmark=HMMT26 task_id=19 progress=7/33 latency=2186.187 output_tokens=37932 finish_reason=None
+2026-08-12T00:06:13+0300 INFO task_completed benchmark=HMMT26 task_id=21 progress=8/33 latency=2259.965 output_tokens=16519 finish_reason=None
+2026-08-12T00:06:26+0300 INFO task_completed benchmark=HMMT26 task_id=3 progress=9/33 latency=2273.810 output_tokens=30057 finish_reason=None
+2026-08-12T00:07:33+0300 INFO task_completed benchmark=HMMT26 task_id=5 progress=10/33 latency=2340.785 output_tokens=34287 finish_reason=None
+2026-08-12T00:07:37+0300 INFO task_completed benchmark=HMMT26 task_id=6 progress=11/33 latency=2344.270 output_tokens=32183 finish_reason=None
+2026-08-12T00:08:38+0300 INFO task_completed benchmark=HMMT26 task_id=20 progress=12/33 latency=2405.615 output_tokens=40234 finish_reason=None
+2026-08-12T00:09:15+0300 INFO task_completed benchmark=HMMT26 task_id=1 progress=13/33 latency=2442.578 output_tokens=11223 finish_reason=None
+2026-08-12T00:09:25+0300 INFO task_completed benchmark=HMMT26 task_id=23 progress=14/33 latency=2452.400 output_tokens=24026 finish_reason=None
+2026-08-12T00:09:30+0300 INFO task_completed benchmark=HMMT26 task_id=4 progress=15/33 latency=2457.334 output_tokens=14060 finish_reason=None
+2026-08-12T00:12:48+0300 INFO task_completed benchmark=HMMT26 task_id=9 progress=16/33 latency=2655.083 output_tokens=37254 finish_reason=None
+2026-08-12T00:13:45+0300 INFO task_completed benchmark=HMMT26 task_id=26 progress=17/33 latency=2711.912 output_tokens=31595 finish_reason=None
+2026-08-12T00:14:21+0300 INFO task_completed benchmark=HMMT26 task_id=2 progress=18/33 latency=2748.729 output_tokens=29329 finish_reason=None
+2026-08-12T00:14:38+0300 INFO task_completed benchmark=HMMT26 task_id=24 progress=19/33 latency=2765.686 output_tokens=16343 finish_reason=None
+2026-08-12T00:18:57+0300 INFO task_completed benchmark=HMMT26 task_id=7 progress=20/33 latency=3024.597 output_tokens=56566 finish_reason=None
+2026-08-12T00:19:28+0300 INFO task_completed benchmark=HMMT26 task_id=27 progress=21/33 latency=3055.097 output_tokens=32688 finish_reason=None
+2026-08-12T00:21:35+0300 INFO task_completed benchmark=HMMT26 task_id=16 progress=22/33 latency=3182.570 output_tokens=49628 finish_reason=None
+2026-08-12T00:22:03+0300 INFO task_completed benchmark=HMMT26 task_id=13 progress=23/33 latency=3210.141 output_tokens=51729 finish_reason=None
+=== 2026-08-11T21:29:38.837978+00:00 status=timeout exit_code=-9 duration=7202.7s

@@ -36,3 +36,13 @@ agent_traces:
 eval_report:
   type: json.JSONDataset
   filepath: ${globals:metrics_dir}/eval_report.json
+
+# Сводка прогона бенчмарков (пишет узел run_benchmarks): run_id, статусы, manifest
+benchmark_run_summary:
+  type: json.JSONDataset
+  filepath: ${globals:output_dir}/benchmark_run_summary.json
+
+# Результат опциональной публикации прогона в LangSmith (узел publish_to_langsmith)
+langsmith_publish_result:
+  type: json.JSONDataset
+  filepath: ${globals:output_dir}/langsmith_publish_result.json

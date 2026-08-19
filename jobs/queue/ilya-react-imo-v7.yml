@@ -1,0 +1,16 @@
+# Прогон react-агента на imo_answerbench (400 задач) — v7.
+# v6 всё ещё ловил 400 переполнения: динамический max_tokens применялся (bind
+# работает), но оценка входа считала только .content и НЕ видела reasoning в
+# additional_kwargs (reasoning-модель возвращает <think> в контекст) → недосчёт
+# ~половины токенов → max_tokens выходил слишком большим.
+#
+# ФИКС react.py (в этой же ветке): размер входа ведём по РЕАЛЬНЫМ prompt-токенам
+# из usage_metadata ответов сервера (там учтён и reasoning), а не по символам;
+# ctx_tokens прокидывается через состояние графа + учёт observation. max_tokens
+# каждого вызова = min(90112, 131072 - реальный_вход - запас) → 400 невозможен.
+# Гард лупа (length без \boxed → finalize) сохранён.
+#
+# Команда — как в рабочем v6 (sglang, 48 seqs, concurrency 32). ~400 задач ≈ 45 мин.
+command: "ENGINE=sglang MAX_MODEL_LEN=131072 CONCURRENCY=32 scripts/run_benchmarks.sh -- .venv/bin/kedro run --pipeline benchmarks --params benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=32,benchmarks.serving.vllm_max_num_seqs=48,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}"
+gpus: 1
+timeout_minutes: 120

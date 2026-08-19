@@ -1,0 +1,145 @@
+=== 2026-08-11T17:23:35.990256+00:00 run_id=ilya-react-aime26-3 branch=Ilya/agentic_loop@72b900007c0a gpus=1 devices=1 isolation=bwrap
+=== command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 SELECT=[aime26] scripts/run_benchmarks.sh
+>>> Стартую vllm: Qwen/Qwen3.5-9B как 'qwen35-9b' на GPU 1, порт 8137
+>>> Лог: /home/ykapushev/mathagent/work/ilya-react-aime26-3/scripts/qwen35-vllm-bench/bench-server.log (предыдущий — /home/ykapushev/mathagent/work/ilya-react-aime26-3/scripts/qwen35-vllm-bench/bench-server.log.prev)
+Started vLLM supervisor PID 769840
+Log: /home/ykapushev/mathagent/work/ilya-react-aime26-3/scripts/qwen35-vllm-bench/bench-server.log
+Stop: /home/ykapushev/mathagent/work/ilya-react-aime26-3/scripts/qwen35-vllm-bench/serve_vllm.sh --stop
+>>> Жду готовности http://127.0.0.1:8137/v1 (лог: /home/ykapushev/mathagent/work/ilya-react-aime26-3/scripts/qwen35-vllm-bench/bench-server.log)
+>>> Движок (vllm) готов. Размер KV-кэша:
+(EngineCore pid=778261) INFO 08-11 20:28:45 [kv_cache_utils.py:2177] GPU KV cache size: 7,561,093 tokens
+(EngineCore pid=778261) INFO 08-11 20:28:45 [kv_cache_utils.py:2178] Maximum concurrency for 131,072 tokens per request: 57.69x
+>>> Движок поднялся с:
+      speculative_config=SpeculativeConfig(method='mtp'
+      'max_cudagraph_capture_size': 32
+      enable_prefix_caching=True
+      kv_cache_dtype=fp8_e4m3
+>>> Запускаю бенчмарки (run_id=ilya-react-aime26-3)
+    /home/ykapushev/mathagent/work/ilya-react-aime26-3/.venv/bin/kedro    run    --pipeline    benchmarks    --params    benchmarks.pipeline=react\,benchmarks.react.tester=true\,benchmarks.prompt=conf/base/prompts/react-tools.yml\,benchmarks.model.name=qwen35-9b\,benchmarks.model.base_url=http://127.0.0.1:8137/v1\,benchmarks.select=\[aime26\]\,benchmarks.runtime.concurrency=32\,benchmarks.serving.vllm_max_num_seqs=16\,benchmarks.serving.vllm_max_model_len=131072\,benchmarks.run_id=ilya-react-aime26-3
+[08/11/26 20:29:20] INFO     Using                               __init__.py:272
+                             '/home/ykapushev/mathagent/MathAgen                
+                             t/.venv/lib/python3.13/site-package                
+                             s/kedro/framework/project/rich_logg                
+                             ing.yml' as logging configuration.                 
+[08/11/26 20:29:20] INFO     Kedro project ilya-react-aime26-3    session.py:329
+[08/11/26 20:29:21] INFO     Kedro is sending anonymous usage data plugin.py:273
+                             with the sole purpose of improving                 
+                             the product. No personal data or IP                
+                             addresses are stored on our side. To               
+                             opt out, set the                                   
+                             `KEDRO_DISABLE_TELEMETRY` or                       
+                             `DO_NOT_TRACK` environment variables,              
+                             or create a `.telemetry` file in the               
+                             current working directory with the                 
+                             contents `consent: false`. To hide                 
+                             this message, explicitly grant or                  
+                             deny consent. Read more at                         
+                             https://docs.kedro.org/en/stable/abou              
+                             t/telemetry/                                       
+                    INFO     Using synchronous mode for  sequential_runner.py:68
+                             loading and saving data.                           
+                             Use the --async flag for                           
+                             potential performance                              
+                             gains.                                             
+                             https://docs.kedro.org/en/s                        
+                             table/nodes_and_pipelines/r                        
+                             un_a_pipeline.html#load-and                        
+                             -save-asynchronously                               
+                    INFO     Loading data from               data_catalog.py:403
+                             params:benchmarks                                  
+                             (MemoryDataset)...                                 
+                    INFO     Running node: run_benchmarks:           node.py:389
+                             run_benchmarks() ->                                
+2026-08-11T20:29:21+0300 INFO kedro_run_all_started run_id=ilya-react-aime26-3 model=qwen35-9b benchmarks=aime26
+2026-08-11T20:29:21+0300 INFO benchmark_process_started benchmark=aime26
+2026-08-11T20:29:25+0300 INFO run_started run_id=ilya-react-aime26-3 model=qwen35-9b benchmark=AIME26
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-08-11T20:29:29+0300 INFO benchmark_started benchmark=AIME26 total=30 skipped=0 concurrency=32 output=/home/ykapushev/mathagent/work/ilya-react-aime26-3/results/runs/ilya-react-aime26-3/aime26.jsonl
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=1
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=2
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=3
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=4
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=5
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=6
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=7
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=8
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=9
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=10
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=11
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=12
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=13
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=14
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=15
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=16
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=17
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=18
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=19
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=20
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=21
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=22
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=23
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=24
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=25
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=26
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=27
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=28
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=29
+2026-08-11T20:29:29+0300 INFO task_submitted benchmark=AIME26 task_id=30
+2026-08-11T20:37:46+0300 INFO task_completed benchmark=AIME26 task_id=12 progress=1/30 latency=496.786 output_tokens=16793 finish_reason=None
+2026-08-11T20:38:49+0300 INFO task_completed benchmark=AIME26 task_id=4 progress=2/30 latency=559.641 output_tokens=18955 finish_reason=None
+2026-08-11T20:40:39+0300 INFO task_completed benchmark=AIME26 task_id=13 progress=3/30 latency=670.508 output_tokens=22309 finish_reason=None
+2026-08-11T20:43:13+0300 INFO task_completed benchmark=AIME26 task_id=16 progress=4/30 latency=824.513 output_tokens=8629 finish_reason=None
+2026-08-11T20:44:09+0300 INFO task_completed benchmark=AIME26 task_id=9 progress=5/30 latency=879.732 output_tokens=28091 finish_reason=None
+2026-08-11T20:45:08+0300 INFO task_completed benchmark=AIME26 task_id=3 progress=6/30 latency=939.145 output_tokens=15034 finish_reason=None
+2026-08-11T20:45:11+0300 INFO task_completed benchmark=AIME26 task_id=7 progress=7/30 latency=941.725 output_tokens=13265 finish_reason=None
+2026-08-11T20:45:23+0300 INFO task_completed benchmark=AIME26 task_id=5 progress=8/30 latency=954.201 output_tokens=16868 finish_reason=None
+2026-08-11T20:45:29+0300 INFO task_completed benchmark=AIME26 task_id=6 progress=9/30 latency=960.371 output_tokens=20239 finish_reason=None
+2026-08-11T20:45:49+0300 INFO task_completed benchmark=AIME26 task_id=2 progress=10/30 latency=980.532 output_tokens=17143 finish_reason=None
+2026-08-11T20:46:11+0300 INFO task_completed benchmark=AIME26 task_id=14 progress=11/30 latency=1001.805 output_tokens=32052 finish_reason=None
+2026-08-11T20:46:26+0300 INFO task_completed benchmark=AIME26 task_id=19 progress=12/30 latency=1016.893 output_tokens=14949 finish_reason=None
+2026-08-11T20:46:57+0300 INFO task_completed benchmark=AIME26 task_id=20 progress=13/30 latency=1048.116 output_tokens=14298 finish_reason=None
+2026-08-11T20:47:10+0300 INFO task_completed benchmark=AIME26 task_id=24 progress=14/30 latency=1060.942 output_tokens=12866 finish_reason=None
+2026-08-11T20:47:21+0300 INFO task_completed benchmark=AIME26 task_id=8 progress=15/30 latency=1072.278 output_tokens=17220 finish_reason=None
+2026-08-11T20:47:24+0300 INFO task_completed benchmark=AIME26 task_id=17 progress=16/30 latency=1075.061 output_tokens=23418 finish_reason=None
+2026-08-11T20:47:40+0300 INFO task_completed benchmark=AIME26 task_id=25 progress=17/30 latency=1091.256 output_tokens=15786 finish_reason=None
+2026-08-11T20:47:53+0300 INFO task_completed benchmark=AIME26 task_id=1 progress=18/30 latency=1103.909 output_tokens=8033 finish_reason=None
+2026-08-11T20:49:26+0300 INFO task_completed benchmark=AIME26 task_id=15 progress=19/30 latency=1196.558 output_tokens=37018 finish_reason=None
+2026-08-11T20:50:31+0300 INFO task_completed benchmark=AIME26 task_id=21 progress=20/30 latency=1261.616 output_tokens=26336 finish_reason=None
+2026-08-11T20:51:56+0300 INFO task_completed benchmark=AIME26 task_id=26 progress=21/30 latency=1346.916 output_tokens=22936 finish_reason=None
+2026-08-11T20:53:14+0300 INFO task_completed benchmark=AIME26 task_id=22 progress=22/30 latency=1424.795 output_tokens=27199 finish_reason=None
+2026-08-11T20:53:17+0300 INFO task_completed benchmark=AIME26 task_id=30 progress=23/30 latency=1428.038 output_tokens=22696 finish_reason=None
+2026-08-11T20:54:34+0300 INFO task_completed benchmark=AIME26 task_id=27 progress=24/30 latency=1504.946 output_tokens=26127 finish_reason=None
+2026-08-11T20:57:38+0300 INFO task_completed benchmark=AIME26 task_id=10 progress=25/30 latency=1688.686 output_tokens=53269 finish_reason=None
+2026-08-11T20:59:22+0300 INFO task_completed benchmark=AIME26 task_id=11 progress=26/30 latency=1792.956 output_tokens=48822 finish_reason=None
+2026-08-11T21:05:02+0300 INFO task_completed benchmark=AIME26 task_id=29 progress=27/30 latency=2132.636 output_tokens=44511 finish_reason=None
+2026-08-11T21:05:50+0300 INFO task_completed benchmark=AIME26 task_id=28 progress=28/30 latency=2180.611 output_tokens=46422 finish_reason=None
+2026-08-11T21:06:37+0300 INFO task_completed benchmark=AIME26 task_id=23 progress=29/30 latency=2227.820 output_tokens=57344 finish_reason=None
+2026-08-11T21:06:48+0300 INFO task_completed benchmark=AIME26 task_id=18 progress=30/30 latency=2239.368 output_tokens=66178 finish_reason=None
+2026-08-11T21:06:48+0300 INFO benchmark_finished benchmark=AIME26 status=completed successful=30 failed=0 remaining=0 wall_time=2239.511 output=/home/ykapushev/mathagent/work/ilya-react-aime26-3/results/runs/ilya-react-aime26-3/aime26.jsonl
+2026-08-11T21:06:50+0300 INFO kedro_run_all_finished run_id=ilya-react-aime26-3 status=completed
+[08/11/26 21:06:50] INFO     Saving data to                  data_catalog.py:445
+                             benchmark_run_summary                              
+                             (JSONDataset)...                                   
+                    INFO     Completed node: run_benchmarks        runner.py:250
+                    INFO     Completed 1 out of 2 tasks            runner.py:251
+                    INFO     Loading data from               data_catalog.py:403
+                             benchmark_run_summary                              
+                             (JSONDataset)...                                   
+                    INFO     Loading data from               data_catalog.py:403
+                             params:benchmarks                                  
+                             (MemoryDataset)...                                 
+                    INFO     Running node: publish_to_langsmith:     node.py:389
+                             publish_to_langsmith() ->                          
+                    INFO     Saving data to                  data_catalog.py:445
+                             langsmith_publish_result                           
+                             (JSONDataset)...                                   
+                    INFO     Completed node: publish_to_langsmith  runner.py:250
+                    INFO     Completed 2 out of 2 tasks            runner.py:251
+                    INFO     Pipeline execution completed          runner.py:135
+                             successfully in 2248.8 sec.                        
+>>> kedro завершился с кодом 0
+>>> PUSH_RESULTS=none — результаты не коммичу
+>>> Останавливаю vllm...
+Requesting graceful shutdown of supervisor PID 769840...
+vLLM stopped.
+=== 2026-08-11T18:06:54.509741+00:00 status=done exit_code=0 duration=2598.5s

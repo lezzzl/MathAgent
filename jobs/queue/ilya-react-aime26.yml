@@ -1,0 +1,15 @@
+# Прогон react-агента (react + tester + наши тулы) на AIME26.
+# Имя файла = run_id → результаты лягут в results/runs/ilya-react-aime26/.
+#
+# Движок и пайплайн поднимает scripts/run_benchmarks.sh; после `--` команды нет
+# → он сам зовёт kedro-пайплайн benchmarks с дефолтами
+# (pipeline=react, react.tester=true, prompt=react-tools.yml).
+#
+# MAX_MODEL_LEN=131072 — расширяем контекст (Qwen3.5-9B тянет нативно): при 73728
+# длинное reasoning + растущий ReAct-диалог упирались в потолок и обрывались.
+# Из MAX_MODEL_LEN скрипт сам считает лимит выхода (max_tokens = 131072-40960 =
+# 90112), чтобы трудные задачи дорешивались, а выход не переполнял контекст.
+# MAX_NUM_SEQS=16 — снижаем, т.к. длинный контекст ест KV-кэш.
+command: MAX_MODEL_LEN=131072 MAX_NUM_SEQS=16 SELECT=[aime26] scripts/run_benchmarks.sh
+gpus: 1
+timeout_minutes: 120

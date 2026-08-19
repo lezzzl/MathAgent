@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "run_id": "ilya-react-all-v8",
+  "model": "qwen35-9b",
+  "pipeline": "react",
+  "prompt": "/home/ykapushev/mathagent/work/ilya-react-all-v8/conf/base/prompts/react-tools.yml",
+  "prompt_version": "react-tools-v2",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 90112
+  },
+  "runtime": {
+    "concurrency": 16,
+    "timeout": 4000.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 8
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 16,
+    "max_model_len": 131072
+  },
+  "status": "running",
+  "created_at": "2026-08-18T20:42:51.792727+00:00",
+  "updated_at": "2026-08-18T23:33:10.266994+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-all-v8/results/runs/ilya-react-all-v8/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-18T22:14:11.636609+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 30,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 213875,
+        "output_tokens": 723703,
+        "total_tokens": 937578,
+        "wall_time_seconds": 5478.659,
+        "tasks_per_second": 0.0055
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 5478.659,
+          "tasks_per_second": 0.0055,
+          "status": "completed",
+          "updated_at": "2026-08-18T22:14:11.636590+00:00"
+        }
+      ]
+    },
+    "HMMT26": {
+      "dataset": "MathArena/hmmt_feb_2026",
+      "split": "train",
+      "total_tasks": 33,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-all-v8/results/runs/ilya-react-all-v8/hmmt26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-18T23:33:01.477050+00:00",
+      "summary": {
+        "total_tasks": 33,
+        "successful_tasks": 33,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 384042,
+        "output_tokens": 962657,
+        "total_tokens": 1346699,
+        "wall_time_seconds": 4711.526,
+        "tasks_per_second": 0.007
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 33,
+          "wall_time_seconds": 4711.526,
+          "tasks_per_second": 0.007,
+          "status": "completed",
+          "updated_at": "2026-08-18T23:33:01.477030+00:00"
+        }
+      ]
+    },
+    "IMOAnswerBench": {
+      "dataset": "OpenEvals/IMO-AnswerBench",
+      "split": "train",
+      "total_tasks": 400,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-all-v8/results/runs/ilya-react-all-v8/imo_answerbench.jsonl",
+      "status": "running",
+      "updated_at": "2026-08-18T23:33:10.266971+00:00"
+    }
+  },
+  "summary": {
+    "total_tasks": 63,
+    "successful_tasks": 63,
+    "failed_tasks": 0,
+    "remaining_tasks": 0,
+    "input_tokens": 597917,
+    "output_tokens": 1686360,
+    "total_tokens": 2284277,
+    "wall_time_seconds": 10190.185,
+    "tasks_per_second": 0.0062
+  }
+}

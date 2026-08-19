@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "run_id": "ilya-react-full-v1",
+  "model": "qwen35-9b",
+  "pipeline": "react",
+  "prompt": "/home/ykapushev/mathagent/work/ilya-react-full-v1/conf/base/prompts/react-tools.yml",
+  "prompt_version": "react-tools-v1",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 90112
+  },
+  "runtime": {
+    "concurrency": 32,
+    "timeout": 3000.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 3
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 16,
+    "max_model_len": 131072
+  },
+  "status": "interrupted",
+  "created_at": "2026-08-12T06:23:14.500284+00:00",
+  "updated_at": "2026-08-12T08:07:54.332572+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-full-v1/results/runs/ilya-react-full-v1/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-12T07:16:01.229566+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 30,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 231038,
+        "output_tokens": 804224,
+        "total_tokens": 1035262,
+        "wall_time_seconds": 3166.429,
+        "tasks_per_second": 0.0095
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 3166.429,
+          "tasks_per_second": 0.0095,
+          "status": "completed",
+          "updated_at": "2026-08-12T07:16:01.229522+00:00"
+        }
+      ]
+    },
+    "HMMT26": {
+      "dataset": "MathArena/hmmt_feb_2026",
+      "split": "train",
+      "total_tasks": 33,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-full-v1/results/runs/ilya-react-full-v1/hmmt26.jsonl",
+      "status": "failed",
+      "updated_at": "2026-08-12T08:07:51.954232+00:00",
+      "summary": {
+        "total_tasks": 33,
+        "successful_tasks": 32,
+        "failed_tasks": 1,
+        "remaining_tasks": 0,
+        "input_tokens": 181264,
+        "output_tokens": 880432,
+        "total_tokens": 1061696,
+        "wall_time_seconds": 3100.265,
+        "tasks_per_second": 0.0106
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 33,
+          "wall_time_seconds": 3100.265,
+          "tasks_per_second": 0.0106,
+          "status": "failed",
+          "updated_at": "2026-08-12T08:07:51.954201+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 63,
+    "successful_tasks": 62,
+    "failed_tasks": 1,
+    "remaining_tasks": 0,
+    "input_tokens": 412302,
+    "output_tokens": 1684656,
+    "total_tokens": 2096958,
+    "wall_time_seconds": 6266.694,
+    "tasks_per_second": 0.0101
+  }
+}

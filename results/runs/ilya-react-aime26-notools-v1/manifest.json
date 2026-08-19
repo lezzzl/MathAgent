@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "run_id": "ilya-react-aime26-notools-v1",
+  "model": "qwen35-9b",
+  "pipeline": "react",
+  "prompt": "/home/ykapushev/mathagent/work/ilya-react-aime26-notools-v1/conf/base/prompts/react-tools.yml",
+  "prompt_version": "react-tools-v1",
+  "generation": {
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "seed": 42,
+    "max_tokens": 90112
+  },
+  "runtime": {
+    "concurrency": 32,
+    "timeout": 4000.0,
+    "max_retries": 1,
+    "max_consecutive_api_errors": 8
+  },
+  "serving": {
+    "engine": "vllm",
+    "reasoning_parser": "qwen3",
+    "max_num_seqs": 48,
+    "max_model_len": 131072
+  },
+  "status": "completed",
+  "created_at": "2026-08-15T12:48:39.838756+00:00",
+  "updated_at": "2026-08-15T12:57:05.628400+00:00",
+  "benchmarks": {
+    "AIME26": {
+      "dataset": "MathArena/aime_2026",
+      "split": "train",
+      "total_tasks": 30,
+      "output": "/home/ykapushev/mathagent/work/ilya-react-aime26-notools-v1/results/runs/ilya-react-aime26-notools-v1/aime26.jsonl",
+      "status": "completed",
+      "updated_at": "2026-08-15T12:57:03.948868+00:00",
+      "summary": {
+        "total_tasks": 30,
+        "successful_tasks": 30,
+        "failed_tasks": 0,
+        "remaining_tasks": 0,
+        "input_tokens": 149701,
+        "output_tokens": 933016,
+        "total_tokens": 1082717,
+        "wall_time_seconds": 503.753,
+        "tasks_per_second": 0.0596
+      },
+      "segments": [
+        {
+          "resume": false,
+          "processed_tasks": 30,
+          "wall_time_seconds": 503.753,
+          "tasks_per_second": 0.0596,
+          "status": "completed",
+          "updated_at": "2026-08-15T12:57:03.948840+00:00"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_tasks": 30,
+    "successful_tasks": 30,
+    "failed_tasks": 0,
+    "remaining_tasks": 0,
+    "input_tokens": 149701,
+    "output_tokens": 933016,
+    "total_tokens": 1082717,
+    "wall_time_seconds": 503.753,
+    "tasks_per_second": 0.0596
+  }
+}

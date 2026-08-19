@@ -1,0 +1,13 @@
+# RESUME оставшихся imo-задач с новыми тулами (промпт v2). v8 (vllm@16) успел
+# 298/400 и осиротел; недостающие 102 — почти все number_theory.
+#
+# Приём: run_id = имя файла (ilya-react-imo-v2r), а каталог results/runs/ilya-react-
+# imo-v2r/ ЗАСЕЯН 298 записями из v8 (тот же benchmark/model). benchmarks.resume=true
+# → load_resume_records пропустит готовые и догонит только оставшиеся ~102–106.
+#
+# Конфиг ИДЕНТИЧЕН v8 (vllm@16, tools=all, tester, промпт v2) — чтобы все 400 были
+# однородны (один движок/промпт). vllm@16 медленный, но проверенно стабильный
+# (sglang падал на sm100). ~102 задачи × ~3 мин ≈ 5 ч → timeout 2400.
+command: "ENGINE=vllm STARTUP_TIMEOUT=5400 MAX_NUM_SEQS=16 MAX_MODEL_LEN=131072 CONCURRENCY=16 scripts/run_benchmarks.sh -- .venv/bin/kedro run --pipeline benchmarks --params benchmarks.pipeline=react,benchmarks.react.tester=true,benchmarks.react.tools=all,benchmarks.resume=true,benchmarks.prompt=conf/base/prompts/react-tools.yml,benchmarks.model.name={SERVED_MODEL_NAME},benchmarks.model.base_url={BASE_URL},benchmarks.select=[imo_answerbench],benchmarks.generation.max_tokens=90112,benchmarks.runtime.concurrency=16,benchmarks.serving.vllm_max_num_seqs=16,benchmarks.serving.vllm_max_model_len=131072,benchmarks.run_id={RUN_ID}"
+gpus: 1
+timeout_minutes: 2400

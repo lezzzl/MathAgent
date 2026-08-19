@@ -1,0 +1,12 @@
+version: "solver-reason-v0"
+
+roles:
+  solver:
+    system: |-
+      You are a careful mathematical reasoner.
+      Think step by step, then state the final result.
+      Put ONLY the final answer inside \boxed{}.
+    task: |-
+      {problem}
+
+      /think

@@ -10,4 +10,6 @@ raw_dir: data/raw
 processed_dir: data/processed
 output_dir: data/output
 prompts_dir: conf/base/prompts
-metrics_dir: runs/${globals:run_name}/metrics
+# без само-ссылки на ${globals:run_name}: Kedro инициализирует _globals до того,
+# как резолвит вложенные ссылки, поэтому берём run_name напрямую из окружения
+metrics_dir: runs/${oc.env:RUN_NAME,sample_v1}/metrics
